@@ -39,11 +39,11 @@ export function pngSize(buf) {
 }
 
 /** Store a renderer-produced thumbnail after checking it is a 512×512 PNG. */
-export function storeThumb(db, id, bytes) {
+export function storeThumb(db, id, bytes, dark = false) {
   const buf = Buffer.from(bytes);
   const size = pngSize(buf);
   if (!size || size.width !== THUMB_SIZE || size.height !== THUMB_SIZE) {
     throw new Error(`thumbnail for model ${id} must be a ${THUMB_SIZE}px PNG, got ${size ? `${size.width}x${size.height}` : 'non-PNG'}`);
   }
-  setThumb(db, id, buf);
+  setThumb(db, id, buf, dark);
 }

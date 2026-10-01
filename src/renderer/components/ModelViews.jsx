@@ -1,6 +1,7 @@
 // Card grid and list (table) views of the library.
 import { ProvenanceBadge, ColorBadge, MissingBadge, PlateBadge, ColorLabels, U1Badge } from './Badges.jsx';
 import { isUnlabeled, formatBytes, formatInt, formatDate } from '../format.js';
+import { thumbOf } from '../thumbSource.js';
 
 // `picked` (a Set of ids, or null): multi-select checkboxes, used by the 遺失 view
 function Pick({ id, picked, onPick }) {
@@ -29,8 +30,8 @@ export function ModelGrid({ models, selectedId, onSelect, picked = null, onPick 
                 <i className="mdi mdi-file-alert-outline" /> 檔案遺失
               </div>
             )}
-            {m.has_thumb ? (
-              <img src={`mfthumb://thumb/${m.id}`} alt="" data-testid="card-thumb" draggable={false} />
+            {thumbOf(m) ? (
+              <img src={thumbOf(m).src} alt="" data-testid="card-thumb" data-source={thumbOf(m).source} className={`thumb-${thumbOf(m).source}`} draggable={false} />
             ) : (
               <>
                 <i className="mdi mdi-cube-outline" />
@@ -66,6 +67,7 @@ export function ModelList({ models, selectedId, onSelect, picked = null, onPick 
       <thead>
         <tr>
           {picked && <th />}
+          <th className="thumb-col" />
           <th>名稱</th>
           <th>格式</th>
           <th>來源</th>
@@ -89,6 +91,13 @@ export function ModelList({ models, selectedId, onSelect, picked = null, onPick 
                 <Pick id={m.id} picked={picked} onPick={onPick} />
               </td>
             )}
+            <td className="thumb-col">
+              {thumbOf(m) ? (
+                <img src={thumbOf(m).src} alt="" data-testid="row-thumb" data-source={thumbOf(m).source} draggable={false} />
+              ) : (
+                <i className="mdi mdi-cube-outline" data-testid="row-thumb-icon" />
+              )}
+            </td>
             <td className="name">{m.name} <MissingBadge model={m} /></td>
             <td className="mono">{m.format}</td>
             <td><ProvenanceBadge model={m} /></td>

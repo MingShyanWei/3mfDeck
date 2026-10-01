@@ -386,3 +386,9 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
 .embedded-thumb { flex: 0 0 auto; width: 72px; padding: 3px; border-radius: 10px; background: var(--panel); box-shadow: var(--shadow); display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10px; color: var(--muted); }
 .embedded-thumb img { width: 64px; height: 64px; object-fit: cover; border-radius: 7px; background: var(--sunken); }
 .embedded-thumb.on { box-shadow: 0 0 0 2px var(--accent); color: var(--text); }
+
+/* M21: product cover as the card / row thumbnail */
+.thumb img.thumb-cover { inset: 0; width: 100%; height: 100%; object-fit: cover; filter: none; }
+.list .thumb-col { width: 52px; padding: 4px 6px; }
+.list .thumb-col img { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; display: block; background: var(--sunken); }
+.list .thumb-col .mdi { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 8px; background: var(--sunken); color: var(--muted); font-size: 20px; }

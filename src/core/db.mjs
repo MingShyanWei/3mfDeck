@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS models (
   source_printer TEXT,           -- M18: printer_model of the 3MF project ('' = none / not a project)
   source_process TEXT,           -- M18: its print_settings_id
   embedded_images TEXT,          -- M19: JSON {cover, images} of product images inside the 3MF
-  cover          BLOB            -- M19: bytes of that cover image
+  cover          BLOB,           -- M19: bytes of that cover image
+  thumb_dark     INTEGER         -- M21: 1 = the rendered thumbnail is nearly all black (not shown)
 );
 CREATE TABLE IF NOT EXISTS tags (
   id   INTEGER PRIMARY KEY,
@@ -90,6 +91,7 @@ export function openDb(file) {
   addColumn('models', 'source_process');
   addColumn('models', 'embedded_images');
   addColumn('models', 'cover', 'BLOB');
+  addColumn('models', 'thumb_dark', 'INTEGER');
   backfillColorLabels(db);
   return db;
 }
@@ -223,7 +225,7 @@ export function setTags(db, modelId, names) {
 const LIST_COLUMNS = `m.id, m.name, m.rel_path, m.format, m.size_bytes, m.tri_count, m.bbox_mm, m.color_count,
   m.provenance_type, m.platform, m.url, m.prompt, m.retrieved_at, m.notes, m.imported_at, m.updated_at,
   m.source_printer, m.source_process, m.embedded_images,
-  m.thumb IS NOT NULL AS has_thumb,
+  m.thumb IS NOT NULL AS has_thumb, m.cover IS NOT NULL AS has_cover, m.thumb_dark,
   (SELECT COUNT(*) FROM plates p WHERE p.model_id = m.id) AS plate_count,
   (SELECT cm.full_spectrum FROM color_mixing cm WHERE cm.model_id = m.id) AS full_spectrum,
   (SELECT cm.vertex_mixed_pct FROM color_mixing cm WHERE cm.model_id = m.id) AS vertex_mixed_pct,
@@ -245,6 +247,8 @@ const SORTS = {
 const rowOut = (r) => ({
   ...r,
   has_thumb: Boolean(r.has_thumb),
+  has_cover: Boolean(r.has_cover),
+  thumb_dark: Boolean(r.thumb_dark),
   full_spectrum: Boolean(r.full_spectrum),
   tags: JSON.parse(r.tags),
   color_labels: JSON.parse(r.color_labels),
@@ -386,8 +390,13 @@ export function knownRelPaths(db) {
 }
 
 // Thumbnails (512px PNG, SPEC 3.4). Not part of updated_at: they are derived data.
-export function setThumb(db, id, png) {
-  db.prepare('UPDATE models SET thumb = ? WHERE id = ?').run(png, id);
+export function setThumb(db, id, png, dark = false) {
+  db.prepare('UPDATE models SET thumb = ?, thumb_dark = ? WHERE id = ?').run(png, png ? (dark ? 1 : 0) : null, id);
+}
+
+/** Thumbnails stored before M21 (thumb_dark unknown): [{id, thumb}]. */
+export function thumbsToCheck(db) {
+  return db.prepare('SELECT id, thumb FROM models WHERE thumb IS NOT NULL AND thumb_dark IS NULL').all();
 }
 
 export function getThumb(db, id) {

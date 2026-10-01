@@ -20,6 +20,7 @@ describe('schema', () => {
       'provenance_type', 'platform', 'url', 'prompt', 'retrieved_at', 'notes', 'imported_at', 'updated_at',
       'source_printer', 'source_process', // M18 (SPEC 3.9)
       'embedded_images', 'cover', // M19 (SPEC 3.4b)
+      'thumb_dark', // M21 (SPEC 3.4c)
     ]);
     expect(cols('tags')).toEqual(['id', 'name']);
     expect(cols('model_tags')).toEqual(['model_id', 'tag_id']);

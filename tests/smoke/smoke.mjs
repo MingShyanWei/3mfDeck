@@ -1103,6 +1103,69 @@ try {
     await page.fill('[data-testid=search]', '');
   }
 
+  // 17) M21: card / row thumbnails — cover, else the 3D render, never a black blob
+  {
+    const JSZipM21 = (await import('jszip')).default;
+    const zip = await JSZipM21.loadAsync(await fs.readFile(path.join(FIX, 'painted.3mf')));
+    const cfg = JSON.parse(await zip.file('Metadata/project_settings.config').async('string'));
+    cfg.filament_colour = cfg.filament_colour.map(() => '#000000'); // an all-black part, like 咕咕嘎嘎-U1's first plate
+    zip.file('Metadata/project_settings.config', JSON.stringify(cfg));
+    const blackFile = path.join(inbox, 'm21-black.3mf');
+    await fs.writeFile(blackFile, await zip.generateAsync({ type: 'nodebuffer' }));
+    await importViaMenu([blackFile]);
+    await page.click('[data-testid=import-skip-all]');
+    const source = (name) => page.$eval(`[data-testid=model-card]:has(.name:text-is("${name}")) [data-testid=card-thumb]`, (i) => i.dataset.source).catch(() => null);
+    await page.fill('[data-testid=search]', 'm');
+    await page.waitForFunction(() => document.querySelector('[data-testid=model-card] .name') !== null);
+    await page.fill('[data-testid=search]', 'm21-black');
+    await page.waitForSelector('[data-testid=model-card] [data-testid=card-thumb]', { timeout: 120000 }); // rendered, not judged black
+    assert.equal(await source('m21-black'), 'render', 'a black part renders shaded (M21 lighting), not as a black blob');
+    // the stored render, decoded by Electron (the page cannot read mfthumb:// pixels: cross-origin)
+    const SqliteM21 = (await import('better-sqlite3')).default;
+    const rodb = new SqliteM21(path.join(base, 'userData', 'library.db'), { readonly: true, fileMustExist: true });
+    const rendered = rodb.prepare(`SELECT thumb FROM models WHERE name = 'm21-black'`).pluck().get();
+    rodb.close();
+    const blackThumb = await app.evaluate(({ nativeImage }, b64) => {
+      const d = nativeImage.createFromBuffer(Buffer.from(b64, 'base64')).toBitmap();
+      let opaque = 0, dark = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i + 3] >= 200) { opaque++; if (Math.max(d[i], d[i + 1], d[i + 2]) < 24) dark++; }
+      return { opaque, darkShare: dark / opaque };
+    }, Buffer.from(rendered).toString('base64'));
+    assert.ok(blackThumb.darkShare < 0.9, 'rendered black part is not nearly all black ' + JSON.stringify(blackThumb));
+    await page.fill('[data-testid=search]', 'm19-pictures');
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 1);
+    assert.equal(await source('m19-pictures'), 'cover', 'a 3MF with an embedded cover shows it');
+    await page.fill('[data-testid=search]', 'm17-painted');
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 1);
+    assert.equal(await source('m17-painted'), 'render', 'no cover: our 3D render');
+    // a black silhouette stored through the normal path is detected in main and not shown
+    const blackId = (await page.evaluate(() => window.api.list({ q: 'm21-black' })))[0].id;
+    await page.evaluate(async (id) => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 512;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(256, 270, 170, 90, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+      await window.api.setThumb(id, new Uint8Array(await blob.arrayBuffer()));
+    }, blackId);
+    await page.fill('[data-testid=search]', '');
+    await page.fill('[data-testid=search]', 'm21-black');
+    await page.waitForFunction(() => document.querySelector('[data-testid=model-card] .thumb .fmt')?.textContent === '3MF');
+    assert.equal(await page.$('[data-testid=model-card] [data-testid=card-thumb]'), null, 'black blob replaced by the format icon');
+    // table view uses the same order
+    await page.fill('[data-testid=search]', 'm');
+    await page.click('[data-testid=view-list]');
+    await page.waitForSelector('[data-testid=model-row]');
+    const rowSource = (name) => page.$eval(`[data-testid=model-row]:has(td.name:text-matches("^${name}")) .thumb-col`, (td) => td.querySelector('img')?.dataset.source ?? 'icon');
+    assert.deepEqual([await rowSource('m19-pictures'), await rowSource('m17-painted'), await rowSource('m21-black')], ['cover', 'render', 'icon']);
+    await page.click('[data-testid=view-grid]');
+    await page.fill('[data-testid=search]', '');
+    step(`M21 縮圖: m19-pictures 用封面、m17-painted 用 3D 渲染；全黑零件渲染成有明暗的深灰（暗像素 ${(blackThumb.darkShare * 100).toFixed(1)}%）；黑剪影縮圖 -> 格式圖示；表格同序`);
+  }
+
   await page.screenshot({ path: path.join(base, 'smoke.png') });
   step('screenshot: ' + path.join(base, 'smoke.png'));
 

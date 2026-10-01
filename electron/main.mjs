@@ -1,9 +1,10 @@
 // Electron main process: window, menu, IPC to the core library.
-import { app, BrowserWindow, Menu, ipcMain, dialog, protocol, shell } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, dialog, protocol, shell, nativeImage } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb, cabinetColorRows, idsNeedingSourcePrinter, setSourcePrinter, idsNeedingEmbedded, setEmbedded, getCover } from '../src/core/db.mjs';
+import { isNearlyBlack } from '../src/core/thumbCheck.mjs';
+import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb, cabinetColorRows, idsNeedingSourcePrinter, setSourcePrinter, idsNeedingEmbedded, setEmbedded, getCover, thumbsToCheck, setThumb } from '../src/core/db.mjs';
 import JSZip from 'jszip';
 import { listEmbeddedImages, mimeOf } from '../src/core/embeddedImages.mjs';
 import { convertToU1, readSourcePrinter } from '../src/core/u1Convert.mjs';
@@ -226,7 +227,7 @@ function registerIpc() {
   ipcMain.handle('lib:rebuildIndex', async () => (await indexNewFiles(db, root)).length);
   ipcMain.handle('lib:reveal', (_e, id) => shell.showItemInFolder(modelPath(db, root, id)));
   ipcMain.handle('lib:idsNeedingThumb', () => idsNeedingThumb(db));
-  ipcMain.handle('lib:setThumb', (_e, id, bytes) => storeThumb(db, id, bytes));
+  ipcMain.handle('lib:setThumb', (_e, id, bytes) => storeThumb(db, id, bytes, thumbIsBlack(bytes)));
   ipcMain.handle('lib:importDialog', () => importViaDialog());
   ipcMain.handle('settings:get', () => ({ libraryRoot: root, spools: loadSettings(app.getPath('userData'), root).spools, inventory: loadSettings(app.getPath('userData'), root).inventory }));
   ipcMain.handle('settings:setInventory', (_e, list) => {
@@ -339,6 +340,12 @@ app.whenReady().then(() => {
   root = loadSettings(app.getPath('userData'), DEFAULT_ROOT).libraryRoot;
   fs.mkdirSync(root, { recursive: true });
   db = openDb(path.join(app.getPath('userData'), 'library.db'));
+  // M21: thumbnails rendered before the thumbnail lighting fix that came out
+  // as black silhouettes are dropped, so the queue renders them again
+  for (const { id, thumb } of thumbsToCheck(db)) {
+    if (thumbIsBlack(thumb)) setThumb(db, id, null);
+    else setThumb(db, id, thumb, false);
+  }
   registerIpc();
   buildMenu();
   win = new BrowserWindow({
@@ -379,6 +386,12 @@ async function backfillSourcePrinters() {
       // missing or unreadable file
     }
   }
+}
+
+/** Decode a PNG thumbnail (BGRA bitmap) and test it for a black blob. */
+function thumbIsBlack(bytes) {
+  const img = nativeImage.createFromBuffer(Buffer.from(bytes));
+  return !img.isEmpty() && isNearlyBlack(img.toBitmap());
 }
 
 // One zip entry from a 3MF; the last opened archive is kept so browsing a
