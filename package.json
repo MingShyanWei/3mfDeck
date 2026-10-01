@@ -16,6 +16,9 @@
     "test": "vitest run",
     "smoke": "vite build && node tests/smoke/smoke.mjs",
     "dist": "vite build && electron-builder --mac dmg",
+    "dist:mac": "vite build && electron-builder --mac dmg --arm64",
+    "dist:win": "vite build && electron-builder --win nsis portable --x64",
+    "dist:linux": "vite build && electron-builder --linux AppImage deb --x64",
     "realfiles": "vite build && node tests/smoke/realfiles.mjs",
     "orcacompare": "vite build && node tests/smoke/orcacompare.mjs"
   },
@@ -30,8 +33,7 @@
       "src/core/**",
       "dist/**",
       "package.json",
-      "!node_modules/better-sqlite3/{deps,src,docs}/**",
-      "!node_modules/better-sqlite3/prebuilds/{win32,linux,linuxmusl,darwin-x64}*"
+      "!node_modules/better-sqlite3/{deps,src,docs}/**"
     ],
     "asarUnpack": [
       "**/*.node"
@@ -49,7 +51,55 @@
       ],
       "category": "public.app-category.utilities",
       "identity": "-",
-      "hardenedRuntime": false
+      "hardenedRuntime": false,
+      "files": [
+        "!node_modules/better-sqlite3/prebuilds/{win32,linux,linuxmusl}*"
+      ]
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "files": [
+        "!node_modules/better-sqlite3/prebuilds/{darwin,linux,linuxmusl}*"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Utility",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "files": [
+        "!node_modules/better-sqlite3/prebuilds/{darwin,win32}*"
+      ]
     }
   },
   "dependencies": {
