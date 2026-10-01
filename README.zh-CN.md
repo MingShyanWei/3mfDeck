@@ -79,12 +79,25 @@
 
 ## 安装
 
-从 [Releases](https://github.com/MingShyanWei/3mfDeck/releases) 下载对应平台的文件：
+### 从 Releases 下载
 
-- **macOS**：`3mfDeck-<版本>-arm64.dmg`，拖进“应用程序”。目前未做 Apple 签名与公证，第一次打开请右键 →“打开”，或执行
-  `xattr -dr com.apple.quarantine /Applications/3mfDeck.app`
-- **Windows**：`.exe`（NSIS 安装包）或免安装版
-- **Linux**：`.AppImage`（`chmod +x` 后直接运行）或 `.deb`
+到 [GitHub Releases](https://github.com/MingShyanWei/3mfDeck/releases) 下载对应平台的文件（下表文件名中的 `0.1.0` 是软件包版本；侧栏显示的是构建版本 `1.<YYMMDDHHMM>`）。各版本文件的 SHA256 见 [docs/release-manifest.md](docs/release-manifest.md)。
+
+| 平台 | 文件 | 说明 |
+|---|---|---|
+| macOS（Apple 芯片） | `3mfDeck-0.1.0-arm64.dmg` | 打开后把 3mfDeck 拖进“应用程序” |
+| Windows x64 | `3mfDeck Setup 0.1.0.exe` | 安装版（可选安装位置） |
+| Windows x64 | `3mfDeck 0.1.0.exe` | 免安装版，直接运行 |
+| Linux x64 | `3mfDeck-0.1.0.AppImage` | `chmod +x` 后直接运行 |
+| Linux x64（Debian／Ubuntu） | `mf-cabinet_0.1.0_amd64.deb` | `sudo apt install ./mf-cabinet_0.1.0_amd64.deb` |
+
+**macOS：此版本未签名（仅 ad-hoc 签名，未用 Developer ID、未公证）**，第一次打开会被 Gatekeeper 拦下，请任选其一：
+- 在“应用程序”里右键 3mfDeck →**“打开”→“打开”**；若没有“打开”按钮，到 **“系统设置 › 隐私与安全”**，点按 3mfDeck 提示旁的 **“仍要打开”**；或
+- 在终端执行 `xattr -dr com.apple.quarantine /Applications/3mfDeck.app`，之后正常打开。
+
+若要下载后免警告打开，需 Apple Developer Program 签名＋公证，不在本版本范围内。
+
+**Windows：** `.exe` 也未做代码签名；SmartScreen 若警告，请点击“更多信息 → 仍要运行”。
 
 ## 开发
 
