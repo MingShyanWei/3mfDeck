@@ -516,6 +516,42 @@ try {
   await page.click('[data-testid=settings-done]');
   await page.waitForSelector('[data-testid=viewer][data-status=ready]');
   step(`M11 建議捲色: 建議 ${recK} 捲（${newSpools.join(' ')}），已套用後還原 CMYK；覆蓋率選項 ${kCoverage.length} 組`);
+  // 9d) M12: filament inventory — register two filaments, suggest FROM them
+  await page.click('[data-testid=settings-button]');
+  await page.waitForSelector('[data-testid=inventory-editor]');
+  await page.click('[data-testid=inventory-add]');
+  await page.click('[data-testid=inventory-add]');
+  await page.fill('[data-testid=inventory-hex-0]', '#4CAF50');
+  await page.fill('[data-testid=inventory-name-0]', '翠綠');
+  await page.fill('[data-testid=inventory-hex-1]', '#800080');
+  await page.fill('[data-testid=inventory-name-1]', '紫');
+  await page.click('[data-testid=inventory-save]');
+  await page.waitForSelector('[data-testid=inventory-message]');
+  await page.click('[data-testid=settings-done]');
+  await page.waitForSelector('[data-testid=viewer][data-status=ready]');
+  await page.click('[data-testid=suggest-inventory]');
+  await page.waitForSelector('[data-testid=suggest-spools-list]');
+  const invSwatches = await page.$$eval('[data-testid=suggest-spools-list] code', (els) => els.map((e) => e.textContent));
+  assert.ok(invSwatches.every((h) => h === '#4CAF50' || h === '#800080'), `spools picked from inventory: ${invSwatches.join(' ')}`);
+  assert.match(await page.textContent('[data-testid=suggest-note]'), /從線材庫挑選/);
+  assert.match(await page.textContent('[data-testid=suggest-buy]') || '', /建議採購/);
+  step(`M12 線材庫: 登記 翠綠+紫 → 從我的線材挑出 ${invSwatches.join(' ')}，其餘列採購建議`);
+  // clear the inventory so later steps are unaffected
+  await page.click('[data-testid=settings-button]');
+  await page.waitForSelector('[data-testid=inventory-editor]');
+  for (let i = 1; i >= 0; i--) await page.click(`[data-testid=inventory-del-${i}]`);
+  await page.click('[data-testid=inventory-save]');
+  await page.waitForSelector('[data-testid=inventory-message]');
+  await page.click('[data-testid=settings-done]');
+  await page.waitForSelector('[data-testid=viewer][data-status=ready]');
+  // restore the default CMYK spools again (the inventory apply changed them)
+  await page.click('[data-testid=settings-button]');
+  await page.waitForSelector('[data-testid=spool-editor]');
+  await page.click('[data-testid=spool-reset]');
+  await page.waitForSelector('[data-testid=spool-message]');
+  await page.click('[data-testid=settings-done]');
+  await page.waitForSelector('[data-testid=viewer][data-status=ready]');
+  step('M12 線材庫: 清空庫、捲色還原 CMYK');
   await page.$eval('[data-testid=detail-panel]', (el) => el.scrollTo(0, 0));
   await page.screenshot({ path: path.join(base, 'mixneeded.png') });
   await page.fill('[data-testid=search]', '');

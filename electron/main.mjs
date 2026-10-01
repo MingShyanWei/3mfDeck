@@ -8,7 +8,7 @@ import { loadPreviewData, storeThumb, previewPlate } from '../src/core/preview.m
 import { importPaths, indexNewFiles } from '../src/core/importer.mjs';
 import { trashModel, restoreModel, emptyTrash, exportModel } from '../src/core/trash.mjs';
 import { consistencyReport, relocateModel, removeRecord, findInTrash, restoreMissingFromTrash, isInside, removeMissingRecords, findByFilename, applyRelocations } from '../src/core/missing.mjs';
-import { loadSettings, saveSettings, validateSpools, switchRoot, markMissing, modelPath } from '../src/core/settings.mjs';
+import { loadSettings, saveSettings, validateSpools, validateInventory, switchRoot, markMissing, modelPath } from '../src/core/settings.mjs';
 import { mappingCsv, exportQuantized3mf } from '../src/core/exportMapping.mjs';
 import { slotsFromColours } from '../src/core/filament.mjs';
 import { SUPPORTED_EXTS } from '../src/core/parse/index.mjs';
@@ -200,7 +200,16 @@ function registerIpc() {
   ipcMain.handle('lib:idsNeedingThumb', () => idsNeedingThumb(db));
   ipcMain.handle('lib:setThumb', (_e, id, bytes) => storeThumb(db, id, bytes));
   ipcMain.handle('lib:importDialog', () => importViaDialog());
-  ipcMain.handle('settings:get', () => ({ libraryRoot: root, spools: loadSettings(app.getPath('userData'), root).spools }));
+  ipcMain.handle('settings:get', () => ({ libraryRoot: root, spools: loadSettings(app.getPath('userData'), root).spools, inventory: loadSettings(app.getPath('userData'), root).inventory }));
+  ipcMain.handle('settings:setInventory', (_e, list) => {
+    try {
+      const clean = validateInventory(list);
+      saveSettings(app.getPath('userData'), { inventory: clean });
+      return { inventory: clean };
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
   ipcMain.handle('settings:setSpools', (_e, spools) => {
     try {
       const clean = validateSpools(spools);

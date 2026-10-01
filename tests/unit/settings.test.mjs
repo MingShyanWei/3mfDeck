@@ -9,7 +9,8 @@ import { tmpDir, stage, exists } from './helpers.mjs';
 describe('settings storage (SPEC 3.8)', () => {
   it('defaults to the given root when no config exists', async () => {
     const userData = await tmpDir();
-    expect(loadSettings(userData, '/Users/x/3mf-library')).toEqual({ libraryRoot: '/Users/x/3mf-library', notifiedMissing: [], spools: ['#00FFFF', '#FF00FF', '#FFFF00', '#000000'] });
+    expect(loadSettings(userData, '/Users/x/3mf-library')).toEqual({ libraryRoot: '/Users/x/3mf-library',
+      inventory: [], notifiedMissing: [], spools: ['#00FFFF', '#FF00FF', '#FFFF00', '#000000'] });
   });
 
   it('persists the root in userData/config.json', async () => {

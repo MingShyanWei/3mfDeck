@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('api', {
   setThumb: (id, bytes) => ipcRenderer.invoke('lib:setThumb', id, bytes),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSpools: (spools) => ipcRenderer.invoke('settings:setSpools', spools),
+  setInventory: (list) => ipcRenderer.invoke('settings:setInventory', list),
   exportCsv: (id, opts) => ipcRenderer.invoke('lib:exportCsv', id, opts),
   exportQuantized: (id, opts) => ipcRenderer.invoke('lib:exportQuantized', id, opts),
   chooseRoot: () => ipcRenderer.invoke('settings:chooseRoot'),

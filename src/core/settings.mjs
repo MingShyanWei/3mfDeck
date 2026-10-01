@@ -21,7 +21,24 @@ export function loadSettings(userDataDir, defaultRoot) {
     libraryRoot: saved.libraryRoot || defaultRoot,
     notifiedMissing: saved.notifiedMissing || [],
     spools: saved.spools || DEFAULT_SPOOLS,
+    inventory: (Array.isArray(saved.inventory) ? saved.inventory : []),
   };
+}
+
+/**
+ * Filament inventory (SPEC 3.5d): filaments the user owns, name + "#RRGGBB".
+ * The suggestion picks spools from here first. Throws on invalid input.
+ */
+export function validateInventory(list) {
+  if (!Array.isArray(list)) throw new Error('線材庫格式錯誤');
+  const seen = new Set();
+  return list.map((f) => {
+    const hex = String(f?.hex || '').toUpperCase();
+    if (!/^#[0-9A-F]{6}$/.test(hex)) throw new Error(`色碼格式錯誤：${f?.hex}（需為 #RRGGBB）`);
+    if (seen.has(hex)) throw new Error(`線材庫有重複色碼：${hex}`);
+    seen.add(hex);
+    return { name: String(f?.name || '').trim().slice(0, 60), hex };
+  });
 }
 
 /**

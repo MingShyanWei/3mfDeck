@@ -6,11 +6,14 @@ export default function SettingsDialog({ onClose, onRootChanged, onSpoolsChanged
   const [message, setMessage] = useState('');
   const [spools, setSpools] = useState(null); // draft spool colours
   const [spoolMsg, setSpoolMsg] = useState('');
+  const [inventory, setInventory] = useState(null); // draft filament inventory
+  const [invMsg, setInvMsg] = useState('');
 
   useEffect(() => {
     window.api.getSettings().then((s) => {
       setSettings(s);
       setSpools(s.spools);
+      setInventory(s.inventory || []);
     });
   }, []);
 
@@ -69,6 +72,31 @@ export default function SettingsDialog({ onClose, onRootChanged, onSpoolsChanged
                 <button data-testid="spool-reset" onClick={() => saveSpools(DEFAULT_SPOOLS)}>恢復理想 CMYK</button>
               </div>
               {spoolMsg && <p className="small" data-testid="spool-message">{spoolMsg}</p>}
+            </fieldset>
+          )}
+          {inventory && (
+            <fieldset className="spool-editor" data-testid="inventory-editor">
+              <legend>線材庫（你擁有的線材）</legend>
+              <div className="inventory-list" data-testid="inventory-list">
+                {inventory.map((f, i) => (
+                  <div className="row" key={i} data-testid={`inventory-item-${i}`}>
+                    <span className="swatch" style={{ background: f.hex }} />
+                    <input className="mono" style={{ width: 84 }} data-testid={`inventory-hex-${i}`} value={f.hex} onChange={(e) => setInventory(inventory.map((x, j) => (j === i ? { ...x, hex: e.target.value } : x)))} placeholder="#RRGGBB" />
+                    <input data-testid={`inventory-name-${i}`} value={f.name} onChange={(e) => setInventory(inventory.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} placeholder="名稱（廠牌/色名）" />
+                    <button data-testid={`inventory-del-${i}`} onClick={() => setInventory(inventory.filter((_, j) => j !== i))}><i className="mdi mdi-delete-outline" /></button>
+                  </div>
+                ))}
+              </div>
+              <div className="row">
+                <button data-testid="inventory-add" onClick={() => setInventory([...inventory, { name: '', hex: '#FFFFFF' }])}><i className="mdi mdi-plus" /> 新增線材</button>
+                <button className="primary" data-testid="inventory-save" onClick={async () => {
+                  const r = await window.api.setInventory(inventory);
+                  if (r.error) return setInvMsg(r.error);
+                  setInventory(r.inventory);
+                  setInvMsg(`已儲存 ${r.inventory.length} 條線材。建議捲色會優先從這裡挑。`);
+                }}>儲存線材庫</button>
+              </div>
+              {invMsg && <p className="small" data-testid="inventory-message">{invMsg}</p>}
             </fieldset>
           )}
         </div>
