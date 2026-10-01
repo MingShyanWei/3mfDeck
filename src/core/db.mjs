@@ -24,7 +24,9 @@ CREATE TABLE IF NOT EXISTS models (
   imported_at   TEXT NOT NULL,
   updated_at    TEXT NOT NULL,
   source_printer TEXT,           -- M18: printer_model of the 3MF project ('' = none / not a project)
-  source_process TEXT            -- M18: its print_settings_id
+  source_process TEXT,           -- M18: its print_settings_id
+  embedded_images TEXT,          -- M19: JSON {cover, images} of product images inside the 3MF
+  cover          BLOB            -- M19: bytes of that cover image
 );
 CREATE TABLE IF NOT EXISTS tags (
   id   INTEGER PRIMARY KEY,
@@ -80,12 +82,14 @@ export function openDb(file) {
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
   // Columns added after a database may have been created (M17 colour labels, M18 source printer)
-  const addColumn = (table, column) => {
-    if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`);
+  const addColumn = (table, column, type = 'TEXT') => {
+    if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   };
   addColumn('color_stats', 'label');
   addColumn('models', 'source_printer');
   addColumn('models', 'source_process');
+  addColumn('models', 'embedded_images');
+  addColumn('models', 'cover', 'BLOB');
   backfillColorLabels(db);
   return db;
 }
@@ -113,9 +117,9 @@ export function insertModel(db, { name, relPath, parsed }) {
     const { lastInsertRowid: id } = db
       .prepare(
         `INSERT INTO models (name, rel_path, format, size_bytes, tri_count, bbox_mm, color_count,
-           provenance_type, platform, retrieved_at, notes, imported_at, updated_at, source_printer, source_process)
+           provenance_type, platform, retrieved_at, notes, imported_at, updated_at, source_printer, source_process, embedded_images, cover)
          VALUES (@name, @rel_path, @format, @size_bytes, @tri_count, @bbox_mm, @color_count,
-           @provenance_type, @platform, @retrieved_at, @notes, @ts, @ts, @source_printer, @source_process)`,
+           @provenance_type, @platform, @retrieved_at, @notes, @ts, @ts, @source_printer, @source_process, @embedded_images, @cover)`,
       )
       .run({
         name,
@@ -132,12 +136,19 @@ export function insertModel(db, { name, relPath, parsed }) {
         ts,
         source_printer: parsed.sourcePrinter?.printer ?? '',
         source_process: parsed.sourcePrinter?.process ?? '',
+        ...embeddedColumns(parsed),
       });
     insertDerivedRows(db, Number(id), parsed);
     return Number(id);
   });
   return run();
 }
+
+// M19: embedded image list ('{"cover":null,"images":[]}' when none — known, unlike NULL) and cover bytes
+const embeddedColumns = (parsed) => ({
+  embedded_images: JSON.stringify(parsed.embedded ?? { cover: null, images: [] }),
+  cover: parsed.coverBytes ?? null,
+});
 
 // Per-model rows derived from the file: colour stats, plates, mixing
 function insertDerivedRows(db, id, parsed) {
@@ -163,8 +174,10 @@ export function replaceDerived(db, id, parsed) {
   db.transaction(() => {
     db.prepare(
       `UPDATE models SET format = @format, size_bytes = @size_bytes, tri_count = @tri_count, bbox_mm = @bbox_mm,
-         color_count = @color_count, thumb = NULL, updated_at = @ts, source_printer = @source_printer, source_process = @source_process WHERE id = @id`,
+         color_count = @color_count, thumb = NULL, updated_at = @ts, source_printer = @source_printer, source_process = @source_process,
+         embedded_images = @embedded_images, cover = @cover WHERE id = @id`,
     ).run({
+      ...embeddedColumns(parsed),
       source_printer: parsed.sourcePrinter?.printer ?? '',
       source_process: parsed.sourcePrinter?.process ?? '',
       id,
@@ -209,7 +222,7 @@ export function setTags(db, modelId, names) {
 
 const LIST_COLUMNS = `m.id, m.name, m.rel_path, m.format, m.size_bytes, m.tri_count, m.bbox_mm, m.color_count,
   m.provenance_type, m.platform, m.url, m.prompt, m.retrieved_at, m.notes, m.imported_at, m.updated_at,
-  m.source_printer, m.source_process,
+  m.source_printer, m.source_process, m.embedded_images,
   m.thumb IS NOT NULL AS has_thumb,
   (SELECT COUNT(*) FROM plates p WHERE p.model_id = m.id) AS plate_count,
   (SELECT cm.full_spectrum FROM color_mixing cm WHERE cm.model_id = m.id) AS full_spectrum,
@@ -229,7 +242,15 @@ const SORTS = {
   colors: 'm.color_count IS NULL, m.color_count DESC, m.name COLLATE NOCASE',
 };
 
-const rowOut = (r) => ({ ...r, has_thumb: Boolean(r.has_thumb), full_spectrum: Boolean(r.full_spectrum), tags: JSON.parse(r.tags), color_labels: JSON.parse(r.color_labels), bbox_mm: r.bbox_mm ? JSON.parse(r.bbox_mm) : null });
+const rowOut = (r) => ({
+  ...r,
+  has_thumb: Boolean(r.has_thumb),
+  full_spectrum: Boolean(r.full_spectrum),
+  tags: JSON.parse(r.tags),
+  color_labels: JSON.parse(r.color_labels),
+  bbox_mm: r.bbox_mm ? JSON.parse(r.bbox_mm) : null,
+  embedded_images: r.embedded_images ? JSON.parse(r.embedded_images) : null,
+});
 
 // M18: projects set up for another printer (a 3MF without project settings is not flagged)
 const NON_U1 = `(m.source_printer IS NOT NULL AND m.source_printer != '' AND m.source_printer != '${U1_MODEL}')`;
@@ -318,6 +339,20 @@ export function sidebarCounts(db) {
       )
       .all(),
   };
+}
+
+/** 3MF records indexed before M19, whose embedded images are still unknown (NULL). */
+export function idsNeedingEmbedded(db) {
+  return db.prepare(`SELECT id FROM models WHERE format = '3mf' AND embedded_images IS NULL ORDER BY id`).pluck().all();
+}
+export function setEmbedded(db, id, embedded, coverBytes) {
+  db.prepare('UPDATE models SET embedded_images = ?, cover = ? WHERE id = ?').run(JSON.stringify(embedded), coverBytes ?? null, id);
+}
+/** { path, bytes } of a model's stored cover image, or null. */
+export function getCover(db, id) {
+  const r = db.prepare('SELECT embedded_images, cover FROM models WHERE id = ?').get(id);
+  if (!r?.cover || !r.embedded_images) return null;
+  return { path: JSON.parse(r.embedded_images).cover, bytes: r.cover };
 }
 
 /** 3MF records indexed before M18, whose source printer is still unknown (NULL). */

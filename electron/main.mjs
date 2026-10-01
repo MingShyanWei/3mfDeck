@@ -3,7 +3,9 @@ import { app, BrowserWindow, Menu, ipcMain, dialog, protocol, shell } from 'elec
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb, cabinetColorRows, idsNeedingSourcePrinter, setSourcePrinter } from '../src/core/db.mjs';
+import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb, cabinetColorRows, idsNeedingSourcePrinter, setSourcePrinter, idsNeedingEmbedded, setEmbedded, getCover } from '../src/core/db.mjs';
+import JSZip from 'jszip';
+import { listEmbeddedImages, mimeOf } from '../src/core/embeddedImages.mjs';
 import { convertToU1, readSourcePrinter } from '../src/core/u1Convert.mjs';
 import { loadU1Profiles, DEFAULT_PROFILES_DIR } from '../src/core/orcaProfiles.mjs';
 import { cabinetColors } from '../src/core/purchase.mjs';
@@ -23,7 +25,10 @@ const DEFAULT_ROOT = process.env.MF_LIBRARY_ROOT || path.join(os.homedir(), '3mf
 
 // Thumbnails are served to <img> as mfthumb://thumb/<id> straight from the DB,
 // so the library list never ships PNG blobs over IPC.
-protocol.registerSchemesAsPrivileged([{ scheme: 'mfthumb', privileges: { standard: true, secure: true } }]);
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'mfthumb', privileges: { standard: true, secure: true } },
+  { scheme: 'mfimg', privileges: { standard: true, secure: true } }, // M19 embedded product images
+]);
 
 let win = null;
 let db = null;
@@ -300,6 +305,25 @@ app.whenReady().then(() => {
     const png = getThumb(db, Number(new URL(req.url).pathname.slice(1)));
     return png ? new Response(png, { headers: { 'content-type': 'image/png' } }) : new Response(null, { status: 404 });
   });
+  // M19: mfimg://cover/<id> = the cover stored at import; mfimg://entry/<id>?p=<path> = one
+  // listed image entry read from the 3MF on demand
+  protocol.handle('mfimg', async (req) => {
+    const url = new URL(req.url);
+    const id = Number(url.pathname.slice(1));
+    try {
+      if (url.hostname === 'cover') {
+        const c = getCover(db, id);
+        return c ? new Response(c.bytes, { headers: { 'content-type': mimeOf(c.path) } }) : new Response(null, { status: 404 });
+      }
+      const entry = url.searchParams.get('p');
+      const listed = getModel(db, id)?.embedded_images?.images.some((i) => i.path === entry);
+      if (!listed) return new Response(null, { status: 404 }); // only the images the index lists
+      const bytes = await readZipEntry(modelPath(db, root, id), entry);
+      return bytes ? new Response(bytes, { headers: { 'content-type': mimeOf(entry) } }) : new Response(null, { status: 404 });
+    } catch {
+      return new Response(null, { status: 404 });
+    }
+  });
   root = loadSettings(app.getPath('userData'), DEFAULT_ROOT).libraryRoot;
   fs.mkdirSync(root, { recursive: true });
   db = openDb(path.join(app.getPath('userData'), 'library.db'));
@@ -323,16 +347,37 @@ app.whenReady().then(() => {
   backfillSourcePrinters();
 });
 
-// M18: one-time fill of source_printer for 3MF records indexed before it existed.
-// Runs in the background; records whose file is missing stay unknown (NULL).
+// M18 / M19: one-time fill of source_printer and embedded images for 3MF records
+// indexed before they existed. Runs in the background; records whose file is
+// missing stay unknown (NULL) and are retried on a later launch.
 async function backfillSourcePrinters() {
   for (const id of idsNeedingSourcePrinter(db)) {
     try {
       setSourcePrinter(db, id, await readSourcePrinter(modelPath(db, root, id)));
     } catch {
-      // missing or unreadable file: try again on a later launch
+      // missing or unreadable file
     }
   }
+  for (const id of idsNeedingEmbedded(db)) {
+    try {
+      const zip = await JSZip.loadAsync(await fs.promises.readFile(modelPath(db, root, id)));
+      const embedded = listEmbeddedImages(Object.keys(zip.files));
+      setEmbedded(db, id, embedded, embedded.cover ? await zip.file(embedded.cover).async('nodebuffer') : null);
+    } catch {
+      // missing or unreadable file
+    }
+  }
+}
+
+// One zip entry from a 3MF; the last opened archive is kept so browsing a
+// project's images reads the file once
+let zipCache = null; // { file, mtimeMs, zip }
+async function readZipEntry(file, entry) {
+  const { mtimeMs } = await fs.promises.stat(file);
+  if (zipCache?.file !== file || zipCache.mtimeMs !== mtimeMs) {
+    zipCache = { file, mtimeMs, zip: await JSZip.loadAsync(await fs.promises.readFile(file)) };
+  }
+  return (await zipCache.zip.file(entry)?.async('nodebuffer')) ?? null;
 }
 
 app.on('window-all-closed', () => app.quit());

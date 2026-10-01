@@ -376,3 +376,13 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
 .u1-warning .row { margin-top: 8px; flex-wrap: wrap; }
 .u1-result { align-items: flex-start; }
 .u1-report { margin: 6px 0 8px; padding-left: 18px; color: var(--muted); line-height: 1.6; }
+
+/* M19: embedded product images */
+.preview-switch { margin: 0 0 8px; }
+.preview-switch .muted { font-family: var(--num); font-size: 11px; }
+.embedded-stage { position: relative; height: 380px; border-radius: 14px; overflow: hidden; background: var(--stage); }
+.embedded-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.embedded-thumbs { display: flex; gap: 6px; overflow-x: auto; padding: 8px 2px 4px; }
+.embedded-thumb { flex: 0 0 auto; width: 72px; padding: 3px; border-radius: 10px; background: var(--panel); box-shadow: var(--shadow); display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10px; color: var(--muted); }
+.embedded-thumb img { width: 64px; height: 64px; object-fit: cover; border-radius: 7px; background: var(--sunken); }
+.embedded-thumb.on { box-shadow: 0 0 0 2px var(--accent); color: var(--text); }

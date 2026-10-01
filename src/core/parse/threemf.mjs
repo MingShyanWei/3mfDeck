@@ -12,6 +12,7 @@ import { decodePaintColor } from '../paintColor.mjs';
 import { FULL_SPECTRUM } from '../fullSpectrum.mjs';
 import { emptyBox, growBox, transformBox, mulAffine, applyAffine, boxSize, IDENTITY } from './geom.mjs';
 import { detectPrinter } from '../u1Convert.mjs';
+import { listEmbeddedImages } from '../embeddedImages.mjs';
 
 const UNIT_MM = { micron: 0.001, millimeter: 1, centimeter: 10, inch: 25.4, foot: 304.8, meter: 1000 };
 
@@ -299,6 +300,9 @@ export async function parse3mf(buffer, { geometry = false, plate = null } = {}) 
   for (const p of subPaths) if (p !== rootPath && zip.file(p)) await scanModel(zip.file(p), p, model);
 
   const projectText = await text('Metadata/project_settings.config');
+  // M19: product images embedded in the project; the cover is read only when indexing (no geometry)
+  const embedded = listEmbeddedImages(Object.keys(zip.files));
+  const coverBytes = !geometry && embedded.cover ? await zip.file(embedded.cover).async('nodebuffer') : null;
   const colours = readFilamentColours(projectText);
   const ext = readModelSettings(await text('Metadata/model_settings.config'));
 
@@ -408,6 +412,8 @@ export async function parse3mf(buffer, { geometry = false, plate = null } = {}) 
     provenanceHint: provenanceHint(model.metadata),
     // M18: which printer the project was set up for (null without project settings)
     sourcePrinter: projectText ? detectPrinter(JSON.parse(projectText)) : null,
+    embedded,
+    coverBytes,
     ...(geo && {
       geometry: { positions: geo.positions.array, indices: geo.indices.array, faceColor: geo.faceColor.array, palette: geo.palette },
     }),

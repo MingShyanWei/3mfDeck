@@ -1063,6 +1063,46 @@ try {
     step(`M18 U1: m18-p1s 非 U1 徽章/過濾/警示 -> 轉換 ${outFile}（${out.print_settings_id}，2 盤搬到 U1 盤面、盤 3 保持原位），原檔未動`);
   }
 
+  // 15) M19: embedded product images — 3D / 原檔圖 switch, thumbnail strip, plate switcher link
+  {
+    const JSZipM19 = (await import('jszip')).default;
+    const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==', 'base64');
+    const zip = await JSZipM19.loadAsync(await fs.readFile(path.join(FIX, 'multiplate.3mf')));
+    zip.file('Auxiliaries/.thumbnails/thumbnail_middle.png', PNG);
+    zip.file('Auxiliaries/Model Pictures/photo.png', PNG);
+    zip.file('Metadata/plate_1.png', PNG);
+    zip.file('Metadata/plate_2.png', PNG);
+    const picFile = path.join(inbox, 'm19-pictures.3mf');
+    await fs.writeFile(picFile, await zip.generateAsync({ type: 'nodebuffer' }));
+    await importViaMenu([picFile]);
+    await page.click('[data-testid=import-skip-all]');
+    // a file without embedded images: no switch at all
+    await openModel('m17-painted');
+    assert.equal(await page.$('[data-testid=preview-switch]'), null, 'no 3D / 原檔圖 switch without embedded images');
+    await openModel('m19-pictures');
+    assert.match(await page.textContent('[data-testid=preview-mode-images]'), /原檔圖\s*4/);
+    assert.equal(await page.$('[data-testid=embedded-images]'), null, '3D is the default view');
+    await page.click('[data-testid=preview-mode-images]');
+    await page.waitForSelector('[data-testid=embedded-image]');
+    const shown = () => page.getAttribute('[data-testid=embedded-image]', 'data-path');
+    const loaded = () => page.waitForFunction(() => document.querySelector('[data-testid=embedded-image]')?.naturalWidth > 0);
+    assert.equal(await shown(), 'Auxiliaries/.thumbnails/thumbnail_middle.png');
+    await loaded(); // the cover, served from the index
+    assert.equal(await page.$eval('[data-testid=viewer]', (v) => v.offsetParent === null), true, 'the 3D view is hidden, not unmounted');
+    assert.deepEqual(await page.$$eval('[data-testid=embedded-thumb]', (b) => b.map((x) => x.textContent.trim())), ['封面', '實拍', '盤 1', '盤 2']);
+    await page.click('[data-testid=embedded-thumb][data-path="Auxiliaries/Model Pictures/photo.png"]');
+    await page.waitForFunction(() => document.querySelector('[data-testid=embedded-image]')?.dataset.path.endsWith('photo.png'));
+    await loaded(); // read from the 3MF on demand
+    await page.click('[data-testid=plate-2]');
+    await page.waitForFunction(() => document.querySelector('[data-testid=embedded-image]')?.dataset.path === 'Metadata/plate_2.png');
+    await loaded();
+    await page.click('[data-testid=preview-mode-3d]');
+    await page.waitForSelector('[data-testid=viewer][data-status=ready]');
+    assert.equal(await page.$eval('[data-testid=viewer]', (v) => v.offsetParent !== null), true);
+    step('M19 原檔圖: 無內嵌圖時不顯示切換；m19-pictures 預設 3D，原檔圖 4 張（封面/實拍/盤 1/盤 2），選盤 2 -> plate_2.png，切回 3D 正常');
+    await page.fill('[data-testid=search]', '');
+  }
+
   await page.screenshot({ path: path.join(base, 'smoke.png') });
   step('screenshot: ' + path.join(base, 'smoke.png'));
 } finally {

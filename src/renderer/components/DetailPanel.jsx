@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from 'react';
 import MetadataForm, { toDraft, saveDraft } from './MetadataForm.jsx';
 import ModelViewer from './ModelViewer.jsx';
 import ColorAnalysis from './ColorAnalysis.jsx';
+import EmbeddedImages, { PreviewSwitch } from './EmbeddedImages.jsx';
+import { plateImage } from '../../core/embeddedImages.mjs';
 import { ProvenanceBadge, PlateBadge, ColorLabels, isNonU1 } from './Badges.jsx';
 import { isUnlabeled, formatBytes, formatInt, formatBbox, formatDate } from '../format.js';
 
@@ -14,6 +16,8 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
   const [plate, setPlate] = useState(null); // selected plate of a multi-plate file
 
   const [inTrash, setInTrash] = useState(false); // missing record whose file is in .trash
+  const [previewMode, setPreviewMode] = useState('3d'); // M19: '3d' | 'images'
+  const [imagePath, setImagePath] = useState(null);
   const [converting, setConverting] = useState(false);
   const [converted, setConverted] = useState(null); // M18 conversion result
   const [actionError, setActionError] = useState('');
@@ -26,6 +30,8 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
     setConverted(null);
     setActionError('');
     setPlate(m.plates.length > 1 ? m.plates[0].plate : null);
+    setPreviewMode('3d');
+    setImagePath(m.embedded_images?.cover ?? null);
     setInTrash(m.missing ? await window.api.missingInTrash(id) : false);
   }, [id]);
   useEffect(() => {
@@ -184,7 +190,12 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
                 className={p.plate === plate ? 'seg on' : 'seg'}
                 data-testid={`plate-${p.plate}`}
                 title={p.name || `盤 ${p.plate}`}
-                onClick={() => setPlate(p.plate)}
+                onClick={() => {
+                  setPlate(p.plate);
+                  // the image view follows the plate switcher: plate N -> its Orca render
+                  const img = plateImage(model.embedded_images, p.plate);
+                  if (img) setImagePath(img);
+                }}
               >
                 盤 {p.plate}
               </button>
@@ -196,7 +207,14 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
           </div>
         </div>
       )}
-      <ModelViewer model={model} plate={plate} colors={plateInfo ? plateInfo.colors : model.colors} />
+      <PreviewSwitch embedded={model.embedded_images} mode={previewMode} onMode={setPreviewMode} />
+      {previewMode === 'images' && model.embedded_images?.images.length > 0 && (
+        <EmbeddedImages id={model.id} embedded={model.embedded_images} path={imagePath} onPath={setImagePath} />
+      )}
+      {/* kept mounted while the images show, so going back to 3D does not reload the model */}
+      <div hidden={previewMode === 'images' && model.embedded_images?.images.length > 0}>
+        <ModelViewer model={model} plate={plate} colors={plateInfo ? plateInfo.colors : model.colors} />
+      </div>
       <div className="detail-title">
         <div className="grow">
           <h2 title={model.name}>{model.name}</h2>
