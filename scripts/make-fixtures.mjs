@@ -467,6 +467,9 @@ await fs.writeFile(path.join(OUT, 'painted.3mf'), await painted3mf(['#00FFFF', '
 // Same cube with non-CMYK filament colours, to exercise filament mapping
 await fs.writeFile(path.join(OUT, 'offpalette.3mf'), await painted3mf(['#1E90FF', '#E0457B', '#FFD700', '#333333']));
 await fs.writeFile(path.join(OUT, 'textured.glb'), texturedGlb());
+// Colours a single U1 slot cannot print (M8): green, saturated orange (not
+// reachable by CMYK halftone either), purple, skin tone
+await fs.writeFile(path.join(OUT, 'mixneeded.3mf'), await painted3mf(['#4CAF50', '#FF8C00', '#800080', '#E0AC69']));
 await fs.writeFile(path.join(OUT, 'materials.3mf'), await materials3mf());
 await fs.writeFile(path.join(OUT, 'multiplate.3mf'), await multiplate3mf());
 // Full Spectrum style: every face an independent random filament with

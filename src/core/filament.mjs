@@ -79,24 +79,136 @@ export function nearestSlot(hex, slots = U1_SLOTS) {
   return best;
 }
 
+// ---------------------------------------------------------------------------
+// Mixing recipes (M8). U1 Full Spectrum prints a mix as side-by-side dots of
+// single filaments (halftone; see paintColor.mjs), so the perceived colour is
+// the Neugebauer halftone mix with the filaments as primaries and no dot
+// overlap (Yule–Nielsen n = 1): the area-weighted average of the filament
+// colours in LINEAR light — the same forward model as the 混色估計 preview.
+// A recipe is the slot weighting (1 % steps) whose mix is closest to the
+// target by CIEDE2000. Partitive mixing can only desaturate/darken, so very
+// saturated or very light targets may stay > MIX_DELTA_E away: those cannot
+// be mixed from CMYK and are flagged (buy that filament).
+// ---------------------------------------------------------------------------
+
+/** Above this CIEDE2000 distance to the nearest single slot a colour must be mixed. */
+export const MIX_DELTA_E = 15;
+
+const srgbToLin = (c) => {
+  c /= 255;
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+};
+const linToSrgb = (c) => Math.round(Math.min(1, Math.max(0, c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055)) * 255);
+const toHex = (rgb) => '#' + rgb.map((v) => v.toString(16).padStart(2, '0')).join('').toUpperCase();
+
+/** Halftone mix of slot colours: `weights` per slot (same order as `slots`), summing to 1. */
+export function mixColour(weights, slots = U1_SLOTS) {
+  const lin = slots.map((s) => hexToRgb(s.hex).map(srgbToLin));
+  return toHex([0, 1, 2].map((k) => linToSrgb(weights.reduce((sum, w, i) => sum + w * lin[i][k], 0))));
+}
+
+// Every weighting of `slots` in `step` % increments (sum 100), with its Lab colour
+function grid(slots, step) {
+  const out = [];
+  const walk = (i, left, acc) => {
+    if (i === slots.length - 1) {
+      const w = [...acc, left];
+      out.push({ w, lab: rgbToLab(hexToRgb(mixColour(w.map((x) => x / 100), slots))) });
+      return;
+    }
+    for (let v = 0; v <= left; v += step) walk(i + 1, left - v, [...acc, v]);
+  };
+  walk(0, 100, []);
+  return out;
+}
+const coarseCache = new Map();
+const recipeCache = new Map();
+
+/**
+ * Best CMYK (slot) recipe for a colour: 5 % grid search, then 1 % refinement
+ * around the best weighting. Returns { weights: [{slot, name, label, hex, pct}]
+ * (non-zero, largest first), mixHex, deltaE }.
+ */
+export function mixRecipe(hex, slots = U1_SLOTS) {
+  const key = hex + slots.map((s) => s.hex).join();
+  if (recipeCache.has(key)) return recipeCache.get(key);
+  const slotKey = slots.map((s) => s.hex).join();
+  if (!coarseCache.has(slotKey)) coarseCache.set(slotKey, grid(slots, 5));
+  const target = rgbToLab(hexToRgb(hex));
+  let best = null;
+  for (const g of coarseCache.get(slotKey)) {
+    const d = deltaE2000(target, g.lab);
+    if (!best || d < best.d) best = { w: g.w, d };
+  }
+  // refine: every 1 % weighting within ±5 % of the coarse optimum
+  const coarse = best.w;
+  const walk = (i, left, acc) => {
+    if (i === slots.length - 1) {
+      if (Math.abs(left - coarse[i]) > 5) return;
+      const w = [...acc, left];
+      const d = deltaE2000(target, rgbToLab(hexToRgb(mixColour(w.map((x) => x / 100), slots))));
+      if (d < best.d) best = { w, d };
+      return;
+    }
+    for (let v = Math.max(0, coarse[i] - 5); v <= Math.min(left, coarse[i] + 5); v++) walk(i + 1, left - v, [...acc, v]);
+  };
+  walk(0, 100, []);
+  const recipe = {
+    weights: slots.map((s, i) => ({ ...s, pct: best.w[i] })).filter((x) => x.pct > 0).sort((a, b) => b.pct - a.pct),
+    mixHex: mixColour(best.w.map((x) => x / 100), slots),
+    deltaE: Math.round(best.d * 10) / 10,
+  };
+  recipeCache.set(key, recipe);
+  return recipe;
+}
+
+/** "C 50%＋Y 50%" */
+export const recipeText = (recipe) => recipe.weights.map((w) => `${w.name} ${w.pct}%`).join('＋');
+
+/**
+ * How a colour gets printed on the slots:
+ * - mode 'single': nearest slot within MIX_DELTA_E -> that one spool
+ * - mode 'mix':    must be mixed; `recipe` with its mix colour and residual ΔE;
+ *                  `mixable` false when even the best mix stays > MIX_DELTA_E
+ *                  (cannot be mixed from these slots: buy the filament)
+ * `previewHex` is what the filament-mapping preview shows.
+ */
+export function printPlan(hex, slots = U1_SLOTS, threshold = MIX_DELTA_E) {
+  const near = nearestSlot(hex, slots);
+  const nearest = { slot: near.slot, name: near.name, hex: near.hex, deltaE: Math.round(near.deltaE * 10) / 10 };
+  if (near.deltaE <= threshold) return { mode: 'single', nearest, previewHex: near.hex };
+  const recipe = mixRecipe(hex, slots);
+  return { mode: 'mix', nearest, recipe, mixable: recipe.deltaE <= threshold, previewHex: recipe.mixHex };
+}
+
 /**
  * Map a colour distribution ([{color, faces, pct}], e.g. color_stats) onto
- * slots. Returns { mapping: [{color, faces, pct, slot, deltaE}],
- * used: [{slot, name, label, hex, faces, pct}] } — `used` answers
- * "which spools will this file use", sorted by slot number.
+ * slots. Returns { mapping: [{color, faces, pct, slot, deltaE, mode, recipe?,
+ * mixable?, previewHex}], used: [{slot, name, label, hex, faces, pct}] } —
+ * `used` answers "which spools will this file use", sorted by slot number;
+ * mixed colours count towards each slot by their recipe share.
  */
-export function mapToSlots(colorStats, slots = U1_SLOTS) {
+export function mapToSlots(colorStats, slots = U1_SLOTS, threshold = MIX_DELTA_E) {
   const mapping = colorStats.map((c) => {
-    const s = nearestSlot(c.color, slots);
-    return { color: c.color, faces: c.faces, pct: c.pct, slot: s.slot, deltaE: Math.round(s.deltaE * 10) / 10 };
+    const plan = printPlan(c.color, slots, threshold);
+    return { color: c.color, faces: c.faces, pct: c.pct, slot: plan.nearest.slot, deltaE: plan.nearest.deltaE, ...plan };
   });
   const used = new Map();
+  const add = (slot, faces, pct) => {
+    const s = slots.find((x) => x.slot === slot);
+    const u = used.get(slot) || { ...s, faces: 0, pct: 0 };
+    u.faces += faces;
+    u.pct += pct;
+    used.set(slot, u);
+  };
   for (const m of mapping) {
-    const s = slots.find((x) => x.slot === m.slot);
-    const u = used.get(s.slot) || { ...s, faces: 0, pct: 0 };
-    u.faces += m.faces;
-    u.pct = Math.round((u.pct + m.pct) * 100) / 100;
-    used.set(s.slot, u);
+    if (m.mode === 'single') add(m.slot, m.faces, m.pct);
+    else for (const w of m.recipe.weights) add(w.slot, (m.faces * w.pct) / 100, (m.pct * w.pct) / 100);
   }
-  return { mapping, used: [...used.values()].sort((a, b) => a.slot - b.slot) };
+  return {
+    mapping,
+    used: [...used.values()]
+      .map((u) => ({ ...u, faces: Math.round(u.faces), pct: Math.round(u.pct * 100) / 100 }))
+      .sort((a, b) => a.slot - b.slot),
+  };
 }

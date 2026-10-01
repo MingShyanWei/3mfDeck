@@ -264,11 +264,16 @@ try {
   const before = await viewerPixels();
   await setMode('filament');
   const after = await viewerPixels();
+  // M8: #1E90FF (ΔE 39.3) and #E0457B (ΔE 21.6) must be mixed; #FFD700 / #333333 print from one slot
   assert.ok(!present(before).includes('cyan') && present(before).includes('blue'), 'original: dodger blue ' + JSON.stringify(before));
-  assert.ok(present(after).includes('cyan') && !present(after).includes('blue'), 'mapped: cyan ' + JSON.stringify(after));
-  const mapping = await page.$$eval('[data-testid=spools] .mapping li', (els) => els.map((e) => e.textContent.trim()));
+  assert.ok(!present(after).includes('blue') && present(after).includes('yellow'), 'mapped: blue replaced by its mix, gold -> Y ' + JSON.stringify(after));
+  const mapping = await page.$$eval('[data-testid=mapping-row]', (els) => els.map((e) => `${e.dataset.mode}: ${e.textContent.trim()}`));
   assert.equal(mapping.length, 4);
-  assert.match(mapping[0], /^#1E90FF → 槽1/);
+  assert.match(mapping[0], /^mix: #1E90FF → 混色 K \d+%＋C \d+%＋M \d+% ≈/);
+  assert.match(mapping[1], /^mix: #E0457B → 混色/);
+  assert.match(mapping[2], /^single: #FFD700 → 槽3（ΔE 11\.6）/);
+  assert.match(mapping[3], /^single: #333333 → 槽4（ΔE 13\.4）/);
+  await page.waitForSelector('[data-testid=mix-note]');
   await page.$eval('[data-testid=detail-panel]', (el) => el.scrollTo(0, 0));
   await page.screenshot({ path: path.join(base, 'preview-filament.png') });
   step(`offpalette.3mf 原始 ${JSON.stringify(present(before))} -> 耗材映射 ${JSON.stringify(present(after))}; ${mapping.join(' | ')}`);
@@ -461,11 +466,36 @@ try {
   await page.waitForFunction((n) => document.querySelectorAll('[data-testid=card-thumb]').length === n, liveFiles);
   step(`拔掉 DB 重開: banner "發現 ${liveFiles} 個檔案"; 重建索引 -> ${await cardCount()} cards, thumbnails regenerated, 3MF metadata re-parsed`);
 
+  // 9b) M8: colours one slot cannot print -> CMYK mixing recipes
+  await importViaMenu([await stage('mixneeded.3mf')]);
+  await page.click('[data-testid=import-skip-all]');
+  await openModel('mixneeded');
+  const printCells = await page.$$eval('[data-testid=color-row]', (rows) =>
+    rows.map((r) => [r.cells[0].textContent.trim().replace(/\s+/g, ' '), r.querySelector('[data-testid=print-cell]').dataset.mode, r.querySelector('[data-testid=print-cell]').textContent.trim()]),
+  );
+  const modeOf = Object.fromEntries(printCells.map(([c, m]) => [c, m]));
+  assert.deepEqual(modeOf, { '#4CAF50': 'mix', '#FF8C00': 'buy', '#800080': 'mix', '#E0AC69': 'mix' });
+  assert.match(printCells.find((r) => r[0] === '#800080')[2], /^K \d+%＋M \d+%（ΔE 0\.\d）$/);
+  assert.match(printCells.find((r) => r[0] === '#FF8C00')[2], /需買線材/);
+  assert.match(await page.textContent('[data-testid=needs-mix-summary]'), /4 色單捲印不出.*其中 1 色 CMYK 也混不出/);
+  await setMode('filament');
+  const mixPx = await viewerPixels();
+  const opaque = (c) => Object.entries(c).filter(([k]) => k !== 'transparent').reduce((sum, [, n]) => sum + n, 0);
+  // nearest single slots would paint green, orange and skin pure yellow (#FFFF00); their mixes are muted
+  // (purple's mix #810081 is a dark magenta, so magenta-hued pixels remain on its face)
+  assert.ok(!present(mixPx).includes('yellow') && (mixPx.other || 0) / opaque(mixPx) > 0.8, 'preview shows mix colours, not nearest slots ' + JSON.stringify(mixPx));
+  const mixRows = await page.$$eval('[data-testid=mapping-row]', (els) => els.map((e) => e.dataset.mode));
+  assert.deepEqual(mixRows, ['mix', 'mix', 'mix', 'mix']);
+  step('mixneeded.3mf: 列印方式 ' + printCells.map((r) => `${r[0]}=${r[1]} ${r[2]}`).join(' | ') + '; filament preview uses mix colours');
+  await page.$eval('[data-testid=detail-panel]', (el) => el.scrollTo(0, 0));
+  await page.screenshot({ path: path.join(base, 'mixneeded.png') });
+  await page.fill('[data-testid=search]', '');
+
   // 6) Settings page: switch library root (SPEC 3.8)
   const rootB = path.join(base, 'libraryB');
   await fs.mkdir(path.join(rootB, '2025'), { recursive: true });
   await fs.copyFile(path.join(FIX, 'fixture.step'), path.join(rootB, '2025', 'part.step'));
-  const allCount = liveFiles; // after the rebuild every live file is indexed again
+  const allCount = liveFiles + 1; // every live file after the rebuild, plus mixneeded.3mf (M8)
   await page.click('[data-testid=filter-all]');
   await page.click('[data-testid=settings-button]');
   await page.waitForFunction((v) => document.querySelector('[data-testid=settings-root]')?.textContent === v, lib);
@@ -589,7 +619,6 @@ try {
   assert.match(await page.textContent('[data-testid=mixing-spools]'), /5 捲（超過 U1 的 4 個耗材槽）/);
   assert.match(await page.textContent('[data-testid=mixing-average]'), /#D7BE8C.*估計值，實際以 Orca 渲染為準/);
   const pure = (c) => ['cyan', 'magenta', 'yellow', 'black', 'red', 'green', 'blue'].reduce((s, k) => s + (c[k] || 0), 0);
-  const opaque = (c) => Object.entries(c).filter(([k]) => k !== 'transparent').reduce((s, [, n]) => s + n, 0);
   await setMode('filament');
   const fsSpools = await page.$$eval('[data-testid=spool]', (e) => e.map((x) => x.textContent.trim()));
   assert.equal(fsSpools.length, 5);
@@ -730,7 +759,7 @@ try {
   await put(path.join(lib, year, 'box.obj'), 'recovered/y/box.obj');
   await page.click('[data-testid=recover-open]');
   await page.waitForSelector('[data-testid=recover-summary]');
-  assert.match(await page.textContent('[data-testid=recover-summary]'), /找到 3 筆 · 多個候選 1 筆.*找不到 3 筆/);
+  assert.match(await page.textContent('[data-testid=recover-summary]'), new RegExp(`找到 3 筆 · 多個候選 1 筆.*找不到 ${left - 4} 筆`));
   const recRows = await page.$$eval('[data-testid=recover-row]', (rows) =>
     rows.map((r) => [r.dataset.name, r.dataset.status, r.querySelector('[data-testid=recover-check]')?.checked ?? null, r.cells[3].textContent.trim()]),
   );

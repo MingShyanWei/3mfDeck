@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Viewer } from '../viewer/Viewer.js';
 import { buildModel } from '../viewer/buildModel.js';
-import { mapToSlots, U1_SLOTS } from '../../core/filament.mjs';
+import { mapToSlots, U1_SLOTS, MIX_DELTA_E, recipeText } from '../../core/filament.mjs';
 
 const MODE_LABELS = [
   ['original', '原始', 'mdi-palette-outline'],
@@ -170,11 +170,24 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
           {spools.mapping.some((m) => m.deltaE > 0) && (
             <ul className="mapping small">
               {spools.mapping.filter((m) => m.deltaE > 0).map((m) => (
-                <li key={m.color}>
-                  <span className="swatch" style={{ background: m.color }} /> {m.color} → 槽{m.slot}（ΔE {m.deltaE}）
+                <li key={m.color} data-testid="mapping-row" data-mode={m.mode}>
+                  <span className="swatch" style={{ background: m.color }} /> {m.color} →{' '}
+                  {m.mode === 'single' ? (
+                    <>槽{m.slot}（ΔE {m.deltaE}）</>
+                  ) : (
+                    <>
+                      混色 {recipeText(m.recipe)} ≈ <span className="swatch" style={{ background: m.recipe.mixHex }} /> {m.recipe.mixHex}（ΔE {m.recipe.deltaE}；單捲最近 {m.nearest.name} ΔE {m.deltaE}）
+                      {!m.mixable && <span className="badge badge-warn">CMYK 混不出，建議直接買此色線材</span>}
+                    </>
+                  )}
                 </li>
               ))}
             </ul>
+          )}
+          {spools.mapping.some((m) => m.mode === 'mix') && (
+            <div className="small muted" data-testid="mix-note">
+              單捲 ΔE &gt; {MIX_DELTA_E} 的顏色以 CMYK 混色（半色調面積混合，Neugebauer 模型）估計，預覽顯示混色結果；需以 Full Spectrum 抖色列印，實際以 Orca 為準。
+            </div>
           )}
         </div>
       )}

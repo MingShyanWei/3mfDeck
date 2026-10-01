@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { quantizeFaces, faceColours, prepareMesh, linearBytes } from '../../src/renderer/viewer/meshData.js';
 import { parse3mf } from '../../src/core/parse/threemf.mjs';
+import { printPlan } from '../../src/core/filament.mjs';
 import { FIXTURES } from './helpers.mjs';
 
 describe('quantizeFaces', () => {
@@ -44,13 +45,17 @@ describe('faceColours', () => {
 });
 
 describe('prepareMesh', () => {
-  it('painted.3mf: original colours and nearest-slot colours per face', async () => {
+  it('offpalette.3mf: original colours and filament-plan colours per face (mix colour when ΔE > 15)', async () => {
     const { geometry } = await parse3mf(await fs.readFile(path.join(FIXTURES, 'offpalette.3mf')), { geometry: true });
     const r = prepareMesh(geometry);
     expect(r.positions.length).toBe(12 * 9);
     const first = (arr) => [...arr.subarray(0, 3)];
     expect(first(r.original)).toEqual(linearBytes('#1E90FF'));
-    expect(first(r.filament)).toEqual(linearBytes('#00FFFF')); // nearest U1 slot: C
+    // #1E90FF is ΔE 39.3 from slot C: it must be mixed, so the preview shows the recipe's colour
+    const plan = printPlan('#1E90FF');
+    expect(plan.mode).toBe('mix');
+    expect(first(r.filament)).toEqual(linearBytes(plan.previewHex));
+    expect(first(r.filament)).not.toEqual(linearBytes('#00FFFF'));
   });
 
   it('no palette: geometry only', async () => {

@@ -1,6 +1,6 @@
 // Heavy per-face mesh preparation for painted 3MF previews. Pure functions
 // (no DOM / three.js) so they run in a Web Worker and in unit tests.
-import { nearestSlot } from '../../core/filament.mjs';
+import { printPlan } from '../../core/filament.mjs';
 
 export const GRAY_HEX = '#b4b4b0';
 
@@ -135,7 +135,8 @@ export function prepareMesh({ positions, indices, faceColor, palette }, { estima
   return {
     ...q,
     original: faceColours(faceColor, palette),
-    filament: faceColours(faceColor, palette.map((c) => nearestSlot(c).hex)),
+    // single slot within MIX_DELTA_E, else the CMYK mixing recipe's colour (M8)
+    filament: faceColours(faceColor, palette.map((c) => printPlan(c).previewHex)),
     estimate: estimate ? estimateColours(indices, faceColor, palette, positions.length / 3) : null,
   };
 }

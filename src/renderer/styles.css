@@ -234,3 +234,6 @@ button.icon:hover { color: var(--text); }
 .modal.wide { width: min(860px, 92vw); }
 .recover td { white-space: normal; vertical-align: top; }
 .recover .badge { margin-left: 6px; }
+
+.mapping .badge { margin-left: 6px; }
+.dist td[data-testid=print-cell] { white-space: normal; }
