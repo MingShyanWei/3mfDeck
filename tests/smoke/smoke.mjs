@@ -519,6 +519,24 @@ try {
   // 9d) M12: filament inventory — register two filaments, suggest FROM them
   await page.click('[data-testid=settings-button]');
   await page.waitForSelector('[data-testid=inventory-editor]');
+  // M12b: import a real-format 3dfilamentprofiles export through the (mocked) file dialog
+  {
+    const invFile = path.join(base, 'my-spools.json');
+    await fs.writeFile(invFile, JSON.stringify([
+      { brand: 'Bambu Lab', material: 'PLA', material_type: 'Basic', color: 'Cyan (10603)', rgb: '#0086D6', filament_id: 68 },
+      { brand: 'Bambu Lab', material: 'PLA', material_type: 'Basic', color: 'Yellow (10400)', rgb: '#F4EE2A', filament_id: 42 },
+    ]));
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+    }, invFile);
+    await page.click('[data-testid=inventory-import]');
+    await page.waitForFunction(() => /匯入 2 條線材/.test(document.querySelector('[data-testid=inventory-message]')?.textContent || ''));
+    const imported = await page.$$eval('[data-testid=inventory-list] [data-testid^=inventory-hex-]', (els) => els.map((e) => e.value));
+    assert.deepEqual(imported.sort(), ['#0086D6', '#F4EE2A']);
+    step('M12b 線材庫匯入: 3dfilamentprofiles JSON → Bambu Lab 青+黃 2 條入庫');
+    // clear them again so the manual-entry part below starts clean
+    for (let i = 1; i >= 0; i--) await page.click(`[data-testid=inventory-del-${i}]`);
+  }
   await page.click('[data-testid=inventory-add]');
   await page.click('[data-testid=inventory-add]');
   await page.fill('[data-testid=inventory-hex-0]', '#4CAF50');

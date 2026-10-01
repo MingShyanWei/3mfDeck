@@ -88,6 +88,15 @@ export default function SettingsDialog({ onClose, onRootChanged, onSpoolsChanged
                 ))}
               </div>
               <div className="row">
+                <button data-testid="inventory-import" onClick={async () => {
+                  const r = await window.api.importInventory();
+                  if (!r) return;
+                  if (r.error) return setInvMsg(r.error);
+                  const existing = new Set(inventory.map((f) => f.hex));
+                  const add = r.items.filter((f) => !existing.has(f.hex));
+                  setInventory([...inventory, ...add]);
+                  setInvMsg(`匯入 ${add.length} 條線材${add.length < r.items.length ? `（重複 ${r.items.length - add.length} 條已略過）` : ''}${r.skipped.length ? `，另 ${r.skipped.length} 條缺色碼略過` : ''}。請確認後按「儲存線材庫」。`);
+                }}><i className="mdi mdi-file-import-outline" /> 從檔案匯入…</button>
                 <button data-testid="inventory-add" onClick={() => setInventory([...inventory, { name: '', hex: '#FFFFFF' }])}><i className="mdi mdi-plus" /> 新增線材</button>
                 <button className="primary" data-testid="inventory-save" onClick={async () => {
                   const r = await window.api.setInventory(inventory);

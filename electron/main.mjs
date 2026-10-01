@@ -10,6 +10,7 @@ import { trashModel, restoreModel, emptyTrash, exportModel } from '../src/core/t
 import { consistencyReport, relocateModel, removeRecord, findInTrash, restoreMissingFromTrash, isInside, removeMissingRecords, findByFilename, applyRelocations } from '../src/core/missing.mjs';
 import { loadSettings, saveSettings, validateSpools, validateInventory, switchRoot, markMissing, modelPath } from '../src/core/settings.mjs';
 import { mappingCsv, exportQuantized3mf } from '../src/core/exportMapping.mjs';
+import { import3dfpInventory } from '../src/core/inventoryImport.mjs';
 import { slotsFromColours } from '../src/core/filament.mjs';
 import { SUPPORTED_EXTS } from '../src/core/parse/index.mjs';
 
@@ -208,6 +209,20 @@ function registerIpc() {
       return { inventory: clean };
     } catch (err) {
       return { error: err.message };
+    }
+  });
+  ipcMain.handle('settings:importInventory', async () => {
+    const r = await dialog.showOpenDialog(win, {
+      title: '匯入線材庫（3dfilamentprofiles 匯出檔）',
+      filters: [{ name: 'JSON / CSV', extensions: ['json', 'csv'] }],
+      properties: ['openFile'],
+    });
+    if (r.canceled || !r.filePaths.length) return null;
+    try {
+      const text = await fs.promises.readFile(r.filePaths[0], 'utf8');
+      return { ...import3dfpInventory(text), path: r.filePaths[0] };
+    } catch (err) {
+      return { error: `匯入失敗：${err.message}` };
     }
   });
   ipcMain.handle('settings:setSpools', (_e, spools) => {
