@@ -4,7 +4,8 @@ import { analyzeColors, mixedAverage } from '../../core/colorAnalysis.mjs';
 import { printPlan, recipeText, MIX_DELTA_E, slotName } from '../../core/filament.mjs';
 import { useSlots } from '../slots.js';
 import { FULL_SPECTRUM } from '../../core/fullSpectrum.mjs';
-import SpoolSuggest from './SpoolSuggest.jsx';
+import SpoolSuggestDialog from './SpoolSuggestDialog.jsx';
+import { useState } from 'react';
 
 const ICONS = { dither: 'mdi-select-compare', 'few-colors': 'mdi-check-circle-outline', 'needs-mixing': 'mdi-palette-swatch-variant' };
 
@@ -27,6 +28,7 @@ function PrintCell({ plan }) {
 // `mixing`: { vertexMixedPct } for Full Spectrum (dithered) files, else null.
 export default function ColorAnalysis({ colors, totals = null, title = '', mixing = null }) {
   const slots = useSlots();
+  const [suggestOpen, setSuggestOpen] = useState(false);
   const warnings = useMemo(() => (colors.length ? analyzeColors(colors) : []), [colors]);
   const ditherColors = new Set(warnings.filter((w) => w.type === 'dither').flatMap((w) => w.colors));
   const max = Math.max(...colors.map((c) => c.pct), 0);
@@ -43,6 +45,11 @@ export default function ColorAnalysis({ colors, totals = null, title = '', mixin
       <h3 data-testid="color-analysis-title">
         顏色分析 · {title ? `${title}：` : ''}
         {colors.length} 色{totals ? ` ／ 全檔 ${totals.length} 色` : ''}
+        {!mixing && colors.length >= 2 && (
+          <button className="small right" data-testid="suggest-open" onClick={() => setSuggestOpen(true)}>
+            <i className="mdi mdi-palette" /> 建議捲色…
+          </button>
+        )}
       </h3>
       {mixing && colors.length > 0 && (
         <div className="mixing" data-testid="mixing-stats">
@@ -112,7 +119,7 @@ export default function ColorAnalysis({ colors, totals = null, title = '', mixin
           ))}
         </tbody>
       </table>
-      {!mixing && <SpoolSuggest colors={totals || colors} />}
+      {!mixing && suggestOpen && <SpoolSuggestDialog colors={totals || colors} onClose={() => setSuggestOpen(false)} />}
     </section>
   );
 }

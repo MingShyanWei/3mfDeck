@@ -1,11 +1,11 @@
-// M11/M12: recommend spool colours for this model — from the user's filament
-// inventory first (SPEC 3.5d), or open-ended ideal colours (area-weighted k-means).
+// M13: spool-colour suggestion in its own modal (SPEC 3.5d) — the colour
+// analysis panel stays clean; this window holds the inventory/ideal pickers.
 import { useMemo, useState } from 'react';
 import { suggestSpools } from '../../core/spoolSuggest.mjs';
 import { suggestFromInventory } from '../../core/inventorySuggest.mjs';
 import { useSetSpools } from '../slots.js';
 
-export default function SpoolSuggest({ colors }) {
+export default function SpoolSuggestDialog({ colors, onClose }) {
   const setSpools = useSetSpools();
   const [ideal, setIdeal] = useState(null); // { ...suggestSpools(), picked }
   const [inv, setInv] = useState(null); // { ...suggestFromInventory(), picked }
@@ -44,7 +44,8 @@ export default function SpoolSuggest({ colors }) {
   if (!colors.length || colors.length < 2) return null;
 
   return (
-    <div className="spool-suggest" data-testid="spool-suggest">
+    <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose?.()}>
+      <div className="modal spool-suggest" role="dialog" aria-label="建議捲色" data-testid="spool-suggest">
       <div className="row">
         <button data-testid="suggest-inventory" onClick={() => runInventory(4)}>
           <i className="mdi mdi-library" /> 從我的線材挑
@@ -115,6 +116,11 @@ export default function SpoolSuggest({ colors }) {
           </button>
         </div>
       )}
+        <footer>
+          <span className="spacer" />
+          <button data-testid="suggest-close" onClick={onClose}>關閉</button>
+        </footer>
+      </div>
     </div>
   );
 }

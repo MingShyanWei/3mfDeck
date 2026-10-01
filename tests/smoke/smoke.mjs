@@ -487,7 +487,8 @@ try {
   const mixRows = await page.$$eval('[data-testid=mapping-row]', (els) => els.map((e) => e.dataset.mode));
   assert.deepEqual(mixRows, ['mix', 'mix', 'mix', 'mix']);
   step('mixneeded.3mf: 列印方式 ' + printCells.map((r) => `${r[0]}=${r[1]} ${r[2]}`).join(' | ') + '; filament preview uses mix colours');
-  // 9c) M11: spool suggestion from area + colour accuracy, then apply
+  // 9c) M11: spool suggestion in its own modal, then apply
+  await page.click('[data-testid=suggest-open]');
   await page.waitForSelector('[data-testid=spool-suggest]');
   await page.click('[data-testid=suggest-spools]');
   await page.waitForSelector('[data-testid=suggest-spools-list]');
@@ -501,11 +502,12 @@ try {
   await page.waitForSelector('[data-testid=suggest-spools-list]');
   await page.click('[data-testid=suggest-apply]');
   await page.waitForSelector('[data-testid=suggest-apply]:disabled');
-  const newSpools = (await page.textContent('[data-testid=export-mapping] h3')).match(/\d 捲：(#[0-9A-F]{6}[^）]*)/)[1].trim().split(' ');
-  assert.equal(newSpools.length, recK, `applied ${recK} suggested spools`);
-  // restore the default CMYK spools: later steps (regions.3mf, exports) assume them
+  await page.click('[data-testid=suggest-close]');
   await page.click('[data-testid=settings-button]');
   await page.waitForSelector('[data-testid=spool-editor]');
+  const newSpools = (await page.$$eval('[data-testid=spool-editor] input[data-testid^=spool-]', (els) => els.map((e) => e.value))).filter((v) => /^#[0-9A-F]{6}$/.test(v));
+  assert.equal(newSpools.length, recK, `applied ${recK} suggested spools: ${newSpools.join(' ')}`);
+  // restore the default CMYK spools in the same settings session
   await page.selectOption('[data-testid=spool-count]', '4');
   await page.fill('[data-testid=spool-1]', '#00FFFF');
   await page.fill('[data-testid=spool-2]', '#FF00FF');
@@ -547,6 +549,8 @@ try {
   await page.waitForSelector('[data-testid=inventory-message]');
   await page.click('[data-testid=settings-done]');
   await page.waitForSelector('[data-testid=viewer][data-status=ready]');
+  await page.click('[data-testid=suggest-open]');
+  await page.waitForSelector('[data-testid=spool-suggest]');
   await page.click('[data-testid=suggest-inventory]');
   await page.waitForSelector('[data-testid=suggest-spools-list]');
   const invSwatches = await page.$$eval('[data-testid=suggest-spools-list] code', (els) => els.map((e) => e.textContent));
@@ -554,7 +558,8 @@ try {
   assert.match(await page.textContent('[data-testid=suggest-note]'), /從線材庫挑選/);
   assert.match(await page.textContent('[data-testid=suggest-buy]') || '', /建議採購/);
   step(`M12 線材庫: 登記 翠綠+紫 → 從我的線材挑出 ${invSwatches.join(' ')}，其餘列採購建議`);
-  // clear the inventory so later steps are unaffected
+  // close the suggest modal, then clear the inventory so later steps are unaffected
+  await page.click('[data-testid=suggest-close]');
   await page.click('[data-testid=settings-button]');
   await page.waitForSelector('[data-testid=inventory-editor]');
   for (let i = 1; i >= 0; i--) await page.click(`[data-testid=inventory-del-${i}]`);
@@ -654,7 +659,8 @@ try {
   };
   await choosePlate(2);
   st = await plateState();
-  assert.deepEqual([st.title, st.colours], ['顏色分析 · 盤 2：2 色 ／ 全檔 3 色', ['magenta', 'yellow']]);
+  assert.equal(st.title.startsWith('顏色分析 · 盤 2：2 色 ／ 全檔 3 色'), true, `title: ${st.title}`);
+  assert.deepEqual(st.colours, ['magenta', 'yellow']);
   assert.deepEqual(st.rows, ['#FF00FF 12 50%', '#FFFF00 12 50%', '#00FFFF — —']);
   step(`盤 2: ${st.title}; preview ${st.colours}`);
   await choosePlate(3);
@@ -913,6 +919,7 @@ try {
   await openModel('offpalette');
   await page.waitForSelector('[data-testid=export-mapping]');
   await saveTo('report.csv');
+  await page.click('[data-testid=export-options] > summary');
   await page.click('[data-testid=export-csv]');
   await page.waitForSelector('[data-testid=export-result]');
   const csv = await fs.readFile(path.join(exportsDir, 'report.csv'), 'utf8');
