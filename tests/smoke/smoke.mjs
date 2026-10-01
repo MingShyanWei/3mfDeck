@@ -264,12 +264,14 @@ try {
   const before = await viewerPixels();
   await setMode('filament');
   const after = await viewerPixels();
-  // M8: #1E90FF (ΔE 39.3) and #E0457B (ΔE 21.6) must be mixed; #FFD700 / #333333 print from one slot
+  // #1E90FF (ΔE 39.3) and #E0457B (ΔE 21.6) must be mixed; #FFD700 / #333333 print from one slot.
+  // M15: mixes are two-spool pigment blends (same model as the export): dodger blue -> C+M #5E9AF0,
+  // still blue rather than the nearest slot's pure cyan
   assert.ok(!present(before).includes('cyan') && present(before).includes('blue'), 'original: dodger blue ' + JSON.stringify(before));
-  assert.ok(!present(after).includes('blue') && present(after).includes('yellow'), 'mapped: blue replaced by its mix, gold -> Y ' + JSON.stringify(after));
+  assert.ok(!present(after).includes('cyan') && present(after).includes('yellow'), 'mapped: blue shown as its C+M mix (not nearest-slot cyan), gold -> Y ' + JSON.stringify(after));
   const mapping = await page.$$eval('[data-testid=mapping-row]', (els) => els.map((e) => `${e.dataset.mode}: ${e.textContent.trim()}`));
   assert.equal(mapping.length, 4);
-  assert.match(mapping[0], /^mix: #1E90FF → 混色 K \d+%＋C \d+%＋M \d+% ≈/);
+  assert.match(mapping[0], /^mix: #1E90FF → 混色 C \d+%＋M \d+% ≈/);
   assert.match(mapping[1], /^mix: #E0457B → 混色/);
   assert.match(mapping[2], /^single: #FFD700 → 槽3（ΔE 11\.6）/);
   assert.match(mapping[3], /^single: #333333 → 槽4（ΔE 13\.4）/);
@@ -466,7 +468,7 @@ try {
   await page.waitForFunction((n) => document.querySelectorAll('[data-testid=card-thumb]').length === n, liveFiles);
   step(`拔掉 DB 重開: banner "發現 ${liveFiles} 個檔案"; 重建索引 -> ${await cardCount()} cards, thumbnails regenerated, 3MF metadata re-parsed`);
 
-  // 9b) M8: colours one slot cannot print -> CMYK mixing recipes
+  // 9b) M8/M15: colours one slot cannot print -> two-spool pigment mixing recipes (what the export writes)
   await importViaMenu([await stage('mixneeded.3mf')]);
   await page.click('[data-testid=import-skip-all]');
   await openModel('mixneeded');
@@ -474,16 +476,20 @@ try {
     rows.map((r) => [r.cells[0].textContent.trim().replace(/\s+/g, ' '), r.querySelector('[data-testid=print-cell]').dataset.mode, r.querySelector('[data-testid=print-cell]').textContent.trim()]),
   );
   const modeOf = Object.fromEntries(printCells.map(([c, m]) => [c, m]));
-  assert.deepEqual(modeOf, { '#4CAF50': 'mix', '#FF8C00': 'buy', '#800080': 'mix', '#E0AC69': 'mix' });
-  assert.match(printCells.find((r) => r[0] === '#800080')[2], /^K \d+%＋M \d+%（ΔE 0\.\d）$/);
-  assert.match(printCells.find((r) => r[0] === '#FF8C00')[2], /需買線材/);
-  assert.match(await page.textContent('[data-testid=needs-mix-summary]'), /4 色單捲印不出.*其中 1 色 CMYK 也混不出/);
+  // M15: the halftone model called orange unmixable, but the pigment blend Y+M reaches it (ΔE 7.3)
+  assert.deepEqual(modeOf, { '#4CAF50': 'mix', '#FF8C00': 'mix', '#800080': 'mix', '#E0AC69': 'mix' });
+  assert.match(printCells.find((r) => r[0] === '#800080')[2], /^M \d+%＋K \d+%（ΔE \d+(\.\d)?）$/);
+  assert.match(printCells.find((r) => r[0] === '#FF8C00')[2], /^Y \d+%＋M \d+%（ΔE 7\.3）$/);
+  const mixSummary = await page.textContent('[data-testid=needs-mix-summary]');
+  assert.match(mixSummary, /4 色單捲印不出/);
+  assert.doesNotMatch(mixSummary, /混不出/);
   await setMode('filament');
   const mixPx = await viewerPixels();
   const opaque = (c) => Object.entries(c).filter(([k]) => k !== 'transparent').reduce((sum, [, n]) => sum + n, 0);
-  // nearest single slots would paint green, orange and skin pure yellow (#FFFF00); their mixes are muted
-  // (purple's mix #810081 is a dark magenta, so magenta-hued pixels remain on its face)
-  assert.ok(!present(mixPx).includes('yellow') && (mixPx.other || 0) / opaque(mixPx) > 0.8, 'preview shows mix colours, not nearest slots ' + JSON.stringify(mixPx));
+  // nearest single slots would paint green, orange and skin pure yellow (#FFFF00) over whole faces; their
+  // pigment mixes (#69A218 / #F9A456 / #F9AD4F, purple #71009F) are not pure slot colours. A few shaded
+  // edge pixels of the orange mixes can still classify as yellow, so judge by share, not presence.
+  assert.ok((mixPx.yellow || 0) / opaque(mixPx) < 0.01 && (mixPx.other || 0) / opaque(mixPx) > 0.8, 'preview shows mix colours, not nearest slots ' + JSON.stringify(mixPx));
   const mixRows = await page.$$eval('[data-testid=mapping-row]', (els) => els.map((e) => e.dataset.mode));
   assert.deepEqual(mixRows, ['mix', 'mix', 'mix', 'mix']);
   step('mixneeded.3mf: 列印方式 ' + printCells.map((r) => `${r[0]}=${r[1]} ${r[2]}`).join(' | ') + '; filament preview uses mix colours');
@@ -969,6 +975,7 @@ try {
   assert.match(await page.textContent('[data-testid=slots-title]'), /自訂耗材槽（2 捲/);
   const customCells = await page.$$eval('[data-testid=color-row]', (rows) => rows.map((r) => [r.cells[0].textContent.trim().slice(0, 7), r.querySelector('[data-testid=print-cell]').dataset.mode]));
   assert.deepEqual(Object.fromEntries(customCells)['#1E90FF'], 'single');
+  assert.ok(Object.values(Object.fromEntries(customCells)).includes('buy'), 'unmixable colours on blue + dark grey show 需買線材 ' + JSON.stringify(customCells));
   await saveTo('q-custom.3mf');
   await page.click('[data-testid=export-quantized]');
   await page.waitForFunction(() => /q-custom\.3mf/.test(document.querySelector('[data-testid=export-message]')?.textContent || ''));

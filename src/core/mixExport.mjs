@@ -13,37 +13,11 @@
 // Virtual extruder id = baseCount + (1-based ordinal among enabled,
 // non-deleted rows). filament_colour stays physical-only; Orca derives the
 // swatch colour of a mix from the definition itself.
-import { nearestSlot, deltaE2000, rgbToLab, hexToRgb, slotName, MIX_DELTA_E } from './filament.mjs';
-import { mixFilamentHex } from './filamentMixer.mjs';
+import { nearestSlot, bestMix, MIX_DELTA_E } from './filament.mjs';
 
-const mixCache = new Map();
-
-/**
- * Best two-spool pigment mix for a colour: ordered spool pairs x mix_b_percent
- * 0..100 (1 % steps), minimising CIEDE2000 to the target.
- * Returns { compA, compB, mixB, mixHex, deltaE }.
- */
-export function bestMix(hex, slots) {
-  if (slots.length < 2) return null; // no pair to blend
-  const key = hex + '|' + slots.map((s) => s.hex).join();
-  if (mixCache.has(key)) return mixCache.get(key);
-  const target = rgbToLab(hexToRgb(hex));
-  let best = null;
-  for (const A of slots) {
-    for (const B of slots) {
-      if (A.slot === B.slot) continue;
-      for (let b = 0; b <= 100; b++) {
-        const mixHex = mixFilamentHex(A.hex, B.hex, 1 - b / 100);
-        const d = deltaE2000(target, rgbToLab(hexToRgb(mixHex)));
-        if (!best || d < best.deltaE) best = { compA: A.slot, compB: B.slot, mixB: b, mixHex, deltaE: d };
-      }
-    }
-  }
-  best.deltaE = Math.round(best.deltaE * 10) / 10;
-  best.text = `${slotName(slots.find((s) => s.slot === best.compA))} ${100 - best.mixB}%＋${slotName(slots.find((s) => s.slot === best.compB))} ${best.mixB}%`;
-  mixCache.set(key, best);
-  return best;
-}
+// bestMix (the two-spool pigment search) lives in filament.mjs so printPlan can
+// use it without an import cycle; re-exported here for existing callers.
+export { bestMix };
 
 /**
  * How a colour is printed when mixed filaments are available (M10):

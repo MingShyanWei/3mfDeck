@@ -48,8 +48,10 @@ describe('mappingCsv', () => {
     const lines = csv.trim().split('\r\n').slice(1);
     expect(lines).toHaveLength(4);
     const row = (hex) => lines.find((l) => l.startsWith(hex));
-    expect(row('#800080')).toMatch(/^#800080,2,16\.67%,槽2 M #FF00FF,配方 K 78%＋M 22%（ΔE 0\.2）；量化到最近捲 ΔE 30\.3,需混色；量化匯出：量化到最近捲（ΔE 30\.3）$/);
-    expect(row('#FF8C00')).toMatch(/,需購買；/);
+    // recipes are the two-spool pigment blends the export writes (M15)
+    expect(row('#800080')).toMatch(/^#800080,2,16\.67%,槽2 M #FF00FF,配方 M 52%＋K 48%（ΔE 7\.1）；量化到最近捲 ΔE 30\.3,需混色；量化匯出：量化到最近捲（ΔE 30\.3）$/);
+    expect(row('#FF8C00')).toMatch(/,配方 Y 72%＋M 28%（ΔE 7\.3）；.*,需混色；/);
+    expect(mappingCsv([{ color: '#947B71', faces: 1, pct: 100 }])).toMatch(/,需購買；/);
     const single = mappingCsv([{ color: '#FFD700', faces: 5, pct: 100 }]);
     expect(single.trim().split('\r\n')[1]).toBe('#FFD700,5,100%,槽3 Y #FFFF00,ΔE 11.6,單捲');
   });

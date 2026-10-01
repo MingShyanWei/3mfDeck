@@ -1,5 +1,6 @@
 // Filament mapping (SPEC 3.4 mode 2): quantize paint colours to the nearest
 // filament slot colour. Shared by main (tests) and renderer, so no Node APIs.
+import { mixFilamentHex } from './filamentMixer.mjs';
 
 // Snapmaker U1 default slots: CMYK
 export const U1_SLOTS = [
@@ -99,7 +100,10 @@ export function nearestSlot(hex, slots = U1_SLOTS) {
 }
 
 // ---------------------------------------------------------------------------
-// Mixing recipes (M8). U1 Full Spectrum prints a mix as side-by-side dots of
+// Halftone mixing recipes (M8). Since M15 printPlan uses the two-spool
+// pigment model below instead (what the export writes); these stay as the
+// halftone reference model.
+// U1 Full Spectrum prints a mix as side-by-side dots of
 // single filaments (halftone; see paintColor.mjs), so the perceived colour is
 // the Neugebauer halftone mix with the filaments as primaries and no dot
 // overlap (Yule–Nielsen n = 1): the area-weighted average of the filament
@@ -184,11 +188,51 @@ export function mixRecipe(hex, slots = U1_SLOTS) {
 /** "C 50%＋Y 50%" */
 export const recipeText = (recipe) => recipe.weights.map((w) => `${slotName(w)} ${w.pct}%`).join('＋');
 
+// ---------------------------------------------------------------------------
+// Two-spool pigment mixing (M10, SPEC 3.5c). What the quantized export writes
+// is a Full Spectrum mixed filament: TWO physical spools blended at
+// mix_b_percent, coloured by Orca's FilamentMixer pigment model (port:
+// filamentMixer.mjs). printPlan uses this same model so the colour analysis,
+// the filament-mapping preview, the CSV report and the export all agree on
+// what can be mixed (M15: the export used to trust the halftone recipe's
+// `mixable`, so e.g. #61C680 on blue + yellow — halftone ΔE 19.1, pigment
+// ΔE 8.3 — was quantized to one spool and no Mix was written).
+// ---------------------------------------------------------------------------
+const pigmentCache = new Map();
+
+/**
+ * Best two-spool pigment mix for a colour: ordered spool pairs x mix_b_percent
+ * 0..100 (1 % steps), minimising CIEDE2000 to the target.
+ * Returns { compA, compB, mixB, mixHex, deltaE, text }, or null with < 2 slots.
+ */
+export function bestMix(hex, slots) {
+  if (slots.length < 2) return null; // no pair to blend
+  const key = hex + '|' + slots.map((s) => s.hex).join();
+  if (pigmentCache.has(key)) return pigmentCache.get(key);
+  const target = rgbToLab(hexToRgb(hex));
+  let best = null;
+  for (const A of slots) {
+    for (const B of slots) {
+      if (A.slot === B.slot) continue;
+      for (let b = 0; b <= 100; b++) {
+        const mixHex = mixFilamentHex(A.hex, B.hex, 1 - b / 100);
+        const d = deltaE2000(target, rgbToLab(hexToRgb(mixHex)));
+        if (!best || d < best.deltaE) best = { compA: A.slot, compB: B.slot, mixB: b, mixHex, deltaE: d };
+      }
+    }
+  }
+  best.deltaE = Math.round(best.deltaE * 10) / 10;
+  best.text = `${slotName(slots.find((s) => s.slot === best.compA))} ${100 - best.mixB}%＋${slotName(slots.find((s) => s.slot === best.compB))} ${best.mixB}%`;
+  pigmentCache.set(key, best);
+  return best;
+}
+
 /**
  * How a colour gets printed on the slots:
  * - mode 'single': nearest slot within MIX_DELTA_E -> that one spool
- * - mode 'mix':    must be mixed; `recipe` with its mix colour and residual ΔE;
- *                  `mixable` false when even the best mix stays > MIX_DELTA_E
+ * - mode 'mix':    must be mixed; `recipe` = the best two-spool pigment blend
+ *                  (weights per slot, its colour and residual ΔE);
+ *                  `mixable` false when even that blend stays > MIX_DELTA_E
  *                  (cannot be mixed from these slots: buy the filament)
  * `previewHex` is what the filament-mapping preview shows.
  */
@@ -196,7 +240,20 @@ export function printPlan(hex, slots = U1_SLOTS, threshold = MIX_DELTA_E) {
   const near = nearestSlot(hex, slots);
   const nearest = { slot: near.slot, name: near.name, hex: near.hex, deltaE: Math.round(near.deltaE * 10) / 10 };
   if (near.deltaE <= threshold) return { mode: 'single', nearest, previewHex: near.hex };
-  const recipe = mixRecipe(hex, slots);
+  const mix = bestMix(hex, slots);
+  const slotOf = (n) => slots.find((s) => s.slot === n);
+  const recipe = mix
+    ? {
+        weights: [
+          { ...slotOf(mix.compA), pct: 100 - mix.mixB },
+          { ...slotOf(mix.compB), pct: mix.mixB },
+        ]
+          .filter((w) => w.pct > 0)
+          .sort((a, b) => b.pct - a.pct),
+        mixHex: mix.mixHex,
+        deltaE: mix.deltaE,
+      }
+    : { weights: [{ ...slotOf(near.slot), pct: 100 }], mixHex: near.hex, deltaE: nearest.deltaE }; // one spool: nothing to mix
   return { mode: 'mix', nearest, recipe, mixable: recipe.deltaE <= threshold, previewHex: recipe.mixHex };
 }
 

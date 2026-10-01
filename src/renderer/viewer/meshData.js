@@ -135,7 +135,7 @@ export function prepareMesh({ positions, indices, faceColor, palette }, { estima
   return {
     ...q,
     original: faceColours(faceColor, palette),
-    // single slot within MIX_DELTA_E, else the CMYK mixing recipe's colour (M8)
+    // single slot within MIX_DELTA_E, else the two-spool pigment mix colour (M15: same model as the export)
     filament: faceColours(faceColor, palette.map((c) => printPlan(c, slots).previewHex)),
     estimate: estimate ? estimateColours(indices, faceColor, palette, positions.length / 3) : null,
   };

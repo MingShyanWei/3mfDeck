@@ -4,7 +4,7 @@
 // Nielsen n = 1 -> area-weighted average in linear light. Recipes are found by
 // CIEDE2000 search (5 % grid + 1 % refinement).
 import { describe, it, expect } from 'vitest';
-import { mixColour, mixRecipe, printPlan, mapToSlots, recipeText, MIX_DELTA_E, U1_SLOTS, nearestSlot } from '../../src/core/filament.mjs';
+import { mixColour, mixRecipe, printPlan, mapToSlots, recipeText, MIX_DELTA_E, U1_SLOTS, nearestSlot, slotsFromColours } from '../../src/core/filament.mjs';
 import { mixedAverage } from '../../src/core/colorAnalysis.mjs';
 import { parse3mf } from '../../src/core/parse/threemf.mjs';
 import fs from 'node:fs/promises';
@@ -41,44 +41,68 @@ describe('mixRecipe recovers known recipes (forward-generated targets)', () => {
   }
 });
 
-describe('real colours: recipe direction, residual, verdict', () => {
-  it('green #4CAF50: cyan + yellow (+ black), no magenta, mixable', () => {
-    const p = printPlan('#4CAF50');
-    expect(p.mode).toBe('mix');
-    const r = pct(p.recipe);
-    expect(r.C).toBeGreaterThan(0);
-    expect(r.Y).toBeGreaterThan(0);
-    expect(r.M).toBe(0);
-    expect(p.mixable).toBe(true);
-    expect(p.recipe.deltaE).toBeLessThan(p.nearest.deltaE);
+// The halftone model stays as the M8 reference; since M15 printPlan (what the
+// UI shows and the export writes) uses the two-spool pigment model instead.
+describe('halftone reference model (M8): recipe direction, residual', () => {
+  it('green #4CAF50: cyan + yellow (+ black), no magenta, within the threshold', () => {
+    const r = mixRecipe('#4CAF50');
+    expect(pct(r).C).toBeGreaterThan(0);
+    expect(pct(r).Y).toBeGreaterThan(0);
+    expect(pct(r).M).toBe(0);
+    expect(r.deltaE).toBeLessThanOrEqual(MIX_DELTA_E);
+    expect(r.deltaE).toBeLessThan(nearestSlot('#4CAF50').deltaE);
   });
 
   it('purple #800080: magenta + black, almost exact', () => {
-    const p = printPlan('#800080');
-    expect(pct(p.recipe)).toMatchObject({ C: 0, Y: 0 });
-    expect(p.recipe.deltaE).toBeLessThan(1);
-    expect(recipeText(p.recipe)).toMatch(/^K \d+%＋M \d+%$/);
+    const r = mixRecipe('#800080');
+    expect(pct(r)).toMatchObject({ C: 0, Y: 0 });
+    expect(r.deltaE).toBeLessThan(1);
+    expect(recipeText(r)).toMatch(/^K \d+%＋M \d+%$/);
   });
 
-  it('skin #E0AC69: magenta + yellow (+ black), no cyan, mixable', () => {
-    const p = printPlan('#E0AC69');
-    const r = pct(p.recipe);
+  it('skin #E0AC69: magenta + yellow (+ black), no cyan', () => {
+    const r = pct(mixRecipe('#E0AC69'));
     expect([r.C, r.M > 0, r.Y > r.M]).toEqual([0, true, true]);
-    expect(p.mixable).toBe(true);
   });
 
-  it('saturated orange #FF8C00: magenta + yellow, but halftone CMYK cannot reach it -> buy the filament', () => {
-    const p = printPlan('#FF8C00');
-    const r = pct(p.recipe);
-    expect([r.C, r.M > 0, r.Y > r.M]).toEqual([0, true, true]);
-    expect(p.recipe.deltaE).toBeGreaterThan(MIX_DELTA_E);
-    expect(p.mixable).toBe(false);
+  it('saturated orange #FF8C00: magenta + yellow, but halftone CMYK cannot reach it', () => {
+    const r = mixRecipe('#FF8C00');
+    expect([pct(r).C, pct(r).M > 0, pct(r).Y > pct(r).M]).toEqual([0, true, true]);
+    expect(r.deltaE).toBeGreaterThan(MIX_DELTA_E);
   });
 
   it('the best mix is never worse than the nearest single slot', () => {
     for (const hex of ['#4CAF50', '#2E8B57', '#FF8C00', '#800080', '#8E44AD', '#E0AC69', '#F1C27D', '#8D5524', '#1E90FF', '#E0457B', '#777777']) {
       expect(mixRecipe(hex).deltaE).toBeLessThanOrEqual(Math.round(nearestSlot(hex).deltaE * 10) / 10);
     }
+  });
+});
+
+describe('printPlan uses the two-spool pigment model (M15, same as the export)', () => {
+  it('recipe = the best two-spool pigment blend; verdict follows its ΔE', () => {
+    const orange = printPlan('#FF8C00'); // halftone ΔE 17 (unmixable) but pigment M+Y reaches it
+    expect(orange).toMatchObject({ mode: 'mix', mixable: true });
+    expect(recipeText(orange.recipe)).toBe('Y 72%＋M 28%');
+    expect(orange.recipe.deltaE).toBe(7.3);
+    expect(orange.previewHex).toBe(orange.recipe.mixHex);
+    const taupe = printPlan('#947B71'); // halftone ΔE 0.8, but no two-spool pigment blend gets within 15
+    expect(taupe.mixable).toBe(false);
+    expect(taupe.recipe.weights).toHaveLength(2);
+  });
+
+  it('#61C680 on blue + yellow spools is mixable (halftone said ΔE 19.1, pigment 8.3)', () => {
+    const slots = slotsFromColours(['#0A2989', '#F4EE2A']);
+    const p = printPlan('#61C680', slots);
+    expect(p).toMatchObject({ mode: 'mix', mixable: true });
+    expect(recipeText(p.recipe)).toBe('槽2 61%＋槽1 39%');
+    expect(p.recipe.deltaE).toBe(8.3);
+    expect(mixRecipe('#61C680', slots).deltaE).toBeGreaterThan(MIX_DELTA_E);
+  });
+
+  it('a single spool has nothing to mix with: not mixable', () => {
+    const p = printPlan('#FF0000', slotsFromColours(['#00FFFF']));
+    expect(p).toMatchObject({ mode: 'mix', mixable: false });
+    expect(p.recipe.weights.map((w) => w.pct)).toEqual([100]);
   });
 });
 
@@ -94,15 +118,16 @@ describe('printPlan threshold (MIX_DELTA_E = 15, adjustable)', () => {
 
 describe('mapToSlots with mixes', () => {
   it('mixed colours count towards each slot by their recipe share', () => {
+    // #BCFFBC (halftone C 50 + Y 50) -> pigment recipe C 75 % + Y 25 %
     const { mapping, used } = mapToSlots([
       { color: fwd(50, 0, 50, 0), faces: 100, pct: 50 },
       { color: '#FF00FF', faces: 100, pct: 50 },
     ]);
     expect(mapping.map((m) => m.mode)).toEqual(['mix', 'single']);
     expect(used.map((u) => [u.name, u.faces, u.pct])).toEqual([
-      ['C', 50, 25],
+      ['C', 75, 37.5],
       ['M', 100, 50],
-      ['Y', 50, 25],
+      ['Y', 25, 12.5],
     ]);
   });
 
@@ -119,13 +144,13 @@ describe('mapToSlots with mixes', () => {
 });
 
 describe('mixneeded.3mf fixture', () => {
-  it('every colour needs mixing; the saturated orange cannot be mixed', async () => {
+  it('every colour needs mixing; all four are reachable with a two-spool pigment blend', async () => {
     const { colorStats, mixing } = await parse3mf(await fs.readFile(path.join(FIXTURES, 'mixneeded.3mf')));
     expect(mixing.fullSpectrum).toBe(false); // not dithered: M8 rules apply
     const { mapping } = mapToSlots(colorStats);
     expect(Object.fromEntries(mapping.map((m) => [m.color, [m.mode, m.mixable]]))).toEqual({
       '#4CAF50': ['mix', true],
-      '#FF8C00': ['mix', false],
+      '#FF8C00': ['mix', true],
       '#800080': ['mix', true],
       '#E0AC69': ['mix', true],
     });

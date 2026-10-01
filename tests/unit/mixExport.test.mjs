@@ -13,7 +13,7 @@ import { mixFilamentHex } from '../../src/core/filamentMixer.mjs';
 import { bestMix, mixPrintPlan, mixedFilamentDefinitions } from '../../src/core/mixExport.mjs';
 import { exportQuantized3mf } from '../../src/core/exportMapping.mjs';
 import { decodePaintColor } from '../../src/core/paintColor.mjs';
-import { U1_SLOTS, nearestSlot } from '../../src/core/filament.mjs';
+import { U1_SLOTS, nearestSlot, slotsFromColours } from '../../src/core/filament.mjs';
 import { FIXTURES, tmpDir } from './helpers.mjs';
 
 describe('FilamentMixer pigment model (ported, MIT)', () => {
@@ -97,15 +97,47 @@ describe('exportQuantized3mf with mixed filaments', () => {
     expect([...states].some((s) => s >= 5)).toBe(true);
   });
 
+  // M15 regression: the user's 2-spool export (blue #0A2989 + yellow #F4EE2A) opened in Orca as a
+  // single colour with an empty Color Mixing list. #61C680 is unmixable by the halftone model
+  // (ΔE 19.1) but the pigment model blends it (yellow 61 % + blue 39 %, ΔE 8.3), and the
+  // export must follow the pigment model: one Mix row, every face on virtual extruder 3.
+  it('blue + yellow spools: #61C680 is exported as one Mix on virtual extruder 3', async () => {
+    const dir = await tmpDir();
+    const src = path.join(dir, 'green.3mf');
+    const zip = await JSZip.loadAsync(await fs.readFile(path.join(FIXTURES, 'mixneeded.3mf')));
+    const cfg = JSON.parse(await zip.file('Metadata/project_settings.config').async('string'));
+    cfg.filament_colour = ['#61C680', '#61C680', '#61C680', '#61C680'];
+    zip.file('Metadata/project_settings.config', JSON.stringify(cfg));
+    await fs.writeFile(src, await zip.generateAsync({ type: 'nodebuffer' }));
+
+    const slots = slotsFromColours(['#0A2989', '#F4EE2A']);
+    const dest = path.join(dir, 'green-mix.3mf');
+    const r = await exportQuantized3mf(src, dest, slots, { mix: true });
+    expect(r.mixes).toHaveLength(1);
+    expect(r.summary).toEqual([expect.objectContaining({ color: '#61C680', slot: 3, deltaE: 8.3 })]);
+
+    const out = await JSZip.loadAsync(await fs.readFile(dest));
+    const outCfg = JSON.parse(await out.file('Metadata/project_settings.config').async('string'));
+    expect(outCfg.mixed_filament_definitions).toBe('2,1,1,1,39,0,g,w,m0,z0,xa0,xb0,d0,o0,u1,cm2');
+    expect(outCfg.filament_colour).toEqual(['#0A2989FF', '#F4EE2AFF']);
+    const states = new Set();
+    const xml = await out.file('3D/Objects/object_1.model').async('string');
+    for (const m of xml.matchAll(/paint_color="([^"]+)"/g)) for (const st of Object.keys(decodePaintColor(m[1]))) states.add(Number(st));
+    expect([...states]).toEqual([3]);
+  });
+
   it('falls back to the nearest spool when even the pigment blend exceeds the threshold (需購買)', async () => {
     // #947B71: best two-spool pigment blend stays ΔE > 15 on CMYK
     const plan = mixPrintPlan('#947B71', U1_SLOTS);
     expect(plan.mode).toBe('mix');
     expect(plan.mixable).toBe(false);
+    // orange cannot be blended from cyan + black: quantized to the nearest of the 2 spools, no Mix
+    const slots = slotsFromColours(['#00FFFF', '#000000']);
+    expect(mixPrintPlan('#FF8C00', slots).mixable).toBe(false);
     const dest = path.join(await tmpDir(), 'unmixable.3mf');
-    const r = await exportQuantized3mf(path.join(FIXTURES, 'mixneeded.3mf'), dest, U1_SLOTS, { mix: true });
-    const row = r.summary.find((s) => s.color === '#FF8C00'); // orange: not mixable from CMYK
-    expect(row.slot).toBeLessThanOrEqual(4);
+    const r = await exportQuantized3mf(path.join(FIXTURES, 'mixneeded.3mf'), dest, slots, { mix: true });
+    const row = r.summary.find((s) => s.color === '#FF8C00');
+    expect(row.slot).toBeLessThanOrEqual(2);
     expect(row.mix).toBeUndefined();
   });
 
