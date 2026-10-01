@@ -38,6 +38,22 @@ CREATE TABLE IF NOT EXISTS color_stats (
   pct      REAL,
   PRIMARY KEY (model_id, color)
 );
+-- Multi-plate 3MF (SPEC 3.6). Additive: §4 has no plate storage.
+CREATE TABLE IF NOT EXISTS plates (
+  model_id  INTEGER REFERENCES models(id) ON DELETE CASCADE,
+  plate     INTEGER,
+  name      TEXT,
+  tri_count INTEGER,
+  PRIMARY KEY (model_id, plate)
+);
+CREATE TABLE IF NOT EXISTS plate_color_stats (
+  model_id INTEGER REFERENCES models(id) ON DELETE CASCADE,
+  plate    INTEGER,
+  color    TEXT,
+  faces    INTEGER,
+  pct      REAL,
+  PRIMARY KEY (model_id, plate, color)
+);
 `;
 
 export const PROVENANCE_TYPES = ['ai_generated', 'downloaded', 'self_made', 'unknown'];
@@ -87,6 +103,12 @@ export function insertModel(db, { name, relPath, parsed }) {
       });
     const ins = db.prepare('INSERT INTO color_stats (model_id, color, faces, pct) VALUES (?, ?, ?, ?)');
     for (const c of parsed.colorStats || []) ins.run(id, c.color, c.faces, c.pct);
+    const insPlate = db.prepare('INSERT INTO plates (model_id, plate, name, tri_count) VALUES (?, ?, ?, ?)');
+    const insPlateColor = db.prepare('INSERT INTO plate_color_stats (model_id, plate, color, faces, pct) VALUES (?, ?, ?, ?, ?)');
+    for (const p of parsed.plates || []) {
+      insPlate.run(id, p.plate, p.name, p.tri_count);
+      for (const c of p.colorStats || []) insPlateColor.run(id, p.plate, c.color, c.faces, c.pct);
+    }
     return Number(id);
   });
   return run();
@@ -122,6 +144,7 @@ export function setTags(db, modelId, names) {
 const LIST_COLUMNS = `m.id, m.name, m.rel_path, m.format, m.size_bytes, m.tri_count, m.bbox_mm, m.color_count,
   m.provenance_type, m.platform, m.url, m.prompt, m.retrieved_at, m.notes, m.imported_at, m.updated_at,
   m.thumb IS NOT NULL AS has_thumb,
+  (SELECT COUNT(*) FROM plates p WHERE p.model_id = m.id) AS plate_count,
   (SELECT json_group_array(t.name) FROM model_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.model_id = m.id) AS tags`;
 
 const SORTS = {
@@ -171,7 +194,12 @@ export function getModel(db, id) {
   const row = db.prepare(`SELECT ${LIST_COLUMNS} FROM models m WHERE m.id = ?`).get(id);
   if (!row) return null;
   const colors = db.prepare('SELECT color, faces, pct FROM color_stats WHERE model_id = ? ORDER BY faces DESC, color').all(id);
-  return { ...rowOut(row), colors };
+  const plateColors = db.prepare('SELECT color, faces, pct FROM plate_color_stats WHERE model_id = ? AND plate = ? ORDER BY faces DESC, color');
+  const plates = db
+    .prepare('SELECT plate, name, tri_count FROM plates WHERE model_id = ? ORDER BY plate')
+    .all(id)
+    .map((p) => ({ ...p, colors: plateColors.all(id, p.plate) }));
+  return { ...rowOut(row), colors, plates };
 }
 
 /** Sidebar data: counts per filter, platforms and tags in use (trash counted separately). */

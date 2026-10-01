@@ -10,6 +10,7 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
   const [draft, setDraft] = useState(null);
   const [saved, setSaved] = useState(false);
   const [exported, setExported] = useState(null);
+  const [plate, setPlate] = useState(null); // selected plate of a multi-plate file
 
   useEffect(() => {
     window.api.get(id).then((m) => {
@@ -17,6 +18,7 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
       setDraft(toDraft(m));
       setSaved(false);
       setExported(null);
+      setPlate(m.plates.length > 1 ? m.plates[0].plate : null);
     });
   }, [id]);
 
@@ -32,6 +34,7 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
   };
 
   const trashed = model.rel_path.startsWith('.trash/');
+  const plateInfo = model.plates.length > 1 ? model.plates.find((p) => p.plate === plate) : null;
   // Delete / restore move the model out of the current list view
   const trash = async () => {
     await window.api.trash(id);
@@ -76,8 +79,34 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
       {trashed && (
         <div className="callout warn"><i className="mdi mdi-delete-outline" /> <span className="grow">此檔案在回收桶中，可按「還原」放回原位置。</span></div>
       )}
-      <ModelViewer model={model} />
-      {model.format === '3mf' && model.colors.length > 0 && <ColorAnalysis colors={model.colors} />}
+      {plateInfo && (
+        <div className="plates" data-testid="plate-switcher">
+          <div className="seg-group wrap">
+            {model.plates.map((p) => (
+              <button
+                key={p.plate}
+                className={p.plate === plate ? 'seg on' : 'seg'}
+                data-testid={`plate-${p.plate}`}
+                title={p.name || `盤 ${p.plate}`}
+                onClick={() => setPlate(p.plate)}
+              >
+                盤 {p.plate}
+              </button>
+            ))}
+          </div>
+          <div className="small muted" data-testid="plate-caption">
+            {plateInfo.name ? `「${plateInfo.name}」 · ` : ''}
+            {formatInt(plateInfo.tri_count)} 面
+          </div>
+        </div>
+      )}
+      <ModelViewer model={model} plate={plate} colors={plateInfo ? plateInfo.colors : model.colors} />
+      {model.format === '3mf' && model.colors.length > 0 &&
+        (plateInfo ? (
+          <ColorAnalysis colors={plateInfo.colors} totals={model.colors} title={`盤 ${plateInfo.plate}`} />
+        ) : (
+          <ColorAnalysis colors={model.colors} />
+        ))}
       {model.missing && (
         <div className="callout danger"><i className="mdi mdi-file-alert-outline" /> 遺失：目前的根目錄下找不到這個檔案。</div>
       )}

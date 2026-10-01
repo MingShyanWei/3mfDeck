@@ -25,6 +25,15 @@ export function MissingBadge({ model }) {
   );
 }
 
+export function PlateBadge({ model }) {
+  if (!(model.plate_count > 1)) return null;
+  return (
+    <span className="badge badge-plates" data-testid="plate-badge" title="多盤 3MF">
+      <i className="mdi mdi-layers-triple-outline" /> {model.plate_count} 盤
+    </span>
+  );
+}
+
 export function ColorBadge({ model }) {
   if (model.color_count == null) return null;
   return (

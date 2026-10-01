@@ -162,6 +162,84 @@ async function materials3mf() {
   return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 }
 
+// BambuStudio-style multi-plate project. Root objects 2/4/6 each point to a
+// cube mesh in 3D/Objects/object_1.model. Plates (model_settings.config):
+//   plate 1 "Cyan plate": object 2            -> extruder 1, cyan, 12 faces
+//   plate 2 "Mixed":      object 4 + object 6 instance 0 -> magenta (painted) + yellow
+//   plate 3 (no plate_3.json): object 6 instance 1 (second build item of 6) -> yellow
+//   plate 4: only Metadata/plate_4.json exists -> empty plate
+// Whole file: yellow 24 (50 %), cyan 12, magenta 12.
+async function multiplate3mf() {
+  const { v, tris } = box(10, 10, 10);
+  const meshObj = (id, paint) => `  <object id="${id}" type="model"><mesh>
+   <vertices>${v.map((p) => `<vertex x="${p[0]}" y="${p[1]}" z="${p[2]}"/>`).join('')}</vertices>
+   <triangles>${tris.map((t) => `<triangle v1="${t[0]}" v2="${t[1]}" v3="${t[2]}"${paint ? ` paint_color="${paint}"` : ''}/>`).join('')}</triangles>
+  </mesh></object>`;
+  const meshes = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+ <resources>
+${meshObj(1)}
+${meshObj(3, '8')}
+${meshObj(5)}
+ </resources>
+ <build/>
+</model>
+`;
+  const rootObj = (id, mesh) => `  <object id="${id}" type="model"><components><component p:path="/3D/Objects/object_1.model" objectid="${mesh}"/></components></object>`;
+  const item = (id, x) => `  <item objectid="${id}" transform="1 0 0 0 1 0 0 0 1 ${x} 100 0" printable="1"/>`;
+  const root = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p">
+ <metadata name="Application">BambuStudio-02.04.00.70</metadata>
+ <resources>
+${rootObj(2, 1)}
+${rootObj(4, 3)}
+${rootObj(6, 5)}
+ </resources>
+ <build>
+${item(2, 100)}
+${item(4, 400)}
+${item(6, 430)}
+${item(6, 700)}
+ </build>
+</model>
+`;
+  const obj = (id, ext) => `  <object id="${id}">
+    <metadata key="extruder" value="${ext}"/>
+    <part id="${id - 1}" subtype="normal_part"><metadata key="extruder" value="${ext}"/></part>
+  </object>`;
+  const plate = (n, name, insts) => `  <plate>
+    <metadata key="plater_id" value="${n}"/>
+    <metadata key="plater_name" value="${name}"/>
+${insts.map(([o, i]) => `    <model_instance>
+      <metadata key="object_id" value="${o}"/>
+      <metadata key="instance_id" value="${i}"/>
+      <metadata key="identify_id" value="${100 + o * 10 + i}"/>
+    </model_instance>`).join('\n')}
+  </plate>`;
+  const modelSettings = `<?xml version="1.0" encoding="UTF-8"?><config>
+${obj(2, 1)}
+${obj(4, 1)}
+${obj(6, 3)}
+${plate(1, 'Cyan plate', [[2, 0]])}
+${plate(2, 'Mixed', [[4, 0], [6, 0]])}
+${plate(3, '', [[6, 1]])}
+</config>
+`;
+  // plate_N.json ids are slicer runtime ids, not 3MF object ids (as in real files)
+  const plateJson = (ids) => JSON.stringify({ bbox_objects: ids.map((id) => ({ id, name: `obj${id}` })), version: 2 });
+  const zip = newZip();
+  zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>');
+  zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>');
+  zip.file('3D/3dmodel.model', root);
+  zip.file('3D/Objects/object_1.model', meshes);
+  zip.file('Metadata/model_settings.config', modelSettings);
+  zip.file('Metadata/project_settings.config', JSON.stringify({ filament_colour: ['#00FFFF', '#FF00FF', '#FFFF00', '#000000'] }, null, 4));
+  zip.file('Metadata/plate_1.json', plateJson([901]));
+  zip.file('Metadata/plate_2.json', plateJson([902, 903, 1000]));
+  zip.file('Metadata/plate_4.json', plateJson([]));
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+}
+
 // Plain core-spec 3MF (no slicer metadata, no paint_color, no materials), unit = centimeter
 async function plain3mf() {
   const { v, tris } = box(1, 2, 3);
@@ -342,6 +420,7 @@ await fs.writeFile(path.join(OUT, 'painted.3mf'), await painted3mf(['#00FFFF', '
 await fs.writeFile(path.join(OUT, 'offpalette.3mf'), await painted3mf(['#1E90FF', '#E0457B', '#FFD700', '#333333']));
 await fs.writeFile(path.join(OUT, 'textured.glb'), texturedGlb());
 await fs.writeFile(path.join(OUT, 'materials.3mf'), await materials3mf());
+await fs.writeFile(path.join(OUT, 'multiplate.3mf'), await multiplate3mf());
 // paint_color + basematerials in one file: 6 painted faces cyan, 2 magenta,
 // 4 unpainted -> material orange (not the part's default extruder 4).
 await fs.writeFile(

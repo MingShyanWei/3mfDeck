@@ -1,4 +1,4 @@
-// SPEC 3.6 (trash, export) and §4 consistency check / index rebuild.
+// SPEC 3.7 (trash, export) and §4 consistency check / index rebuild.
 import { describe, it, expect, beforeEach } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';

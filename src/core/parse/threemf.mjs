@@ -184,9 +184,15 @@ function readFilamentColours(text) {
   return Array.isArray(list) && list.length ? list.map((c) => c.slice(0, 7).toUpperCase()) : null;
 }
 
-// model_settings.config → { objects: {rootId: extruder}, parts: {"rootId/partId": extruder} }
-function readExtruders(text) {
-  const res = { objects: {}, parts: {} };
+/**
+ * model_settings.config →
+ *   objects: {rootId: extruder}, parts: {"rootId/partId": extruder},
+ *   plates: [{ plate, name, instances: [{ objectId, instanceId }] }]
+ * A <plate>'s <model_instance object_id> is the root model's build-item
+ * objectid; instance_id counts build items sharing that objectid.
+ */
+function readModelSettings(text) {
+  const res = { objects: {}, parts: {}, plates: [] };
   if (!text) return res;
   const doc = xml.parse(text);
   const extruderOf = (node) => {
@@ -201,8 +207,25 @@ function readExtruders(text) {
       if (pe) res.parts[`${o.id}/${p.id}`] = pe;
     }
   }
+  const md = (node, key) => asArray(node.metadata).find((x) => x.key === key)?.value;
+  for (const pl of asArray(doc.config?.plate)) {
+    res.plates.push({
+      plate: Number(md(pl, 'plater_id')),
+      name: md(pl, 'plater_name') || '',
+      instances: asArray(pl.model_instance).map((mi) => ({ objectId: String(md(mi, 'object_id')), instanceId: Number(md(mi, 'instance_id') ?? 0) })),
+    });
+  }
   return res;
 }
+
+const toStats = (byColour, total) => {
+  const entries = Object.entries(byColour);
+  return entries.length
+    ? entries
+        .map(([color, w]) => ({ color, faces: Math.round(w), pct: total ? Math.round((w / total) * 10000) / 100 : 0 }))
+        .sort((a, b) => b.faces - a.faces || a.color.localeCompare(b.color))
+    : null;
+};
 
 function rootModelPath(relsText) {
   if (relsText) {
@@ -234,7 +257,10 @@ export function provenanceHint(md) {
 }
 
 /**
- * Parse a 3MF. `colorStats` is the merged per-face colour distribution
+ * Parse a 3MF. `plates` lists the slicer plates (BambuStudio/Orca multi-plate
+ * projects; null when the file carries no plate info) with per-plate
+ * tri_count and colorStats; everything else covers the whole file.
+ * `colorStats` is the merged per-face colour distribution
  * (paint_color first, then material colour, then the default extruder's
  * filament colour); null when no face has a resolvable colour.
  * With { geometry: true } the result also has `geometry`: world-space (mm)
@@ -242,7 +268,7 @@ export function provenanceHint(md) {
  * `faceColor` (index into `palette`, 0 = no colour; split triangles take
  * their dominant colour) and `palette` (index 1.. -> "#RRGGBB").
  */
-export async function parse3mf(buffer, { geometry = false } = {}) {
+export async function parse3mf(buffer, { geometry = false, plate = null } = {}) {
   const zip = await JSZip.loadAsync(buffer);
   const text = async (p) => (zip.file(p) ? zip.file(p).async('string') : null);
 
@@ -255,7 +281,19 @@ export async function parse3mf(buffer, { geometry = false } = {}) {
   for (const p of subPaths) if (p !== rootPath && zip.file(p)) await scanModel(zip.file(p), p, model);
 
   const colours = readFilamentColours(await text('Metadata/project_settings.config'));
-  const ext = readExtruders(await text('Metadata/model_settings.config'));
+  const ext = readModelSettings(await text('Metadata/model_settings.config'));
+
+  // Plate list: model_settings <plate> entries (they carry the object mapping)
+  // plus any Metadata/plate_N.json — the json files are often missing or
+  // incomplete (e.g. never sliced), so neither source alone is reliable.
+  const plateNames = new Map(ext.plates.map((p) => [p.plate, p.name]));
+  for (const f of Object.keys(zip.files)) {
+    const m = /^Metadata\/plate_(\d+)\.json$/.exec(f);
+    if (m && !plateNames.has(Number(m[1]))) plateNames.set(Number(m[1]), '');
+  }
+  const plateOf = new Map(); // "objectId/instanceId" -> plate
+  for (const p of ext.plates) for (const i of p.instances) plateOf.set(`${i.objectId}/${i.instanceId}`, p.plate);
+  const perPlate = new Map([...plateNames.keys()].map((n) => [n, { tris: 0, byColour: {} }]));
 
   // Colour key -> "#RRGGBB" (or null). Unpainted faces without a material
   // colour (S0) take the part's extruder, else the object's, else extruder 1.
@@ -281,19 +319,23 @@ export async function parse3mf(buffer, { geometry = false } = {}) {
     }
     return i;
   };
-  const place = (key, m, rootId, depth) => {
+  // `pl` = this build item's plate stats (or undefined), `withGeo` = include in preview geometry
+  const place = (key, m, rootId, depth, pl, withGeo) => {
     const o = model.objects.get(key);
     if (!o) return;
     const rootExt = ext.objects[rootId] || 1;
     if (o.mesh && o.mesh.tris) {
       transformBox(o.mesh.box, m, box);
       triCount += o.mesh.tris;
+      if (pl) pl.tris += o.mesh.tris;
       const defExt = depth === 0 ? rootExt : ext.parts[`${rootId}/${o.id}`] || rootExt;
       for (const [key, w] of Object.entries(o.mesh.keys)) {
         const hex = resolve(key, defExt);
-        if (hex) byColour[hex] = (byColour[hex] || 0) + w;
+        if (!hex) continue;
+        byColour[hex] = (byColour[hex] || 0) + w;
+        if (pl) pl.byColour[hex] = (pl.byColour[hex] || 0) + w;
       }
-      if (geo) {
+      if (withGeo) {
         const base = geo.positions.n / 3;
         const v = o.mesh.verts.array;
         const k = model.unitScale;
@@ -301,19 +343,29 @@ export async function parse3mf(buffer, { geometry = false } = {}) {
           for (const c of applyAffine(m, v[i], v[i + 1], v[i + 2])) geo.positions.push(c * k);
         }
         for (const idx of o.mesh.indices.array) geo.indices.push(base + idx);
-        const toPalette = model.keyList.map((key) => paletteIndex(resolve(key, defExt)));
-        for (const k of o.mesh.faceKey.array) geo.faceColor.push(toPalette[k]);
+        const toPalette = new Map(); // only colours this mesh actually uses enter the palette
+        for (const k of o.mesh.faceKey.array) {
+          if (!toPalette.has(k)) toPalette.set(k, paletteIndex(resolve(model.keyList[k], defExt)));
+          geo.faceColor.push(toPalette.get(k));
+        }
       }
     }
-    for (const c of o.components) place(c.key, mulAffine(m, c.transform), rootId, depth + 1);
+    for (const c of o.components) place(c.key, mulAffine(m, c.transform), rootId, depth + 1, pl, withGeo);
   };
-  for (const item of model.build) place(item.key, item.transform, item.key.split('#')[1], 0);
+  const instanceCount = {};
+  for (const item of model.build) {
+    const rootId = item.key.split('#')[1];
+    const instanceId = (instanceCount[rootId] = (instanceCount[rootId] ?? -1) + 1);
+    const plateNo = plateOf.get(`${rootId}/${instanceId}`);
+    // With `plate` set, preview geometry only holds that plate's objects
+    place(item.key, item.transform, rootId, 0, perPlate.get(plateNo), Boolean(geo) && (plate == null || plateNo === plate));
+  }
 
-  const entries = Object.entries(byColour);
-  const colorStats = entries.length
-    ? entries
-        .map(([color, w]) => ({ color, faces: Math.round(w), pct: triCount ? Math.round((w / triCount) * 10000) / 100 : 0 }))
-        .sort((a, b) => b.faces - a.faces || a.color.localeCompare(b.color))
+  const colorStats = toStats(byColour, triCount);
+  const plates = perPlate.size
+    ? [...perPlate.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([n, p]) => ({ plate: n, name: plateNames.get(n), tri_count: p.tris, colorStats: toStats(p.byColour, p.tris) }))
     : null;
 
   return {
@@ -321,6 +373,7 @@ export async function parse3mf(buffer, { geometry = false } = {}) {
     bbox_mm: boxSize(box, model.unitScale),
     color_count: colorStats ? colorStats.length : null,
     colorStats,
+    plates,
     metadata: model.metadata,
     provenanceHint: provenanceHint(model.metadata),
     ...(geo && {

@@ -461,7 +461,7 @@ try {
   await page.waitForFunction((n) => document.querySelectorAll('[data-testid=card-thumb]').length === n, liveFiles);
   step(`拔掉 DB 重開: banner "發現 ${liveFiles} 個檔案"; 重建索引 -> ${await cardCount()} cards, thumbnails regenerated, 3MF metadata re-parsed`);
 
-  // 6) Settings page: switch library root (SPEC 3.7)
+  // 6) Settings page: switch library root (SPEC 3.8)
   const rootB = path.join(base, 'libraryB');
   await fs.mkdir(path.join(rootB, '2025'), { recursive: true });
   await fs.copyFile(path.join(FIX, 'fixture.step'), path.join(rootB, '2025', 'part.step'));
@@ -483,6 +483,96 @@ try {
   assert.equal(cfg.libraryRoot, rootB);
   assert.equal(await exists(path.join(lib, year, 'cube.stl')), true, 'old root files must not move');
   step(`settings: root -> ${rootB}; 1 file indexed, ${allCount} old records shown as 遺失; config.json in userData`);
+
+  // 11) M5: multi-plate 3MF — one entry, plate badge, plate switcher, per-plate analysis
+  const REAL = path.dirname(WINE);
+  const multi = [await stage('multiplate.3mf')];
+  for (const f of ['BOOK-U1.3mf', 'U1Cover-U1.3mf']) {
+    if (await exists(path.join(REAL, f))) {
+      await fs.copyFile(path.join(REAL, f), path.join(inbox, f)); // copy, never move the original
+      multi.push(path.join(inbox, f));
+    }
+  }
+  await importViaMenu(multi);
+  await page.click('[data-testid=import-skip-all]');
+  await page.click('[data-testid=filter-all]');
+  const cardFor = async (q) => {
+    await page.fill('[data-testid=search]', q);
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 1);
+    return (await page.textContent('[data-testid=model-card]')).replace(/\s+/g, ' ').trim();
+  };
+  assert.match(await cardFor('multiplate'), /4 盤.*3 色/);
+  if (haveWine) assert.doesNotMatch(await cardFor('Wine'), /盤/);
+  assert.doesNotMatch(await cardFor('painted'), /盤/);
+  await cardFor('part'); // part.step in the current root: no plate info
+  await page.click('[data-testid=model-card]');
+  await page.waitForFunction(() => document.querySelector('[data-testid=detail-panel] h2')?.textContent === 'part');
+  assert.equal(await page.$('[data-testid=plate-switcher]'), null, 'files without plates show no plate UI');
+
+  await openModel('multiplate');
+  const plateButtons = await page.$$eval('[data-testid=plate-switcher] button', (b) => b.map((x) => [x.textContent.trim(), x.classList.contains('on')]));
+  assert.deepEqual(plateButtons, [['盤 1', true], ['盤 2', false], ['盤 3', false], ['盤 4', false]]);
+  const plateState = async () => ({
+    caption: await page.textContent('[data-testid=plate-caption]'),
+    title: (await page.textContent('[data-testid=color-analysis-title]')).trim(),
+    rows: await tableRows(),
+    total: await page.$$eval('[data-testid=color-row] td.total', (t) => t.map((x) => x.textContent)),
+    colours: present(await viewerPixels()).filter((k) => k !== 'gray'),
+  });
+  let st = await plateState();
+  assert.deepEqual([st.title, st.colours], ['顏色分析 · 盤 1：1 色 ／ 全檔 3 色', ['cyan']]);
+  assert.deepEqual(st.rows, ['#00FFFF 12 100%', '#FFFF00 — —', '#FF00FF — —']);
+  assert.deepEqual(st.total, ['25%', '50%', '25%']);
+  assert.match(st.caption, /「Cyan plate」 · 12 面/);
+  assert.deepEqual(await warningTypes(), ['few-colors']);
+  step(`multiplate.3mf 盤 1: ${st.title}; rows ${st.rows.join(' | ')}; 全檔欄 ${st.total.join('/')}; preview ${st.colours}`);
+  const choosePlate = async (n) => {
+    await page.click(`[data-testid=plate-${n}]`);
+    await page.waitForFunction((k) => {
+      const v = document.querySelector('[data-testid=viewer]');
+      return v.dataset.loaded.endsWith(`:${k}`) && ['ready', 'empty'].includes(v.dataset.status);
+    }, n, { timeout: 120000 });
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  };
+  await choosePlate(2);
+  st = await plateState();
+  assert.deepEqual([st.title, st.colours], ['顏色分析 · 盤 2：2 色 ／ 全檔 3 色', ['magenta', 'yellow']]);
+  assert.deepEqual(st.rows, ['#FF00FF 12 50%', '#FFFF00 12 50%', '#00FFFF — —']);
+  step(`盤 2: ${st.title}; preview ${st.colours}`);
+  await choosePlate(3);
+  st = await plateState();
+  assert.deepEqual(st.colours, ['yellow']); // 2nd instance of the yellow object
+  await choosePlate(4);
+  assert.equal(await page.getAttribute('[data-testid=viewer]', 'data-status'), 'empty');
+  assert.match(await page.textContent('[data-testid=color-analysis]'), /這個盤面沒有物件/);
+  step('盤 3: yellow only (instance 1); 盤 4 (plate_4.json only): empty plate message');
+
+  // Thumbnail = first plate only
+  await page.fill('[data-testid=search]', 'multiplate');
+  await page.waitForSelector('[data-testid=card-thumb]');
+  const rodb2 = new Database(path.join(base, 'userData', 'library.db'), { readonly: true });
+  const mpThumb = rodb2.prepare(`SELECT thumb FROM models WHERE rel_path LIKE '%multiplate.3mf'`).pluck().get();
+  rodb2.close();
+  const mpImg = await decode(mpThumb);
+  assert.deepEqual(present(colourCounts(Buffer.from(mpImg.bgra, 'base64'), 'bgra')).filter((k) => k !== 'gray'), ['cyan']);
+  step('multiplate thumbnail: plate 1 only (cyan)');
+
+  if (multi.length === 3) {
+    assert.match(await cardFor('BOOK'), /5 盤/);
+    await openModel('BOOK-U1', 'BOOK');
+    await choosePlate(3);
+    assert.match(await page.textContent('[data-testid=plate-caption]'), /「SPINE \+ EXTENSION」 · 7,528 面/);
+    assert.match(await page.textContent('[data-testid=color-analysis-title]'), /盤 3：2 色 ／ 全檔 2 色/);
+    assert.match(await cardFor('U1Cover'), /8 盤/);
+    await openModel('U1Cover-U1', 'U1Cover');
+    await choosePlate(8);
+    assert.equal(await page.getAttribute('[data-testid=viewer]', 'data-status'), 'ready');
+    assert.match(await page.textContent('[data-testid=plate-caption]'), /1,513,200 面/);
+    step('BOOK-U1 (5 盤, 盤 3 「SPINE + EXTENSION」 7,528 面) and U1Cover-U1 (8 盤, 盤 8 1,513,200 面) previewed per plate');
+  } else {
+    step('BOOK-U1 / U1Cover-U1 not found: real multi-plate files skipped');
+  }
+  await page.fill('[data-testid=search]', '');
 
   await page.screenshot({ path: path.join(base, 'smoke.png') });
   step('screenshot: ' + path.join(base, 'smoke.png'));

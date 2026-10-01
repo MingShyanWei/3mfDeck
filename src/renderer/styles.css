@@ -198,3 +198,13 @@ button.icon:hover { color: var(--text); }
 .detail header .icon:disabled { opacity: 0.3; }
 
 .trash-item { margin-top: 10px !important; border-top: 1px solid var(--border); padding-top: 6px !important; }
+
+/* Multi-plate */
+.plates { margin-top: 12px; display: flex; flex-direction: column; gap: 4px; }
+.seg-group.wrap { flex-wrap: wrap; }
+.seg-group.wrap .seg { border-radius: 0; margin: 0 -1px -1px 0; }
+.seg-group.wrap .seg:first-child { border-radius: 6px 0 0 6px; }
+.seg-group.wrap .seg:last-child { border-radius: 0 6px 6px 0; }
+.badge-plates { color: var(--accent); border-color: currentColor; }
+.dist tr.other-plate td { color: var(--muted); }
+.dist td.total { color: var(--muted); }

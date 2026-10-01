@@ -1,4 +1,4 @@
-// Recycle bin, export and startup consistency check (SPEC 3.6, §4).
+// Recycle bin, export and startup consistency check (SPEC 3.7, §4).
 import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';

@@ -1,5 +1,5 @@
 // Card grid and list (table) views of the library.
-import { ProvenanceBadge, ColorBadge, MissingBadge } from './Badges.jsx';
+import { ProvenanceBadge, ColorBadge, MissingBadge, PlateBadge } from './Badges.jsx';
 import { isUnlabeled, formatBytes, formatInt, formatDate } from '../format.js';
 
 export function ModelGrid({ models, selectedId, onSelect }) {
@@ -27,6 +27,7 @@ export function ModelGrid({ models, selectedId, onSelect }) {
             <div className="badges">
               <MissingBadge model={m} />
               <ProvenanceBadge model={m} />
+              <PlateBadge model={m} />
               <ColorBadge model={m} />
             </div>
           </div>
@@ -62,7 +63,9 @@ export function ModelList({ models, selectedId, onSelect }) {
             <td className="name">{m.name} <MissingBadge model={m} /></td>
             <td className="mono">{m.format}</td>
             <td><ProvenanceBadge model={m} /></td>
-            <td><ColorBadge model={m} /></td>
+            <td>
+              <PlateBadge model={m} /> <ColorBadge model={m} />
+            </td>
             <td className="num">{formatInt(m.tri_count)}</td>
             <td className="num">{formatBytes(m.size_bytes)}</td>
             <td className="tags">{m.tags.join(', ')}</td>

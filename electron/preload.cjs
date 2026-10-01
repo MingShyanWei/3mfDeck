@@ -23,7 +23,7 @@ contextBridge.exposeInMainWorld('api', {
   checkConsistency: () => ipcRenderer.invoke('lib:consistency'),
   rebuildIndex: () => ipcRenderer.invoke('lib:rebuildIndex'),
   reveal: (id) => ipcRenderer.invoke('lib:reveal', id),
-  preview: (id) => ipcRenderer.invoke('lib:preview', id),
+  preview: (id, plate) => ipcRenderer.invoke('lib:preview', id, plate),
   idsNeedingThumb: () => ipcRenderer.invoke('lib:idsNeedingThumb'),
   setThumb: (id, bytes) => ipcRenderer.invoke('lib:setThumb', id, bytes),
   getSettings: () => ipcRenderer.invoke('settings:get'),

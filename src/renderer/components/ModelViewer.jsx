@@ -11,7 +11,9 @@ const MODE_LABELS = [
   ['wireframe', '線框', 'mdi-cube-scan'],
 ];
 
-export default function ModelViewer({ model }) {
+// `plate`: show only that slicer plate (multi-plate 3MF); `colors`: the
+// distribution the filament-mapping summary is based on (plate or file).
+export default function ModelViewer({ model, plate = null, colors = model.colors }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const viewerRef = useRef(null);
@@ -19,6 +21,7 @@ export default function ModelViewer({ model }) {
   const [error, setError] = useState('');
   const [hasPaint, setHasPaint] = useState(false);
   const [mode, setMode] = useState('original');
+  const [loaded, setLoaded] = useState(''); // "<id>:<plate>" the viewer currently shows
 
   // One viewer (WebGL context) for the lifetime of the panel
   useEffect(() => {
@@ -53,10 +56,12 @@ export default function ModelViewer({ model }) {
       try {
         // performance.measure entries let tests break down where load time goes
         performance.mark('preview:start');
-        const payload = await window.api.preview(model.id);
+        const payload = await window.api.preview(model.id, plate);
         performance.measure('preview:ipc', 'preview:start');
         if (cancelled) return;
+        setLoaded(`${model.id}:${plate ?? ''}`);
         if (payload.unsupported) return setStatus('unsupported');
+        if (payload.format === '3mf' && !payload.indices.length) return setStatus('empty');
         performance.mark('preview:build');
         const built = await buildModel(payload);
         performance.measure('preview:buildModel', 'preview:build');
@@ -80,7 +85,7 @@ export default function ModelViewer({ model }) {
     return () => {
       cancelled = true;
     };
-  }, [model.id]);
+  }, [model.id, plate]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -89,14 +94,15 @@ export default function ModelViewer({ model }) {
     viewer.render();
   }, [mode, status]);
 
-  const spools = useMemo(() => (model.colors?.length ? mapToSlots(model.colors) : null), [model.colors]);
+  const spools = useMemo(() => (colors?.length ? mapToSlots(colors) : null), [colors]);
 
   return (
     <div className="viewer">
-      <div className="viewer-stage" ref={wrapRef} data-testid="viewer" data-status={status} data-mode={mode}>
+      <div className="viewer-stage" ref={wrapRef} data-testid="viewer" data-status={status} data-mode={mode} data-loaded={loaded}>
         <canvas ref={canvasRef} data-testid="viewer-canvas" />
         {status === 'loading' && <div className="viewer-msg"><i className="mdi mdi-loading mdi-spin" /> 載入中…</div>}
         {status === 'unsupported' && <div className="viewer-msg">STEP 為 B-rep 格式，暫不支援預覽</div>}
+        {status === 'empty' && <div className="viewer-msg">這個盤面沒有物件</div>}
         {status === 'error' && <div className="viewer-msg error"><i className="mdi mdi-alert-outline" /> {error}</div>}
       </div>
       <div className="seg-group modes">

@@ -1,4 +1,4 @@
-// App settings (SPEC 3.7): stored in Electron userData, never in the library root.
+// App settings (SPEC 3.8): stored in Electron userData, never in the library root.
 import fs from 'node:fs';
 import path from 'node:path';
 import { indexNewFiles } from './importer.mjs';

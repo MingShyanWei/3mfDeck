@@ -6,7 +6,7 @@ import { importPaths } from '../../src/core/importer.mjs';
 import { loadSettings, saveSettings, switchRoot, markMissing, modelPath } from '../../src/core/settings.mjs';
 import { tmpDir, stage, exists } from './helpers.mjs';
 
-describe('settings storage (SPEC 3.7)', () => {
+describe('settings storage (SPEC 3.8)', () => {
   it('defaults to the given root when no config exists', async () => {
     const userData = await tmpDir();
     expect(loadSettings(userData, '/Users/x/3mf-library')).toEqual({ libraryRoot: '/Users/x/3mf-library' });

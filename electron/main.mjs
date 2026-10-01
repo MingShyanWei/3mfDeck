@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb } from '../src/core/db.mjs';
-import { loadPreviewData, storeThumb } from '../src/core/preview.mjs';
+import { loadPreviewData, storeThumb, previewPlate } from '../src/core/preview.mjs';
 import { importPaths, indexNewFiles } from '../src/core/importer.mjs';
 import { trashModel, restoreModel, emptyTrash, exportModel, checkConsistency } from '../src/core/trash.mjs';
 import { loadSettings, switchRoot, markMissing, modelPath } from '../src/core/settings.mjs';
@@ -69,17 +69,19 @@ function registerIpc() {
   // Keep the last preview payload: right after an import the thumbnail and
   // the preview ask for the same model, and a 5M-face 3MF takes ~9 s to parse.
   let lastPreview = null;
-  ipcMain.handle('lib:preview', async (_e, id) => {
+  ipcMain.handle('lib:preview', async (_e, id, requestedPlate) => {
+    const model = getModel(db, id);
+    const plate = previewPlate(model, requestedPlate);
     const file = modelPath(db, root, id);
     const { mtimeMs } = await fs.promises.stat(file);
-    if (lastPreview?.file === file && lastPreview.mtimeMs === mtimeMs) return lastPreview.payload;
-    const payload = await loadPreviewData(file, getModel(db, id).format);
-    lastPreview = { file, mtimeMs, payload };
+    if (lastPreview?.file === file && lastPreview.mtimeMs === mtimeMs && lastPreview.plate === plate) return lastPreview.payload;
+    const payload = await loadPreviewData(file, model.format, plate);
+    lastPreview = { file, mtimeMs, plate, payload };
     return payload;
   });
   ipcMain.handle('lib:trash', (_e, id) => trashModel(db, root, id));
   ipcMain.handle('lib:restore', (_e, id) => restoreModel(db, root, id));
-  // Permanent deletion: two separate confirmations (SPEC 3.6)
+  // Permanent deletion: two separate confirmations (SPEC 3.7)
   ipcMain.handle('lib:emptyTrash', async () => {
     const n = sidebarCounts(db).trash;
     if (!n) return 0;
