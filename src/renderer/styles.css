@@ -138,6 +138,8 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
 .card.unlabeled { box-shadow: inset 0 0 0 2px var(--warn-border); }
 .card.unlabeled.selected { box-shadow: 0 0 0 2px var(--accent), 0 0 0 6px color-mix(in srgb, var(--accent) 25%, transparent); }
 .card.missing { box-shadow: inset 0 0 0 2px var(--danger); }
+/* a selected missing card keeps its red frame inside the selection glow */
+.card.missing.selected { box-shadow: inset 0 0 0 2px var(--danger), 0 0 0 2px var(--accent), 0 0 0 6px color-mix(in srgb, var(--accent) 25%, transparent); }
 .thumb { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); padding-bottom: 18%; }
 .thumb img { position: absolute; inset: 6% 6% 22%; width: 88%; height: 72%; object-fit: contain; filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.25)); }
 .thumb > .mdi { font-size: 56px; opacity: 0.5; }
