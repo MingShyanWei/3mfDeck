@@ -89,7 +89,7 @@ Download the file for your platform from [GitHub Releases](https://github.com/Mi
 | Windows x64 | `3mfDeck Setup 0.1.0.exe` | Installer (you can choose the folder) |
 | Windows x64 | `3mfDeck 0.1.0.exe` | Portable, runs without installing |
 | Linux x64 | `3mfDeck-0.1.0.AppImage` | `chmod +x`, then run it |
-| Linux x64 (Debian / Ubuntu) | `mf-cabinet_0.1.0_amd64.deb` | `sudo apt install ./mf-cabinet_0.1.0_amd64.deb` |
+| Linux x64 (Debian / Ubuntu) | `3mfdeck_0.1.0_amd64.deb` | `sudo apt install ./3mfdeck_0.1.0_amd64.deb` |
 
 **macOS: the app is unsigned (ad-hoc signature only, no Developer ID, not notarized)**, so Gatekeeper blocks the first launch. Either:
 - right-click 3mfDeck in Applications → **Open** → **Open**; if there is no Open button, go to **System Settings › Privacy & Security** and click **Open Anyway** next to the 3mfDeck message; or

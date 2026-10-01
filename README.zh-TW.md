@@ -89,7 +89,7 @@
 | Windows x64 | `3mfDeck Setup 0.1.0.exe` | 安裝版（可選安裝位置） |
 | Windows x64 | `3mfDeck 0.1.0.exe` | 免安裝版，直接執行 |
 | Linux x64 | `3mfDeck-0.1.0.AppImage` | `chmod +x` 後直接執行 |
-| Linux x64（Debian／Ubuntu） | `mf-cabinet_0.1.0_amd64.deb` | `sudo apt install ./mf-cabinet_0.1.0_amd64.deb` |
+| Linux x64（Debian／Ubuntu） | `3mfdeck_0.1.0_amd64.deb` | `sudo apt install ./3mfdeck_0.1.0_amd64.deb` |
 
 **macOS：此版未簽章（僅 ad-hoc 簽章，未用 Developer ID、未公證）**，第一次開啟會被 Gatekeeper 擋下，請擇一：
 - 在「應用程式」裡對 3mfDeck **右鍵 →「打開」→「打開」**；若沒有「打開」按鈕，到 **「系統設定 › 隱私權與安全性」**，按 3mfDeck 訊息旁的 **「強制打開」**；或
