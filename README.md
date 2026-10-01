@@ -123,7 +123,7 @@ SPEC.md            Full functional specification (final)
 
 ## Known limitations
 
-- **Windows / Linux not verified on real machines**: installers are currently produced by CI and have not been smoke-tested on real hardware; macOS is the only platform verified end to end.
+- **Windows / Linux not verified on real machines**: installers are built from macOS with electron-builder's bundled Wine / Linux toolsets (or on CI runners) and have not been smoke-tested on real hardware yet; macOS is the only platform verified end to end.
 - **The Orca CLI cannot validate 3MF files**: without a printer profile loaded it segfaults (`exit 139`), even on the original file. Verification is always done by **opening the file in the Orca GUI**.
 - **Mix recipes cannot be written per face as two spools**: Orca records one spool per face, so mixes are expressed as virtual extruders (Mix).
 - **Large files**: models of 500 MB or more (e.g. some Meshy exports) need streaming parsing and take longer.

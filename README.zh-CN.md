@@ -123,7 +123,7 @@ SPEC.md            完整功能规格（已定稿）
 
 ## 已知限制
 
-- **Windows／Linux 未经真机验证**：目前以 CI 生成安装包，尚未在真机跑过 smoke；macOS 是唯一完成端到端验证的平台。
+- **Windows／Linux 未经真机验证**：安装包是在 macOS 上用 electron-builder 内置的 Wine／Linux 工具组（或 CI runner）生成，尚未在真机跑过 smoke；macOS 是唯一完成端到端验证的平台。
 - **Orca CLI 不能用来验证 3MF**：没加载打印机 profile 会 segfault（`exit 139`），连原始文件也一样。验证一律以 **Orca GUI 打开**为准。
 - **混色配方无法逐面写两卷**：Orca 逐面只记一卷，因此混色以虚拟挤出头（Mix）表达。
 - **大文件**：内含 500MB 以上模型（如某些 Meshy 导出）需用流式解析，处理时间较长。
