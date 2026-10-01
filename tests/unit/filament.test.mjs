@@ -91,7 +91,7 @@ describe('mapToSlots', () => {
 });
 
 describe('parse3mf geometry (preview data)', () => {
-  it('painted.3mf: world-space mm positions, indices and per-face filament state', async () => {
+  it('painted.3mf: world-space mm positions, indices and per-face colour', async () => {
     const { geometry: g } = await parse3mf(await fs.readFile(path.join(FIXTURES, 'painted.3mf')), { geometry: true });
     expect(g.positions.length).toBe(8 * 3);
     expect(g.indices.length).toBe(12 * 3);
@@ -99,15 +99,15 @@ describe('parse3mf geometry (preview data)', () => {
     const xs = [...g.positions].filter((_, i) => i % 3 === 0);
     expect([Math.min(...xs), Math.max(...xs)]).toEqual([100, 120]);
     // unpainted face -> part extruder 4; split faces -> dominant (tie -> lower state)
-    expect([...g.faceState]).toEqual([1, 1, 1, 1, 2, 2, 3, 4, 3, 1, 1, 1]);
-    expect(g.colours).toEqual(['#00FFFF', '#FF00FF', '#FFFF00', '#000000']);
+    expect(g.palette).toEqual(['#00FFFF', '#FF00FF', '#FFFF00', '#000000']);
+    expect([...g.faceColor]).toEqual([1, 1, 1, 1, 2, 2, 3, 4, 3, 1, 1, 1]);
   });
 
-  it('is omitted unless requested, and colours are null without slicer config', async () => {
+  it('is omitted unless requested; faces without any colour get index 0', async () => {
     expect((await parse3mf(await fs.readFile(path.join(FIXTURES, 'painted.3mf')))).geometry).toBeUndefined();
     const { geometry: g } = await parse3mf(await fs.readFile(path.join(FIXTURES, 'plain.3mf')), { geometry: true });
-    expect(g.colours).toBeNull();
-    expect(g.faceState.length).toBe(12);
+    expect(g.palette).toEqual([]);
+    expect([...g.faceColor]).toEqual(new Array(12).fill(0));
     expect(Math.max(...g.positions)).toBe(30); // cm -> mm
   });
 });

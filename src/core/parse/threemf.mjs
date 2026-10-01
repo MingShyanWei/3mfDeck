@@ -1,7 +1,9 @@
 // 3MF parser: jszip for the container, a streaming tag scanner for the
 // (potentially huge, >500 MB) mesh XML, fast-xml-parser for the small
-// config/rels XML. Reads per-face paint_color (BambuStudio/Orca encoding)
-// and resolves it to filament colours from project_settings.config.
+// config/rels XML. Per-face colour comes from paint_color (BambuStudio/Orca
+// encoding, resolved to filament colours from project_settings.config) or,
+// for faces without paint_color, from 3MF material properties
+// (basematerials displaycolor / materials-extension colorgroup).
 import JSZip from 'jszip';
 import { StringDecoder } from 'node:string_decoder';
 import { Readable } from 'node:stream';
@@ -44,21 +46,32 @@ class Grow {
   }
 }
 
+const attrRes = {};
 const attr = (attrs, name) => {
-  const m = new RegExp(`(?:^|\\s)${name}="([^"]*)"`).exec(attrs);
+  const re = (attrRes[name] ??= new RegExp(`(?:^|\\s)${name}="([^"]*)"`));
+  const m = re.exec(attrs);
   return m ? m[1] : undefined;
 };
 
+// "#rrggbb" / "#RRGGBBAA" -> "#RRGGBB"
+const normHex = (c) => (c ? c.slice(0, 7).toUpperCase() : undefined);
+
 /**
  * Stream one .model part and collect objects, build items and model metadata.
- * With model.geometry set, also keep vertices, triangle indices and each
- * face's dominant paint state (for previews).
+ *
+ * Each face gets a colour key: "S<n>" for paint state n (S0 = unpainted,
+ * resolved to the default extruder at placement time) or "#RRGGBB" for a
+ * material colour. paint_color takes priority; material colour applies only
+ * to faces without paint_color. Per mesh, `keys` sums face weights per key
+ * (split paint triangles contribute fractions). With model.geometry set,
+ * vertices, triangle indices and each face's dominant key are kept too.
  */
 async function scanModel(zipFile, partPath, model) {
   const decoder = new StringDecoder('utf8');
   const tagRe = /<(\/?)([A-Za-z_][\w:.-]*)((?:[^>"]|"[^"]*")*?)(\/?)>|([^<]+)/g;
   let rest = '';
   let obj = null; // current <object>
+  let group = null; // colours of the <basematerials>/<colorgroup> being read
   let metaName = null; // current model-level <metadata name=...>
   let metaText = '';
 
@@ -77,35 +90,50 @@ async function scanModel(zipFile, partPath, model) {
         growBox(obj.mesh.box, x, y, z);
         if (obj.mesh.verts) obj.mesh.verts.push(x), obj.mesh.verts.push(y), obj.mesh.verts.push(z);
       } else if (name === 'triangle' && obj) {
-        obj.mesh.tris++;
+        const mesh = obj.mesh;
+        mesh.tris++;
         const pc = attr(attrs, 'paint_color');
-        let dominant = 0;
+        let dominant;
         if (pc) {
           let best = 0;
           for (const [state, w] of Object.entries(decodePaintColor(pc))) {
-            obj.mesh.paint[state] = (obj.mesh.paint[state] || 0) + w;
-            if (w > best) (best = w), (dominant = Number(state));
+            const key = `S${state}`;
+            mesh.keys[key] = (mesh.keys[key] || 0) + w;
+            if (w > best) (best = w), (dominant = key);
           }
-          obj.mesh.painted++;
+        } else {
+          // Triangle pid/p1 override the object's pid/pindex; p1 alone uses the object pid.
+          // Per-vertex p2/p3 are ignored: the face takes its p1 colour.
+          const tpid = attr(attrs, 'pid');
+          const pid = tpid ?? obj.pid;
+          const p1 = attr(attrs, 'p1') ?? (tpid === undefined ? obj.pindex : undefined);
+          dominant = (pid !== undefined && model.groups.get(`${partPath}#${pid}`)?.[p1]) || 'S0';
+          mesh.keys[dominant] = (mesh.keys[dominant] || 0) + 1;
         }
-        if (obj.mesh.indices) {
-          obj.mesh.indices.push(+attr(attrs, 'v1'));
-          obj.mesh.indices.push(+attr(attrs, 'v2'));
-          obj.mesh.indices.push(+attr(attrs, 'v3'));
-          obj.mesh.faceState.push(dominant);
+        if (mesh.indices) {
+          mesh.indices.push(+attr(attrs, 'v1'));
+          mesh.indices.push(+attr(attrs, 'v2'));
+          mesh.indices.push(+attr(attrs, 'v3'));
+          mesh.faceKey.push(keyIndex(model, dominant));
         }
+      } else if ((name === 'base' || name === 'color') && group && !close) {
+        group.push(normHex(attr(attrs, name === 'base' ? 'displaycolor' : 'color')));
       } else if (close) {
         if (name === 'object') obj = null;
+        else if (name === 'basematerials' || name === 'colorgroup') group = null;
         else if (name === 'metadata' && metaName) {
           model.metadata[metaName] = decodeEntities(metaText.trim());
           metaName = null;
         }
+      } else if (name === 'basematerials' || name === 'colorgroup') {
+        group = [];
+        model.groups.set(`${partPath}#${attr(attrs, 'id')}`, group);
       } else if (name === 'object') {
-        obj = { id: attr(attrs, 'id'), mesh: null, components: [] };
+        obj = { id: attr(attrs, 'id'), pid: attr(attrs, 'pid'), pindex: attr(attrs, 'pindex'), mesh: null, components: [] };
         model.objects.set(`${partPath}#${obj.id}`, obj);
       } else if (name === 'mesh' && obj) {
-        obj.mesh = { box: emptyBox(), tris: 0, painted: 0, paint: {} };
-        if (model.geometry) Object.assign(obj.mesh, { verts: new Grow(Float32Array), indices: new Grow(Uint32Array), faceState: new Grow(Uint8Array) });
+        obj.mesh = { box: emptyBox(), tris: 0, keys: {} };
+        if (model.geometry) Object.assign(obj.mesh, { verts: new Grow(Float32Array), indices: new Grow(Uint32Array), faceKey: new Grow(Uint16Array) });
       } else if (name === 'component' && obj) {
         const p = attr(attrs, 'p:path');
         obj.components.push({
@@ -136,6 +164,17 @@ async function scanModel(zipFile, partPath, model) {
     rest = text.slice(cut);
   }
   handle(rest + decoder.end());
+}
+
+// Colour keys used by preview geometry are stored as small integers
+function keyIndex(model, key) {
+  let i = model.keyIndex.get(key);
+  if (i === undefined) {
+    i = model.keyList.length;
+    model.keyList.push(key);
+    model.keyIndex.set(key, i);
+  }
+  return i;
 }
 
 function readFilamentColours(text) {
@@ -195,17 +234,20 @@ export function provenanceHint(md) {
 }
 
 /**
- * Parse a 3MF. With { geometry: true } the result also has `geometry`:
- * world-space (mm) positions, triangle indices and per-face filament state
- * (1-based extruder; split triangles take their dominant state) for every
- * placed build instance, plus the filament colour list (or null).
+ * Parse a 3MF. `colorStats` is the merged per-face colour distribution
+ * (paint_color first, then material colour, then the default extruder's
+ * filament colour); null when no face has a resolvable colour.
+ * With { geometry: true } the result also has `geometry`: world-space (mm)
+ * positions and triangle indices for every placed build instance, plus
+ * `faceColor` (index into `palette`, 0 = no colour; split triangles take
+ * their dominant colour) and `palette` (index 1.. -> "#RRGGBB").
  */
 export async function parse3mf(buffer, { geometry = false } = {}) {
   const zip = await JSZip.loadAsync(buffer);
   const text = async (p) => (zip.file(p) ? zip.file(p).async('string') : null);
 
   const rootPath = rootModelPath(await text('_rels/.rels'));
-  const model = { rootPath, unitScale: 1, metadata: {}, objects: new Map(), build: [], geometry };
+  const model = { rootPath, unitScale: 1, metadata: {}, objects: new Map(), build: [], groups: new Map(), keyList: [], keyIndex: new Map(), geometry };
   await scanModel(zip.file(rootPath), rootPath, model);
   // Sub-models referenced via p:path (Production extension, used by Bambu/Orca)
   const subPaths = new Set();
@@ -215,13 +257,30 @@ export async function parse3mf(buffer, { geometry = false } = {}) {
   const colours = readFilamentColours(await text('Metadata/project_settings.config'));
   const ext = readExtruders(await text('Metadata/model_settings.config'));
 
+  // Colour key -> "#RRGGBB" (or null). Unpainted faces without a material
+  // colour (S0) take the part's extruder, else the object's, else extruder 1.
+  const resolve = (key, defExt) => {
+    if (key[0] === '#') return key;
+    const state = key === 'S0' ? defExt : Number(key.slice(1));
+    return colours?.[state - 1] ?? null;
+  };
+
   // Walk the build: every placed instance counts (bbox, triangles, colours),
-  // i.e. what would actually be printed. Unpainted faces (state 0) take the
-  // part's extruder, else the object's, else extruder 1.
+  // i.e. what would actually be printed.
   const box = emptyBox();
-  const byState = {};
+  const byColour = {};
   let triCount = 0;
-  const geo = geometry && { positions: new Grow(Float32Array), indices: new Grow(Uint32Array), faceState: new Grow(Uint8Array) };
+  const geo = geometry && { positions: new Grow(Float32Array), indices: new Grow(Uint32Array), faceColor: new Grow(Uint16Array), palette: [], paletteIndex: new Map() };
+  const paletteIndex = (hex) => {
+    if (!hex) return 0;
+    let i = geo.paletteIndex.get(hex);
+    if (i === undefined) {
+      geo.palette.push(hex);
+      i = geo.palette.length;
+      geo.paletteIndex.set(hex, i);
+    }
+    return i;
+  };
   const place = (key, m, rootId, depth) => {
     const o = model.objects.get(key);
     if (!o) return;
@@ -230,12 +289,10 @@ export async function parse3mf(buffer, { geometry = false } = {}) {
       transformBox(o.mesh.box, m, box);
       triCount += o.mesh.tris;
       const defExt = depth === 0 ? rootExt : ext.parts[`${rootId}/${o.id}`] || rootExt;
-      for (const [s, w] of Object.entries(o.mesh.paint)) {
-        const st = s === '0' ? defExt : Number(s);
-        byState[st] = (byState[st] || 0) + w;
+      for (const [key, w] of Object.entries(o.mesh.keys)) {
+        const hex = resolve(key, defExt);
+        if (hex) byColour[hex] = (byColour[hex] || 0) + w;
       }
-      const unpainted = o.mesh.tris - o.mesh.painted;
-      if (unpainted) byState[defExt] = (byState[defExt] || 0) + unpainted;
       if (geo) {
         const base = geo.positions.n / 3;
         const v = o.mesh.verts.array;
@@ -244,25 +301,20 @@ export async function parse3mf(buffer, { geometry = false } = {}) {
           for (const c of applyAffine(m, v[i], v[i + 1], v[i + 2])) geo.positions.push(c * k);
         }
         for (const idx of o.mesh.indices.array) geo.indices.push(base + idx);
-        for (const st of o.mesh.faceState.array) geo.faceState.push(st || defExt);
+        const toPalette = model.keyList.map((key) => paletteIndex(resolve(key, defExt)));
+        for (const k of o.mesh.faceKey.array) geo.faceColor.push(toPalette[k]);
       }
     }
     for (const c of o.components) place(c.key, mulAffine(m, c.transform), rootId, depth + 1);
   };
   for (const item of model.build) place(item.key, item.transform, item.key.split('#')[1], 0);
 
-  // paint_color distribution, resolved to filament colours
-  let colorStats = null;
-  if (colours) {
-    const byColour = {};
-    for (const [st, w] of Object.entries(byState)) {
-      const c = colours[st - 1];
-      if (c) byColour[c] = (byColour[c] || 0) + w;
-    }
-    colorStats = Object.entries(byColour)
-      .map(([color, w]) => ({ color, faces: Math.round(w), pct: triCount ? Math.round((w / triCount) * 10000) / 100 : 0 }))
-      .sort((a, b) => b.faces - a.faces);
-  }
+  const entries = Object.entries(byColour);
+  const colorStats = entries.length
+    ? entries
+        .map(([color, w]) => ({ color, faces: Math.round(w), pct: triCount ? Math.round((w / triCount) * 10000) / 100 : 0 }))
+        .sort((a, b) => b.faces - a.faces || a.color.localeCompare(b.color))
+    : null;
 
   return {
     tri_count: triCount,
@@ -272,7 +324,7 @@ export async function parse3mf(buffer, { geometry = false } = {}) {
     metadata: model.metadata,
     provenanceHint: provenanceHint(model.metadata),
     ...(geo && {
-      geometry: { positions: geo.positions.array, indices: geo.indices.array, faceState: geo.faceState.array, colours },
+      geometry: { positions: geo.positions.array, indices: geo.indices.array, faceColor: geo.faceColor.array, palette: geo.palette },
     }),
   };
 }

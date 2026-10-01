@@ -20,22 +20,23 @@ function linearBytes(hex) {
   return [c.r, c.g, c.b].map((v) => Math.round(v * 255));
 }
 
-function faceColours(faceState, palette) {
-  const out = new Uint8Array(faceState.length * 9);
+function faceColours(faceColor, palette) {
+  const out = new Uint8Array(faceColor.length * 9);
   const gray = linearBytes('#' + GRAY.toString(16));
-  for (let f = 0; f < faceState.length; f++) {
-    const rgb = palette[faceState[f] - 1] || gray;
+  for (let f = 0; f < faceColor.length; f++) {
+    const rgb = palette[faceColor[f] - 1] || gray;
     for (let k = 0; k < 3; k++) out.set(rgb, f * 9 + k * 3);
   }
   return out;
 }
 
 /**
- * 3MF with per-face filament state. Geometry is de-indexed so every face can
- * carry its own colour. `paint` holds the two colour arrays the viewer swaps
- * between: original filament colours and their nearest U1 slot colours.
+ * 3MF with per-face colours (paint_color or material colour). Geometry is
+ * de-indexed so every face can carry its own colour. `paint` holds the two
+ * colour arrays the viewer swaps between: original colours and their
+ * nearest U1 slot colours. Faces without a colour (index 0) stay grey.
  */
-function buildPainted({ positions, indices, faceState, colours }) {
+function buildPainted({ positions, indices, faceColor, palette }) {
   const pos = new Float32Array(indices.length * 3);
   for (let i = 0; i < indices.length; i++) {
     const v = indices[i] * 3;
@@ -45,10 +46,10 @@ function buildPainted({ positions, indices, faceState, colours }) {
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  if (!colours) return { object: new THREE.Mesh(geometry, grayMaterial()), zUp: true, paint: null };
+  if (!palette.length) return { object: new THREE.Mesh(geometry, grayMaterial()), zUp: true, paint: null };
 
-  const original = faceColours(faceState, colours.map(linearBytes));
-  const filament = faceColours(faceState, colours.map((c) => linearBytes(nearestSlot(c).hex)));
+  const original = faceColours(faceColor, palette.map(linearBytes));
+  const filament = faceColours(faceColor, palette.map((c) => linearBytes(nearestSlot(c).hex)));
   geometry.setAttribute('color', new THREE.BufferAttribute(original.slice(), 3, true));
   const material = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
   return { object: new THREE.Mesh(geometry, material), zUp: true, paint: { geometry, original, filament } };

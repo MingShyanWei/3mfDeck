@@ -1,0 +1,62 @@
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { analyzeColors, ditherPairs, DITHER } from '../../src/core/colorAnalysis.mjs';
+import { parse3mf } from '../../src/core/parse/threemf.mjs';
+import { FIXTURES } from './helpers.mjs';
+
+const stats = async (f) => (await parse3mf(await fs.readFile(path.join(FIXTURES, f)))).colorStats;
+const types = (w) => w.map((x) => x.type);
+
+describe('ditherPairs', () => {
+  it('flags two near-identical colours sharing a large area (dither.3mf: 33.33% + 25%)', async () => {
+    const pairs = ditherPairs(await stats('dither.3mf'));
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0]).toMatchObject({ colors: ['#FFD000', '#FFDC20'], pcts: [33.33, 25], combined: 58.33 });
+    expect(pairs[0].deltaE).toBeLessThanOrEqual(DITHER.maxDeltaE);
+  });
+
+  it('a 42% / 35% split between near-identical values is flagged', () => {
+    const pairs = ditherPairs([
+      { color: '#E8C547', faces: 420, pct: 42 },
+      { color: '#EFCB4E', faces: 350, pct: 35 },
+      { color: '#000000', faces: 230, pct: 23 },
+    ]);
+    expect(pairs.map((p) => [p.colors, p.combined])).toEqual([[['#E8C547', '#EFCB4E'], 77]]);
+  });
+
+  it('ignores distinct colours even when both are large (C/M 42% / 35%)', () => {
+    expect(ditherPairs([{ color: '#00FFFF', faces: 42, pct: 42 }, { color: '#FF00FF', faces: 35, pct: 35 }])).toEqual([]);
+  });
+
+  it('ignores close colours when one share is tiny or the pair is small', () => {
+    expect(ditherPairs([{ color: '#FFD000', pct: 60 }, { color: '#FFDC20', pct: 5 }])).toEqual([]); // < minEach
+    expect(ditherPairs([{ color: '#FFD000', pct: 15 }, { color: '#FFDC20', pct: 15 }, { color: '#000000', pct: 70 }])).toEqual([]); // < minCombined
+  });
+});
+
+describe('analyzeColors', () => {
+  it('painted.3mf (4 colours): only the "no mixing needed" hint', async () => {
+    const w = analyzeColors(await stats('painted.3mf'));
+    expect(types(w)).toEqual(['few-colors']);
+    expect(w[0].message).toBe('色塊少於 4 色不需混色，量化成實色平塗最乾淨');
+  });
+
+  it('dither.3mf (6 colours): dither pair + Full Spectrum warning', async () => {
+    const w = analyzeColors(await stats('dither.3mf'));
+    expect(types(w)).toEqual(['dither', 'needs-mixing']);
+    expect(w[0].message).toMatch(/^疑似抖色配對：#FFD000（33.33%）與 #FFDC20（25%）/);
+    expect(w[1].message).toBe('超過 4 色，需 Full Spectrum 混色');
+  });
+
+  it('boundary: 1 and 4 colours -> few-colors, 5 colours -> needs-mixing', () => {
+    const n = (k) => Array.from({ length: k }, (_, i) => ({ color: ['#000000', '#FFFFFF', '#00FFFF', '#FF00FF', '#FFFF00'][i], faces: 1, pct: 100 / k }));
+    expect(types(analyzeColors(n(1)))).toEqual(['few-colors']);
+    expect(types(analyzeColors(n(4)))).toEqual(['few-colors']);
+    expect(types(analyzeColors(n(5)))).toEqual(['needs-mixing']);
+  });
+
+  it('respects a different slot count', () => {
+    expect(types(analyzeColors([{ color: '#000000', pct: 50 }, { color: '#FFFFFF', pct: 50 }], 1))).toEqual(['needs-mixing']);
+  });
+});

@@ -165,7 +165,7 @@ export function listModels(db, { q = '', filter = 'all', sort = 'imported' } = {
 export function getModel(db, id) {
   const row = db.prepare(`SELECT ${LIST_COLUMNS} FROM models m WHERE m.id = ?`).get(id);
   if (!row) return null;
-  const colors = db.prepare('SELECT color, faces, pct FROM color_stats WHERE model_id = ? ORDER BY faces DESC').all(id);
+  const colors = db.prepare('SELECT color, faces, pct FROM color_stats WHERE model_id = ? ORDER BY faces DESC, color').all(id);
   return { ...rowOut(row), colors };
 }
 

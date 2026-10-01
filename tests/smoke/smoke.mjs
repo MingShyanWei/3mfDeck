@@ -287,7 +287,7 @@ try {
   await page.fill('[data-testid=search]', '');
 
   // Thumbnails: every renderable model got a 512px PNG in the DB
-  await page.waitForFunction((n) => document.querySelectorAll('[data-testid=card-thumb]').length === n, total + 3);
+  await page.waitForFunction((n) => document.querySelectorAll('[data-testid=card-thumb]').length === n, total + 3);  // before M3 imports
   const Database = (await import('better-sqlite3')).default;
   const rodb = new Database(path.join(base, 'userData', 'library.db'), { readonly: true });
   const thumbs = Object.fromEntries(rodb.prepare(`SELECT rel_path, thumb FROM models WHERE thumb IS NOT NULL`).all().map((r) => [r.rel_path, r.thumb]));
@@ -306,11 +306,67 @@ try {
   }
   step(`thumbnails: ${Object.keys(thumbs).length} stored (512×512 PNG); painted=CMYK, textured=red+green, STL=grey`);
 
+  // 8) M3: colour analysis panel, material colours, Finder
+  await importViaMenu([await stage('materials.3mf'), await stage('mixed.3mf'), await stage('dither.3mf')]);
+  await page.click('[data-testid=import-skip-all]');
+  await page.waitForFunction((n) => document.querySelectorAll('[data-testid=model-card]').length === n, total + 6);
+  const tableRows = () => page.$$eval('[data-testid=color-row]', (rows) => rows.map((r) => [...r.cells].slice(0, 3).map((c) => c.textContent.trim()).join(' ')));
+  const warningTypes = () => page.$$eval('[data-testid^=warning-]', (els) => els.map((e) => e.dataset.testid.slice(8)));
+
+  await openModel('painted');
+  assert.deepEqual(await tableRows(), ['#00FFFF 6 50%', '#FF00FF 3 25%', '#FFFF00 2 16.67%', '#000000 1 8.33%']);
+  assert.deepEqual(await warningTypes(), ['few-colors']);
+  assert.match(await page.textContent('[data-testid=warning-few-colors]'), /色塊少於 4 色不需混色，量化成實色平塗最乾淨/);
+  const bars = await page.$$eval('[data-testid=color-row] .bar', (els) => els.map((e) => Math.round(parseFloat(e.style.width))));
+  assert.deepEqual(bars, [100, 50, 33, 17]);
+  step('painted.3mf 分布表: ' + (await tableRows()).join(' | ') + '; 警示: few-colors; 長條 ' + bars.join('/'));
+
+  // Finder: capture the path instead of opening Finder
+  await app.evaluate(({ shell }) => {
+    globalThis.__revealed = [];
+    shell.showItemInFolder = (p) => globalThis.__revealed.push(p);
+  });
+  await page.click('[data-testid=reveal]');
+  await page.waitForFunction(() => true);
+  const revealed = await app.evaluate(() => globalThis.__revealed);
+  assert.deepEqual(revealed, [path.join(lib, year, 'painted.3mf')]);
+  step('在 Finder 顯示 -> ' + revealed[0]);
+
+  await openModel('dither');
+  assert.equal((await tableRows()).length, 6);
+  assert.deepEqual(await warningTypes(), ['dither', 'needs-mixing']);
+  assert.match(await page.textContent('[data-testid=warning-dither]'), /疑似抖色配對：#FFD000（33.33%）與 #FFDC20（25%）/);
+  assert.match(await page.textContent('[data-testid=warning-needs-mixing]'), /超過 4 色，需 Full Spectrum 混色/);
+  const ditherRows = await page.$$eval('[data-testid=color-row].dither', (rows) => rows.map((r) => r.cells[0].textContent.trim()));
+  assert.deepEqual(ditherRows, ['#FFD000抖色？', '#FFDC20抖色？']);
+  step('dither.3mf: 6 色; 警示 dither + needs-mixing; 標記列 ' + ditherRows.join(', '));
+
+  await openModel('materials');
+  assert.deepEqual(await tableRows(), ['#FF8800 4 33.33%', '#3355DD 3 25%', '#FFFFFF 3 25%', '#22AA44 2 16.67%']);
+  px = await viewerPixels();
+  assert.ok(present(px).includes('green'), 'material colour rendered ' + JSON.stringify(px));
+  assert.equal(await page.isDisabled('[data-testid=mode-filament]'), false);
+  await setMode('filament');
+  assert.ok((await page.$$eval('[data-testid=spool]', (e) => e.length)) > 0);
+  step('materials.3mf (basematerials+colorgroup): 分布 ' + (await tableRows()).join(' | ') + '; preview ' + JSON.stringify(present(px)));
+
+  await openModel('mixed');
+  assert.deepEqual(await tableRows(), ['#00FFFF 6 50%', '#FF8800 4 33.33%', '#FF00FF 2 16.67%']);
+  step('mixed.3mf (paint_color 優先 + 材質色): ' + (await tableRows()).join(' | '));
+
+  // Colour badges on the cards
+  await page.fill('[data-testid=search]', '');
+  await page.waitForFunction((n) => document.querySelectorAll('[data-testid=model-card]').length === n, total + 6);
+  const badge = (name) => page.$$eval('[data-testid=model-card]', (cards, n) => cards.find((c) => c.querySelector('.name').textContent === n)?.querySelector('.badge-colors')?.textContent.trim(), name);
+  assert.deepEqual([await badge('materials'), await badge('mixed'), await badge('dither')], ['4 色', '3 色', '6 色']);
+  await page.$eval('[data-testid=detail-panel]', (el) => el.scrollTo(0, 420));
+  await page.screenshot({ path: path.join(base, 'color-analysis.png') });
+
   // 6) Settings page: switch library root (SPEC 3.7)
   const rootB = path.join(base, 'libraryB');
   await fs.mkdir(path.join(rootB, '2025'), { recursive: true });
   await fs.copyFile(path.join(FIX, 'fixture.step'), path.join(rootB, '2025', 'part.step'));
-  const allCount = total + 3;
+  const allCount = total + 6;
   await page.click('[data-testid=filter-all]');
   await page.click('[data-testid=settings-button]');
   await page.waitForFunction((v) => document.querySelector('[data-testid=settings-root]')?.textContent === v, lib);

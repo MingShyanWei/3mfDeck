@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { indexNewFiles } from './importer.mjs';
-import { listModels } from './db.mjs';
+import { listModels, getModel } from './db.mjs';
 
 const file = (userDataDir) => path.join(userDataDir, 'config.json');
 
@@ -19,6 +19,13 @@ export function loadSettings(userDataDir, defaultRoot) {
 export function saveSettings(userDataDir, settings) {
   fs.mkdirSync(userDataDir, { recursive: true });
   fs.writeFileSync(file(userDataDir), JSON.stringify(settings, null, 2));
+}
+
+/** Absolute path of a model's file under the current root (Finder reveal, preview). */
+export function modelPath(db, root, id) {
+  const m = getModel(db, id);
+  if (!m) throw new Error(`no model ${id}`);
+  return path.join(root, m.rel_path);
 }
 
 /** Annotate rows with `missing`: the indexed file no longer exists under root. */

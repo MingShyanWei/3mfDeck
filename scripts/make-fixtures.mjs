@@ -63,13 +63,17 @@ function obj({ v, quads }) {
 // colours show: top = s1, front = s2, right = s3 + s4.
 const PAINTS = ['4', '4', '4', '4', '8', '8', '0C', null, '0C', '4', '841', '841'];
 
-async function painted3mf(colours) {
+// `materials`: optional basematerials colours for the mesh object (object-level
+// default pindex 0), to test that per-face paint_color wins over material colour.
+async function painted3mf(colours, paints = PAINTS, materials = null) {
   const { v, tris } = box(10, 10, 10);
-  const paints = PAINTS;
+  const mats = materials
+    ? `  <basematerials id="5">${materials.map((c, i) => `<base name="mat${i}" displaycolor="${c}"/>`).join('')}</basematerials>\n`
+    : '';
   const mesh = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
  <resources>
-  <object id="1" type="model">
+${mats}  <object id="1" type="model"${materials ? ' pid="5" pindex="0"' : ''}>
    <mesh>
     <vertices>
 ${v.map((p) => `     <vertex x="${p[0]}" y="${p[1]}" z="${p[2]}"/>`).join('\n')}
@@ -125,14 +129,46 @@ ${tris.map((t, i) => `     <triangle v1="${t[0]}" v2="${t[1]}" v3="${t[2]}"${pai
   return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 }
 
-// Plain core-spec 3MF (no slicer metadata, no paint_color), unit = centimeter
+// Material-coloured 3MF as exported by Meshy & co (no slicer config, no
+// paint_color): basematerials + materials-extension colorgroup, an object
+// default (pid/pindex) and per-triangle pid/p1 overrides.
+// Expected: #FF8800 4 faces, #FFFFFF 3, #3355DD 3, #22AA44 2.
+async function materials3mf() {
+  const { v, tris } = box(10, 10, 10);
+  const props = [
+    '', '', '', '', // object default: basematerials[0] orange
+    ' pid="1" p1="1"', ' pid="1" p1="1"', // white
+    ' pid="2" p1="0"', ' pid="2" p1="0"', // colorgroup green
+    ' pid="2" p1="1"', ' pid="2" p1="1"', ' pid="2" p1="1"', // colorgroup blue
+    ' p1="1"', // p1 without pid -> object pid (basematerials) -> white
+  ];
+  const model = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02" requiredextensions="m">
+ <resources>
+  <basematerials id="1"><base name="Orange" displaycolor="#FF8800"/><base name="White" displaycolor="#ffffffff"/></basematerials>
+  <m:colorgroup id="2"><m:color color="#22AA44FF"/><m:color color="#3355DDFF"/></m:colorgroup>
+  <object id="3" type="model" pid="1" pindex="0"><mesh>
+   <vertices>${v.map((p) => `<vertex x="${p[0]}" y="${p[1]}" z="${p[2]}"/>`).join('')}</vertices>
+   <triangles>${tris.map((t, i) => `<triangle v1="${t[0]}" v2="${t[1]}" v3="${t[2]}"${props[i]}/>`).join('')}</triangles>
+  </mesh></object>
+ </resources>
+ <build><item objectid="3"/></build>
+</model>
+`;
+  const zip = newZip();
+  zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>');
+  zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>');
+  zip.file('3D/3dmodel.model', model);
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+}
+
+// Plain core-spec 3MF (no slicer metadata, no paint_color, no materials), unit = centimeter
 async function plain3mf() {
   const { v, tris } = box(1, 2, 3);
   const model = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="centimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
  <resources>
-  <basematerials id="1"><base name="white" displaycolor="#FFFFFF"/></basematerials>
-  <object id="2" pid="1" pindex="0"><mesh>
+  <object id="2"><mesh>
    <vertices>${v.map((p) => `<vertex x="${p[0]}" y="${p[1]}" z="${p[2]}"/>`).join('')}</vertices>
    <triangles>${tris.map((t) => `<triangle v1="${t[0]}" v2="${t[1]}" v3="${t[2]}"/>`).join('')}</triangles>
   </mesh></object>
@@ -305,6 +341,19 @@ await fs.writeFile(path.join(OUT, 'painted.3mf'), await painted3mf(['#00FFFF', '
 // Same cube with non-CMYK filament colours, to exercise filament mapping
 await fs.writeFile(path.join(OUT, 'offpalette.3mf'), await painted3mf(['#1E90FF', '#E0457B', '#FFD700', '#333333']));
 await fs.writeFile(path.join(OUT, 'textured.glb'), texturedGlb());
+await fs.writeFile(path.join(OUT, 'materials.3mf'), await materials3mf());
+// paint_color + basematerials in one file: 6 painted faces cyan, 2 magenta,
+// 4 unpainted -> material orange (not the part's default extruder 4).
+await fs.writeFile(
+  path.join(OUT, 'mixed.3mf'),
+  await painted3mf(['#00FFFF', '#FF00FF', '#FFFF00', '#000000'], ['4', '4', '4', '4', '4', '4', '8', '8', null, null, null, null], ['#FF8800']),
+);
+// 6 colours, two near-identical yellows splitting 58% of the faces (4 + 3 of 12):
+// suspected dither pair + "more than 4 colours" warning.
+await fs.writeFile(
+  path.join(OUT, 'dither.3mf'),
+  await painted3mf(['#FFD000', '#FFDC20', '#00FFFF', '#FF00FF', '#000000', '#FFFFFF'], ['4', '4', '4', '4', '8', '8', '8', '0C', '0C', '1C', '2C', '3C']),
+);
 await fs.writeFile(path.join(OUT, 'plain.3mf'), await plain3mf());
 await fs.writeFile(path.join(OUT, 'cube.glb'), glb());
 await fs.writeFile(path.join(OUT, 'box.amf'), amf());

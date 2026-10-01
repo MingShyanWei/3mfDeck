@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { openDb, listModels, getModel, updateModel, setTags } from '../../src/core/db.mjs';
 import { importPaths } from '../../src/core/importer.mjs';
-import { loadSettings, saveSettings, switchRoot, markMissing } from '../../src/core/settings.mjs';
+import { loadSettings, saveSettings, switchRoot, markMissing, modelPath } from '../../src/core/settings.mjs';
 import { tmpDir, stage, exists } from './helpers.mjs';
 
 describe('settings storage (SPEC 3.7)', () => {
@@ -65,5 +65,16 @@ describe('switchRoot', () => {
     const res = await switchRoot(openDb(':memory:'), path.join(base, 'ud'), path.join(base, 'new', 'lib'));
     expect(res).toEqual({ libraryRoot: path.join(base, 'new', 'lib'), indexed: 0, missing: 0 });
     expect(await exists(path.join(base, 'new', 'lib'))).toBe(true);
+  });
+});
+
+describe('modelPath (Finder reveal / preview)', () => {
+  it('resolves a record against the current root', async () => {
+    const base = await tmpDir();
+    const db = openDb(':memory:');
+    const { ids } = await importPaths(db, path.join(base, 'A'), [await stage(path.join(base, 'in'), 'cube.stl')], new Date(2026, 9, 1));
+    expect(modelPath(db, path.join(base, 'A'), ids[0])).toBe(path.join(base, 'A', '2026', 'cube.stl'));
+    expect(modelPath(db, '/Volumes/other', ids[0])).toBe(path.join('/Volumes/other', '2026', 'cube.stl'));
+    expect(() => modelPath(db, base, 999)).toThrow(/no model 999/);
   });
 });

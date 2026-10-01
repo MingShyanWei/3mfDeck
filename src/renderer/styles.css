@@ -93,6 +93,7 @@ button.icon:hover { color: var(--text); }
 
 .callout { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 6px; margin: 10px 14px 0; border: 1px solid; }
 .callout.warn { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn); }
+.callout.note { background: var(--sunken); border-color: var(--border); color: var(--text); }
 .callout.danger { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
 .callout.link { width: auto; text-align: left; }
 .callout pre { flex: 1; margin: 0; font: inherit; white-space: pre-wrap; }
@@ -183,3 +184,15 @@ button.icon:hover { color: var(--text); }
 .spool { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 10px; background: var(--panel); border: 1px solid var(--border); font-size: 12px; }
 .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, 0.25); vertical-align: -2px; }
 .mapping { list-style: none; padding: 0; margin: 6px 0 0; color: var(--muted); }
+
+/* Colour analysis */
+.color-analysis .callout { margin: 8px 0 0; }
+.dist { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.dist th { text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.dist td { padding: 4px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.dist .num { text-align: right; font-variant-numeric: tabular-nums; }
+.dist .bar-col { width: 40%; }
+.dist .bar { height: 10px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, 0.2); min-width: 2px; }
+.dist tr.dither td { background: var(--warn-bg); }
+.dist .badge { margin-left: 6px; }
+.detail header .icon:disabled { opacity: 0.3; }

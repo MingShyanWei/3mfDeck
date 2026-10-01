@@ -98,7 +98,7 @@ export default function ModelViewer({ model }) {
             data-testid={`mode-${k}`}
             className={mode === k ? 'seg on' : 'seg'}
             disabled={status !== 'ready' || (k === 'filament' && !hasPaint)}
-            title={k === 'filament' && !hasPaint ? '只有含 paint_color 的 3MF 可做耗材映射' : undefined}
+            title={k === 'filament' && !hasPaint ? '只有含 paint_color 或材質色的 3MF 可做耗材映射' : undefined}
             onClick={() => setMode(k)}
           >
             <i className={`mdi ${icon}`} /> {label}

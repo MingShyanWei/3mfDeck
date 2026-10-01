@@ -1,12 +1,12 @@
 // Electron main process: window, menu, IPC to the core library.
-import { app, BrowserWindow, Menu, ipcMain, dialog, protocol } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, dialog, protocol, shell } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb } from '../src/core/db.mjs';
 import { loadPreviewData, storeThumb } from '../src/core/preview.mjs';
 import { importPaths } from '../src/core/importer.mjs';
-import { loadSettings, switchRoot, markMissing } from '../src/core/settings.mjs';
+import { loadSettings, switchRoot, markMissing, modelPath } from '../src/core/settings.mjs';
 import { SUPPORTED_EXTS } from '../src/core/parse/index.mjs';
 
 // Test hooks: isolate userData / library root (used by the smoke test)
@@ -66,9 +66,9 @@ function registerIpc() {
   ipcMain.handle('lib:setTags', (_e, id, names) => setTags(db, id, names));
   ipcMain.handle('lib:importPaths', (_e, paths) => importAndNotify(paths));
   ipcMain.handle('lib:preview', (_e, id) => {
-    const m = getModel(db, id);
-    return loadPreviewData(path.join(root, m.rel_path), m.format);
+    return loadPreviewData(modelPath(db, root, id), getModel(db, id).format);
   });
+  ipcMain.handle('lib:reveal', (_e, id) => shell.showItemInFolder(modelPath(db, root, id)));
   ipcMain.handle('lib:idsNeedingThumb', () => idsNeedingThumb(db));
   ipcMain.handle('lib:setThumb', (_e, id, bytes) => storeThumb(db, id, bytes));
   ipcMain.handle('lib:importDialog', () => importViaDialog());

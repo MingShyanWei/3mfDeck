@@ -78,12 +78,12 @@ describe('thumbnail storage', () => {
 });
 
 describe('loadPreviewData', () => {
-  it('3MF: geometry with per-face filament state', async () => {
+  it('3MF: geometry with per-face colour', async () => {
     const p = await loadPreviewData(path.join(FIXTURES, 'painted.3mf'), '3mf');
     expect(p.format).toBe('3mf');
     expect(p.indices.length).toBe(36);
-    expect([...p.faceState]).toEqual([1, 1, 1, 1, 2, 2, 3, 4, 3, 1, 1, 1]);
-    expect(p.colours).toHaveLength(4);
+    expect([...p.faceColor]).toEqual([1, 1, 1, 1, 2, 2, 3, 4, 3, 1, 1, 1]);
+    expect(p.palette).toHaveLength(4);
   });
 
   it('other meshes: exact raw bytes for three.js loaders', async () => {

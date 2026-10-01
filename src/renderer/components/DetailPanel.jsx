@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import MetadataForm, { toDraft, saveDraft } from './MetadataForm.jsx';
 import ModelViewer from './ModelViewer.jsx';
+import ColorAnalysis from './ColorAnalysis.jsx';
 import { isUnlabeled, formatBytes, formatInt, formatBbox, formatDate } from '../format.js';
 
 export default function DetailPanel({ id, platforms, onSaved, onClose }) {
@@ -32,9 +33,13 @@ export default function DetailPanel({ id, platforms, onSaved, onClose }) {
     <aside className="detail" data-testid="detail-panel">
       <header>
         <h2 title={model.name}>{model.name}</h2>
+        <button className="icon" data-testid="reveal" onClick={() => window.api.reveal(id)} disabled={model.missing} title="在 Finder 顯示">
+          <i className="mdi mdi-folder-search-outline" />
+        </button>
         <button className="icon" onClick={onClose} title="關閉"><i className="mdi mdi-close" /></button>
       </header>
       <ModelViewer model={model} />
+      {model.format === '3mf' && model.colors.length > 0 && <ColorAnalysis colors={model.colors} />}
       {model.missing && (
         <div className="callout danger"><i className="mdi mdi-file-alert-outline" /> 遺失：目前的根目錄下找不到這個檔案。</div>
       )}
