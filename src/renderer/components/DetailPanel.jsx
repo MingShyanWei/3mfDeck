@@ -3,10 +3,10 @@ import { useCallback, useEffect, useState } from 'react';
 import MetadataForm, { toDraft, saveDraft } from './MetadataForm.jsx';
 import ModelViewer from './ModelViewer.jsx';
 import ColorAnalysis from './ColorAnalysis.jsx';
-import { ProvenanceBadge, PlateBadge, ColorLabels } from './Badges.jsx';
+import { ProvenanceBadge, PlateBadge, ColorLabels, isNonU1 } from './Badges.jsx';
 import { isUnlabeled, formatBytes, formatInt, formatBbox, formatDate } from '../format.js';
 
-export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose }) {
+export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose, onOpen, onConverted }) {
   const [model, setModel] = useState(null);
   const [draft, setDraft] = useState(null);
   const [saved, setSaved] = useState(false);
@@ -14,6 +14,8 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
   const [plate, setPlate] = useState(null); // selected plate of a multi-plate file
 
   const [inTrash, setInTrash] = useState(false); // missing record whose file is in .trash
+  const [converting, setConverting] = useState(false);
+  const [converted, setConverted] = useState(null); // M18 conversion result
   const [actionError, setActionError] = useState('');
   const load = useCallback(async () => {
     const m = await window.api.get(id);
@@ -21,6 +23,7 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
     setDraft(toDraft(m));
     setSaved(false);
     setExported(null);
+    setConverted(null);
     setActionError('');
     setPlate(m.plates.length > 1 ? m.plates[0].plate : null);
     setInTrash(m.missing ? await window.api.missingInTrash(id) : false);
@@ -68,6 +71,16 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
     if (r.error) return setActionError(r.error);
     await load();
     onSaved();
+  };
+  // M18: convert to a Snapmaker U1 project (new "-U1" file in the cabinet; the source stays)
+  const convertU1 = async () => {
+    setConverting(true);
+    setActionError('');
+    const r = await window.api.convertU1(id);
+    setConverting(false);
+    if (r.error) return setActionError(r.error);
+    setConverted(r);
+    onConverted();
   };
   // M13d: the only export action, top right (Mix mode is always on now)
   const export3mf = async () => {
@@ -121,6 +134,42 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
             已匯出：{exported.path}
             {exported.summary && `（${exported.summary.filter((x) => x.slot === null).length ? `跳過 ${exported.summary.filter((x) => x.slot === null).length} 色，` : ''}${exported.mixes ? `Mix ${exported.mixes} 組，` : ''}原檔未變動）`}
           </span>
+        </div>
+      )}
+      {isNonU1(model) && !model.missing && (
+        <div className="callout warn u1-warning" data-testid="u1-warning">
+          <i className="mdi mdi-printer-3d-off" />
+          <div className="grow">
+            <div>
+              這是 <b>{model.source_printer}</b> 的專案{model.source_process ? `（${model.source_process}）` : ''}，不是 Snapmaker U1：
+              直接開啟會沿用原機型的盤面與設定，物件可能超出 U1 盤面。
+            </div>
+            <div className="row">
+              <button className="primary" data-testid="convert-u1" disabled={converting} onClick={convertU1}>
+                {converting ? <><i className="mdi mdi-loading mdi-spin" /> 轉換中…</> : <><i className="mdi mdi-swap-horizontal" /> 轉換為 Snapmaker U1</>}
+              </button>
+              <span className="small">另存為「-U1」新檔並匯入檔案櫃，原檔不動。</span>
+            </div>
+            {actionError && !model.missing && <div className="small" data-testid="u1-error">{actionError}</div>}
+          </div>
+        </div>
+      )}
+      {converted && (
+        <div className="callout note u1-result" data-testid="u1-result">
+          <i className="mdi mdi-check" />
+          <div className="grow">
+            <div>已轉換為「{converted.name}」（{converted.relPath}），原檔未變動。</div>
+            <ul className="u1-report small">
+              <li>{converted.report.machine} · {converted.report.process}</li>
+              <li>線材：{[...new Set(converted.report.filaments)].join('、')}（保留原檔的流速、溫度、冷卻設定）</li>
+              {converted.report.fixes.length > 0 && <li>修正：{converted.report.fixes.join('、')}</li>}
+              <li data-testid="u1-plates">
+                盤面：{converted.report.plates.filter((p) => p.status === 'moved').length} 盤移到 U1 盤面
+                {converted.report.plates.filter((p) => p.status === 'kept').map((p) => `；盤 ${p.plate} 保持原位（${p.reason}）`).join('')}
+              </li>
+            </ul>
+            <button data-testid="u1-open-converted" onClick={() => onOpen(converted.id)}>開啟轉換檔</button>
+          </div>
         </div>
       )}
       {trashed && (

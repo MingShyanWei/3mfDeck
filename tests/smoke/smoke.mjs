@@ -1015,6 +1015,54 @@ try {
   step(`M17 採購建議: ${purchaseRows.length} 個色名排行，建議 ${purchaseRows.filter(([, s]) => s === '1').map(([l]) => l).join('/')}；「加入線材庫」${firstSuggest} -> ${inv[0].name} ${inv[0].hex}`);
   await page.fill('[data-testid=search]', '');
 
+  // 14) M18: a Bambu P1S project -> 非 U1 badge / filter / warning -> 轉換為 Snapmaker U1
+  {
+    const JSZipM18 = (await import('jszip')).default;
+    const zip = await JSZipM18.loadAsync(await fs.readFile(path.join(FIX, 'multiplate.3mf')));
+    const curRoot = (await page.evaluate(() => window.api.getSettings())).libraryRoot;
+    zip.file('Metadata/project_settings.config', JSON.stringify({
+      printer_model: 'Bambu Lab P1S', printer_settings_id: 'Bambu Lab P1S 0.4 nozzle', print_settings_id: '0.20mm Standard @BBL X1C',
+      nozzle_diameter: ['0.4'], printable_area: ['0x0', '256x0', '256x256', '0x256'], layer_height: '0.2',
+      filament_colour: ['#00FFFF', '#FF00FF', '#FFFF00', '#000000'], filament_type: ['PLA', 'PLA', 'PLA', 'PLA'],
+      filament_settings_id: ['Bambu PLA Basic @BBL X1C', 'Bambu PLA Basic @BBL X1C', 'Bambu PLA Basic @BBL X1C', 'Bambu PLA Basic @BBL X1C'],
+      brim_type: 'auto_brim', exclude_object: '1',
+    }));
+    const p1sFile = path.join(inbox, 'm18-p1s.3mf');
+    await fs.writeFile(p1sFile, await zip.generateAsync({ type: 'nodebuffer' }));
+    await importViaMenu([p1sFile]);
+    await page.click('[data-testid=import-skip-all]');
+    await page.fill('[data-testid=search]', 'm18-p1s');
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 1);
+    assert.match(await page.textContent('[data-testid=model-card] [data-testid=u1-badge]'), /非 U1/);
+    assert.match(await page.textContent('[data-testid=filter-nonu1]'), /非 U1\s*1/);
+    await page.fill('[data-testid=search]', '');
+    await page.click('[data-testid=filter-nonu1]');
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 1);
+    await page.click('[data-testid=filter-all]');
+    await openModel('m18-p1s');
+    assert.match(await page.textContent('[data-testid=u1-warning]'), /Bambu Lab P1S.*0\.20mm Standard @BBL X1C.*不是 Snapmaker U1/);
+    const libFile = (await fs.readdir(path.join(curRoot, year))).find((f) => f.startsWith('m18-p1s'));
+    const srcBytes = await fs.readFile(path.join(curRoot, year, libFile));
+    await page.click('[data-testid=convert-u1]');
+    await page.waitForSelector('[data-testid=u1-result]', { timeout: 120000 });
+    const result = (await page.textContent('[data-testid=u1-result]')).replace(/\s+/g, ' ');
+    assert.match(result, /已轉換為「m18-p1s-U1」.*原檔未變動/);
+    assert.match(result, /Snapmaker U1 \(0\.4 nozzle\) · 0\.20mm Standard @Snapmaker U1 \(0\.4 nozzle\)/);
+    assert.match(await page.textContent('[data-testid=u1-plates]'), /2 盤移到 U1 盤面；盤 3 保持原位/);
+    assert.deepEqual(await fs.readFile(path.join(curRoot, year, libFile)), srcBytes, 'source 3MF untouched by the conversion');
+    await page.click('[data-testid=u1-open-converted]');
+    await page.waitForFunction(() => document.querySelector('[data-testid=detail-panel] h2')?.textContent === 'm18-p1s-U1');
+    assert.equal(await page.$('[data-testid=u1-warning]'), null, 'the converted project is a U1 project');
+    const outFile = (await fs.readdir(path.join(curRoot, year))).find((f) => f.startsWith('m18-p1s-U1'));
+    const out = JSON.parse(await (await JSZipM18.loadAsync(await fs.readFile(path.join(curRoot, year, outFile)))).file('Metadata/project_settings.config').async('string'));
+    assert.deepEqual([out.printer_model, out.brim_type, out.exclude_object], ['Snapmaker U1', 'no_brim', '1']);
+    assert.deepEqual(out.filament_colour, ['#00FFFF', '#FF00FF', '#FFFF00', '#000000']);
+    await page.fill('[data-testid=search]', 'm18-p1s-U1');
+    await page.waitForSelector('[data-testid=model-card] [data-testid=card-thumb]', { timeout: 120000 }); // thumbnail rendered for the new record
+    await page.fill('[data-testid=search]', '');
+    step(`M18 U1: m18-p1s 非 U1 徽章/過濾/警示 -> 轉換 ${outFile}（${out.print_settings_id}，2 盤搬到 U1 盤面、盤 3 保持原位），原檔未動`);
+  }
+
   await page.screenshot({ path: path.join(base, 'smoke.png') });
   step('screenshot: ' + path.join(base, 'smoke.png'));
 } finally {

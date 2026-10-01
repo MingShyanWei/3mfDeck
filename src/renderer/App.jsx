@@ -257,6 +257,14 @@ export default function App() {
             refresh();
           }}
           onClose={() => setSelectedId(null)}
+          onOpen={(newId) => {
+            setSelectedId(newId);
+            refresh();
+          }}
+          onConverted={() => {
+            refresh();
+            thumbs(); // the converted file is a new record without a thumbnail yet
+          }}
         />
       )}
       {dragging && (

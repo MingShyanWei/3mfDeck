@@ -11,6 +11,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { decodePaintColor } from '../paintColor.mjs';
 import { FULL_SPECTRUM } from '../fullSpectrum.mjs';
 import { emptyBox, growBox, transformBox, mulAffine, applyAffine, boxSize, IDENTITY } from './geom.mjs';
+import { detectPrinter } from '../u1Convert.mjs';
 
 const UNIT_MM = { micron: 0.001, millimeter: 1, centimeter: 10, inch: 25.4, foot: 304.8, meter: 1000 };
 
@@ -297,7 +298,8 @@ export async function parse3mf(buffer, { geometry = false, plate = null } = {}) 
   for (const o of model.objects.values()) for (const c of o.components) subPaths.add(c.key.split('#')[0]);
   for (const p of subPaths) if (p !== rootPath && zip.file(p)) await scanModel(zip.file(p), p, model);
 
-  const colours = readFilamentColours(await text('Metadata/project_settings.config'));
+  const projectText = await text('Metadata/project_settings.config');
+  const colours = readFilamentColours(projectText);
   const ext = readModelSettings(await text('Metadata/model_settings.config'));
 
   // Plate list: model_settings <plate> entries (they carry the object mapping)
@@ -404,6 +406,8 @@ export async function parse3mf(buffer, { geometry = false, plate = null } = {}) 
     mixing,
     metadata: model.metadata,
     provenanceHint: provenanceHint(model.metadata),
+    // M18: which printer the project was set up for (null without project settings)
+    sourcePrinter: projectText ? detectPrinter(JSON.parse(projectText)) : null,
     ...(geo && {
       geometry: { positions: geo.positions.array, indices: geo.indices.array, faceColor: geo.faceColor.array, palette: geo.palette },
     }),

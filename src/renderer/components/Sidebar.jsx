@@ -21,6 +21,7 @@ export default function Sidebar({ counts, filter, onFilter, colors = [], onToggl
       <ul>
         <Item id="all" filter={filter} onFilter={onFilter} icon="mdi-cube-outline" label="全部" count={counts.all} />
         <Item id="unlabeled" filter={filter} onFilter={onFilter} icon="mdi-help-circle-outline" label="未標" count={counts.unlabeled} warn />
+        <Item id="nonu1" filter={filter} onFilter={onFilter} icon="mdi-printer-3d-off" label="非 U1" count={counts.nonU1} warn />
       </ul>
       <h3>來源</h3>
       <ul>

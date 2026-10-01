@@ -18,6 +18,7 @@ describe('schema', () => {
     expect(cols('models')).toEqual([
       'id', 'name', 'rel_path', 'format', 'size_bytes', 'tri_count', 'bbox_mm', 'color_count', 'thumb',
       'provenance_type', 'platform', 'url', 'prompt', 'retrieved_at', 'notes', 'imported_at', 'updated_at',
+      'source_printer', 'source_process', // M18 (SPEC 3.9)
     ]);
     expect(cols('tags')).toEqual(['id', 'name']);
     expect(cols('model_tags')).toEqual(['model_id', 'tag_id']);

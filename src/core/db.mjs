@@ -2,6 +2,7 @@
 // The file system is the source of truth; this is only an index.
 import Database from 'better-sqlite3';
 import { labelFor, labelInQuery, MODEL_LABEL_MIN_PCT } from './colorNames.mjs';
+import { U1_MODEL } from './orcaProfiles.mjs';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS models (
@@ -21,7 +22,9 @@ CREATE TABLE IF NOT EXISTS models (
   retrieved_at  TEXT,
   notes         TEXT,
   imported_at   TEXT NOT NULL,
-  updated_at    TEXT NOT NULL
+  updated_at    TEXT NOT NULL,
+  source_printer TEXT,           -- M18: printer_model of the 3MF project ('' = none / not a project)
+  source_process TEXT            -- M18: its print_settings_id
 );
 CREATE TABLE IF NOT EXISTS tags (
   id   INTEGER PRIMARY KEY,
@@ -76,10 +79,13 @@ export function openDb(file) {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
-  // M17: databases created before colour labels lack color_stats.label
-  if (!db.prepare('PRAGMA table_info(color_stats)').all().some((c) => c.name === 'label')) {
-    db.exec('ALTER TABLE color_stats ADD COLUMN label TEXT');
-  }
+  // Columns added after a database may have been created (M17 colour labels, M18 source printer)
+  const addColumn = (table, column) => {
+    if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`);
+  };
+  addColumn('color_stats', 'label');
+  addColumn('models', 'source_printer');
+  addColumn('models', 'source_process');
   backfillColorLabels(db);
   return db;
 }
@@ -107,9 +113,9 @@ export function insertModel(db, { name, relPath, parsed }) {
     const { lastInsertRowid: id } = db
       .prepare(
         `INSERT INTO models (name, rel_path, format, size_bytes, tri_count, bbox_mm, color_count,
-           provenance_type, platform, retrieved_at, notes, imported_at, updated_at)
+           provenance_type, platform, retrieved_at, notes, imported_at, updated_at, source_printer, source_process)
          VALUES (@name, @rel_path, @format, @size_bytes, @tri_count, @bbox_mm, @color_count,
-           @provenance_type, @platform, @retrieved_at, @notes, @ts, @ts)`,
+           @provenance_type, @platform, @retrieved_at, @notes, @ts, @ts, @source_printer, @source_process)`,
       )
       .run({
         name,
@@ -124,6 +130,8 @@ export function insertModel(db, { name, relPath, parsed }) {
         retrieved_at: today(),
         notes: hint.notes || null,
         ts,
+        source_printer: parsed.sourcePrinter?.printer ?? '',
+        source_process: parsed.sourcePrinter?.process ?? '',
       });
     insertDerivedRows(db, Number(id), parsed);
     return Number(id);
@@ -155,8 +163,10 @@ export function replaceDerived(db, id, parsed) {
   db.transaction(() => {
     db.prepare(
       `UPDATE models SET format = @format, size_bytes = @size_bytes, tri_count = @tri_count, bbox_mm = @bbox_mm,
-         color_count = @color_count, thumb = NULL, updated_at = @ts WHERE id = @id`,
+         color_count = @color_count, thumb = NULL, updated_at = @ts, source_printer = @source_printer, source_process = @source_process WHERE id = @id`,
     ).run({
+      source_printer: parsed.sourcePrinter?.printer ?? '',
+      source_process: parsed.sourcePrinter?.process ?? '',
       id,
       format: parsed.format,
       size_bytes: parsed.size_bytes,
@@ -199,6 +209,7 @@ export function setTags(db, modelId, names) {
 
 const LIST_COLUMNS = `m.id, m.name, m.rel_path, m.format, m.size_bytes, m.tri_count, m.bbox_mm, m.color_count,
   m.provenance_type, m.platform, m.url, m.prompt, m.retrieved_at, m.notes, m.imported_at, m.updated_at,
+  m.source_printer, m.source_process,
   m.thumb IS NOT NULL AS has_thumb,
   (SELECT COUNT(*) FROM plates p WHERE p.model_id = m.id) AS plate_count,
   (SELECT cm.full_spectrum FROM color_mixing cm WHERE cm.model_id = m.id) AS full_spectrum,
@@ -219,6 +230,9 @@ const SORTS = {
 };
 
 const rowOut = (r) => ({ ...r, has_thumb: Boolean(r.has_thumb), full_spectrum: Boolean(r.full_spectrum), tags: JSON.parse(r.tags), color_labels: JSON.parse(r.color_labels), bbox_mm: r.bbox_mm ? JSON.parse(r.bbox_mm) : null });
+
+// M18: projects set up for another printer (a 3MF without project settings is not flagged)
+const NON_U1 = `(m.source_printer IS NOT NULL AND m.source_printer != '' AND m.source_printer != '${U1_MODEL}')`;
 
 // Trashed models keep their row (metadata survives a restore); their file
 // lives under <root>/.trash/, so rel_path tells them apart.
@@ -248,6 +262,7 @@ export function listModels(db, { q = '', filter = 'all', sort = 'imported', colo
     where.push(hasLabel(`c${i}`));
   });
   if (filter === 'unlabeled') where.push(`(m.provenance_type IS NULL OR m.provenance_type = 'unknown')`);
+  else if (filter === 'nonu1') where.push(NON_U1);
   else if (filter.startsWith('type:')) {
     where.push('m.provenance_type = @ftype');
     params.ftype = filter.slice(5);
@@ -282,6 +297,7 @@ export function sidebarCounts(db) {
   return {
     all: one(`SELECT COUNT(*) FROM models m WHERE ${live}`),
     unlabeled: one(`SELECT COUNT(*) FROM models m WHERE ${live} AND (provenance_type IS NULL OR provenance_type = 'unknown')`),
+    nonU1: one(`SELECT COUNT(*) FROM models m WHERE ${live} AND ${NON_U1}`),
     types: Object.fromEntries(
       db.prepare(`SELECT provenance_type AS k, COUNT(*) AS n FROM models m WHERE ${live} GROUP BY provenance_type`).all().map((r) => [r.k, r.n]),
     ),
@@ -302,6 +318,14 @@ export function sidebarCounts(db) {
       )
       .all(),
   };
+}
+
+/** 3MF records indexed before M18, whose source printer is still unknown (NULL). */
+export function idsNeedingSourcePrinter(db) {
+  return db.prepare(`SELECT id FROM models WHERE format = '3mf' AND source_printer IS NULL ORDER BY id`).pluck().all();
+}
+export function setSourcePrinter(db, id, info) {
+  db.prepare('UPDATE models SET source_printer = ?, source_process = ? WHERE id = ?').run(info?.printer ?? '', info?.process ?? '', id);
 }
 
 /** Colour rows of every live model, for the cabinet-wide colour summary (M17). */

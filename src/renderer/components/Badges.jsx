@@ -59,3 +59,14 @@ export function ColorLabels({ labels, pct = false, testid = 'color-tags' }) {
     </span>
   );
 }
+
+// M18: the project was set up for another printer (not a Snapmaker U1)
+export const isNonU1 = (m) => Boolean(m.source_printer) && m.source_printer !== 'Snapmaker U1';
+export function U1Badge({ model }) {
+  if (!isNonU1(model)) return null;
+  return (
+    <span className="badge badge-warn" data-testid="u1-badge" title={`專案機型：${model.source_printer}（不是 Snapmaker U1）`}>
+      <i className="mdi mdi-printer-3d-off" /> 非 U1
+    </span>
+  );
+}

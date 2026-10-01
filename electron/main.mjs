@@ -3,7 +3,9 @@ import { app, BrowserWindow, Menu, ipcMain, dialog, protocol, shell } from 'elec
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb, cabinetColorRows } from '../src/core/db.mjs';
+import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb, cabinetColorRows, idsNeedingSourcePrinter, setSourcePrinter } from '../src/core/db.mjs';
+import { convertToU1, readSourcePrinter } from '../src/core/u1Convert.mjs';
+import { loadU1Profiles, DEFAULT_PROFILES_DIR } from '../src/core/orcaProfiles.mjs';
 import { cabinetColors } from '../src/core/purchase.mjs';
 import { loadPreviewData, storeThumb, previewPlate } from '../src/core/preview.mjs';
 import { importPaths, indexNewFiles } from '../src/core/importer.mjs';
@@ -77,6 +79,27 @@ function registerIpc() {
   }));
   // M17: cabinet-wide colour ranking (purchase suggestions are matched against the inventory in the renderer)
   ipcMain.handle('lib:colorRanking', () => cabinetColors(cabinetColorRows(db)));
+  // M18: convert a non-U1 project into a new "-U1" 3MF (source untouched), import it and
+  // give it the source record's provenance, notes and tags
+  ipcMain.handle('lib:convertU1', async (_e, id) => {
+    const src = getModel(db, id);
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mfcab-u1-'));
+    try {
+      const dest = path.join(tmp, `${path.basename(src.rel_path, path.extname(src.rel_path))}-U1.3mf`);
+      const report = await convertToU1(modelPath(db, root, id), dest, loadU1Profiles(process.env.MF_ORCA_PROFILES || DEFAULT_PROFILES_DIR));
+      const res = await importPaths(db, root, [dest]);
+      const newId = res.ids[0];
+      if (!newId) throw new Error(res.errors[0]?.error || '轉換檔匯入失敗');
+      const { provenance_type, platform, url, prompt, retrieved_at, notes } = src;
+      updateModel(db, newId, { name: `${src.name}-U1`, provenance_type, platform, url, prompt, retrieved_at, notes });
+      setTags(db, newId, src.tags);
+      return { id: newId, name: `${src.name}-U1`, relPath: getModel(db, newId).rel_path, report };
+    } catch (err) {
+      return { error: err.message };
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
   ipcMain.handle('lib:update', (_e, id, fields) => updateModel(db, id, fields));
   ipcMain.handle('lib:setTags', (_e, id, names) => setTags(db, id, names));
   ipcMain.handle('lib:importPaths', (_e, paths) => importAndNotify(paths));
@@ -297,6 +320,19 @@ app.whenReady().then(() => {
   // Dropping a file outside the drop zone must not navigate the window away
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.loadFile(path.join(import.meta.dirname, '..', 'dist', 'index.html'));
+  backfillSourcePrinters();
 });
+
+// M18: one-time fill of source_printer for 3MF records indexed before it existed.
+// Runs in the background; records whose file is missing stay unknown (NULL).
+async function backfillSourcePrinters() {
+  for (const id of idsNeedingSourcePrinter(db)) {
+    try {
+      setSourcePrinter(db, id, await readSourcePrinter(modelPath(db, root, id)));
+    } catch {
+      // missing or unreadable file: try again on a later launch
+    }
+  }
+}
 
 app.on('window-all-closed', () => app.quit());
