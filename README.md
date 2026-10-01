@@ -4,7 +4,7 @@
 
 把散在硬碟、MakerWorld、Meshy 的 3MF 檔收進一個櫃子，看得見 3D、看得懂顏色、算得出該用哪幾捲線材，最後匯出可以直接在 Snapmaker Orca 開啟列印的檔案。
 
-![卡片清單：產品主圖、來源、盤數、色名標籤](reports/m21-grid-light.png)
+<!-- Screenshots live in docs/screenshots/ (open-source/own fixture models only). -->
 
 ---
 
