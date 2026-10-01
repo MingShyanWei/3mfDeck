@@ -48,19 +48,20 @@ describe('import3dfpInventory', () => {
 });
 
 describe('M26: export instructions in Settings', () => {
-  it('the site is one fixed https URL', () => {
-    expect(FILAMENT_PROFILES_URL).toBe('https://3dfilamentprofiles.com');
+  it('the link is the fixed My Spools page (the site redirects to its login when logged out)', () => {
+    expect(FILAMENT_PROFILES_URL).toBe('https://3dfilamentprofiles.com/my/spools');
   });
 
-  it('every language explains login → My Spools → Export (JSON or CSV) and names the import button by its source', () => {
+  it('every language says: log in, export from My Spools (JSON or CSV), import with the button named by its source', () => {
     for (const lang of LANGS) {
       const d = DICTS[lang];
       expect([lang, d['settings.import3dfp']]).toEqual([lang, expect.stringContaining('3dfilamentprofiles')]);
-      expect([lang, d['settings.inv3dfpStep1']]).toEqual([lang, expect.stringContaining('3dfilamentprofiles.com')]);
-      expect([lang, d['settings.inv3dfpStep2']]).toEqual([lang, expect.stringContaining('My Spools')]);
-      expect([lang, d['settings.inv3dfpStep3']]).toEqual([lang, expect.stringMatching(/Export.*JSON.*CSV/)]);
+      expect([lang, d['settings.inv3dfpStep1']]).toEqual([lang, expect.stringMatching(/My Spools.*JSON.*CSV/)]);
+      // the site's export UI needs a login to see, so no button on the site is named
+      expect([lang, d['settings.inv3dfpStep1']]).toEqual([lang, expect.not.stringContaining('Export')]);
       // the last step quotes the import button exactly as it is labelled
-      expect([lang, d['settings.inv3dfpStep4']]).toEqual([lang, expect.stringContaining(d['settings.import3dfp'])]);
+      expect([lang, d['settings.inv3dfpStep2']]).toEqual([lang, expect.stringContaining(d['settings.import3dfp'])]);
+      expect([lang, Object.keys(d).filter((k) => /^settings\.inv3dfpStep[34]$/.test(k))]).toEqual([lang, []]);
     }
   });
 });

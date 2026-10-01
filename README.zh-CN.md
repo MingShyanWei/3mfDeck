@@ -42,7 +42,7 @@
 - 颜色分析：逐面 `paint_color`／`basematerials` 解析，面积加权占比、抖色检测
 - 颜色标签：自动对应固定色名（黑／白／灰／红／橙／黄／绿／青／蓝／紫／粉／棕／肤／金），可按颜色搜索与过滤；用任一界面语言的色名都能搜到（“蓝”“藍”“blue”皆可）
 - 耗材库：登记自己的料卷（品牌、材质、RGB、剩余量），支持导入 3dfilamentprofiles 的 JSON/CSV
-  - 从 [3dfilamentprofiles.com](https://3dfilamentprofiles.com) 导出：登录 → **My Spools** → **Export**（JSON 或 CSV），再到“设置 › 耗材库”点击 **从 3dfilamentprofiles 导入…** 选择下载的文件（设置页也列出相同步骤与网站链接）
+  - 在 3dfilamentprofiles.com 登录后到 [My Spools](https://3dfilamentprofiles.com/my/spools) 导出（JSON 或 CSV），再到“设置 › 耗材库”点击 **从 3dfilamentprofiles 导入…** 选择下载的文件（设置页也列出相同步骤与 My Spools 链接）
 - 建议料卷颜色：从现有耗材挑，或给理想色码；CMYK／CMYW 标准配置比较；单色作品也给建议
 - 采购建议：统计整个模型库的面积占比，对照耗材库算出该优先买哪些颜色
 
@@ -55,7 +55,7 @@
 - English／繁體中文／简体中文，默认跟随系统语言，可在设置页切换并记住；日期与数字按语言格式化
 
 **离线保证**
-- App 本身**不发任何网络请求**（无账号、无云端、不连打印机）。唯一的外部调用是两个固定链接交给系统浏览器打开：侧栏作者链接、设置页的 3dfilamentprofiles.com。
+- App 本身**不发任何网络请求**（无账号、无云端、不连打印机）。唯一的外部调用是两个固定链接交给系统浏览器打开：侧栏作者链接、设置页的 3dfilamentprofiles.com My Spools 页。
 - 侧栏左下显示版本号 `1.<YYMMDDHHMM>`（构建时间），悬停可看完整时间与 commit。
 
 ---

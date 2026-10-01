@@ -42,7 +42,7 @@ Downloading models is easy; the trouble starts afterwards:
 - Colour analysis: per-face `paint_color` / `basematerials` parsing, area-weighted shares, dither detection
 - Colour labels: every colour is mapped to a fixed name (black / white / gray / red / orange / yellow / green / cyan / blue / purple / pink / brown / skin / gold) for searching and filtering; search accepts the name in any UI language (“blue”, 「藍」 and 「蓝」 all work)
 - Filament inventory: register your own spools (brand, material, RGB, remaining amount); imports 3dfilamentprofiles JSON/CSV exports
-  - From [3dfilamentprofiles.com](https://3dfilamentprofiles.com): log in → **My Spools** → **Export** (JSON or CSV), then in Settings › Filament inventory press **Import from 3dfilamentprofiles…** and pick the downloaded file (Settings shows the same steps and a link to the site)
+  - On 3dfilamentprofiles.com, log in and export from [My Spools](https://3dfilamentprofiles.com/my/spools) (JSON or CSV), then in Settings › Filament inventory press **Import from 3dfilamentprofiles…** and pick the downloaded file (Settings shows the same steps and links to My Spools)
 - Spool suggestions: pick from what you own, or get ideal colour codes; compare with the CMYK / CMYW standard sets; single-colour models get suggestions too
 - Purchase suggestions: area shares across the whole library, checked against your inventory, tell you which colours to buy first
 
@@ -55,7 +55,7 @@ Downloading models is easy; the trouble starts afterwards:
 - English / 繁體中文 / 简体中文; follows the system language by default, can be switched in Settings and is remembered; dates and numbers are formatted for the language
 
 **Offline guarantee**
-- The app itself **makes no network requests** (no account, no cloud, no printer connection). The only outside calls are two fixed links handed to the system browser: the author link in the sidebar and 3dfilamentprofiles.com in Settings.
+- The app itself **makes no network requests** (no account, no cloud, no printer connection). The only outside calls are two fixed links handed to the system browser: the author link in the sidebar and the 3dfilamentprofiles.com My Spools page in Settings.
 - The bottom of the sidebar shows the version `1.<YYMMDDHHMM>` (build time); hover for the full time and commit.
 
 ---

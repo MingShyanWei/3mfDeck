@@ -90,8 +90,6 @@ export default function SettingsDialog({ onClose, onRootChanged, onSpoolsChanged
                 <ol>
                   <li>{t('settings.inv3dfpStep1')}</li>
                   <li>{t('settings.inv3dfpStep2')}</li>
-                  <li>{t('settings.inv3dfpStep3')}</li>
-                  <li>{t('settings.inv3dfpStep4')}</li>
                 </ol>
                 <button className="link-btn" data-testid="inventory-3dfp-link" title={t('footer.openRepo', { url: FILAMENT_PROFILES_URL })} onClick={() => window.api.openFilamentProfiles()}>
                   <i className="mdi mdi-open-in-new" /> {t('settings.inv3dfpOpen')}

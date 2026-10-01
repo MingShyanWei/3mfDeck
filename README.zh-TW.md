@@ -42,7 +42,7 @@
 - 顏色分析：逐面 `paint_color`／`basematerials` 解析，面積加權佔比、抖色偵測
 - 顏色標籤：自動對應固定色名（黑／白／灰／紅／橙／黃／綠／青／藍／紫／粉／棕／膚／金），可依顏色搜尋與過濾；色名用任一介面語言搜尋都找得到（「藍」「蓝」「blue」皆可）
 - 線材庫：登記自己的線捲（品牌、材質、RGB、剩餘量），支援匯入 3dfilamentprofiles 的 JSON/CSV
-  - 從 [3dfilamentprofiles.com](https://3dfilamentprofiles.com) 匯出：登入 → **My Spools** → **Export**（JSON 或 CSV），再到「設定 › 線材庫」按 **從 3dfilamentprofiles 匯入…** 選擇下載的檔案（設定頁也列出相同步驟與網站連結）
+  - 在 3dfilamentprofiles.com 登入後到 [My Spools](https://3dfilamentprofiles.com/my/spools) 匯出（JSON 或 CSV），再到「設定 › 線材庫」按 **從 3dfilamentprofiles 匯入…** 選擇下載的檔案（設定頁也列出相同步驟與 My Spools 連結）
 - 建議捲色：從現有線材挑，或給理想色碼；CMYK／CMYW 標準配置比較；單色作品也建議
 - 採購建議：統計整個櫃子的面積佔比，對照線材庫算出該優先買哪些顏色
 
@@ -55,7 +55,7 @@
 - English／繁體中文／简体中文，預設跟隨系統語言，可在設定頁切換並記住；日期與數字依語言格式化
 
 **離線保證**
-- App 本身**不發任何網路請求**（無帳號、無雲端、不連印表機）。唯一的外部呼叫是兩個固定連結交給系統瀏覽器開啟：側欄作者連結、設定頁的 3dfilamentprofiles.com。
+- App 本身**不發任何網路請求**（無帳號、無雲端、不連印表機）。唯一的外部呼叫是兩個固定連結交給系統瀏覽器開啟：側欄作者連結、設定頁的 3dfilamentprofiles.com My Spools 頁。
 - 側欄左下顯示版本號 `1.<YYMMDDHHMM>`（建置時間），滑過去可看完整時間與 commit。
 
 ---
