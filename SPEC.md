@@ -118,6 +118,27 @@
   結合線材庫算出「建議優先購買哪些顏色」；面板放在顏色過濾區下方或彈窗，
   並可直接把建議色加入線材庫草稿。
 
+### 3.9 Snapmaker U1 相容性檢查與轉換（M18）
+- **偵測**：匯入時與詳情面板顯示用 `project_settings.printer_model` / `printer_settings_id` 判定；
+  非 Snapmaker U1（例如 `Bambu Lab P1S/H2S`）→ 卡片與詳情面板顯示警示（含來源機型與 process 名稱），
+  匯入時記錄 `source_printer` 供清單過濾（「非 U1」過濾器）。
+- **轉換（自寫引擎，不採用第三方程式碼）**：詳情面板警示區提供「轉換為 Snapmaker U1」按鈕 →
+  另存為新檔（檔名加 `-U1`，原檔不動，轉換後匯入檔案櫃）。轉換內容：
+  1. 讀來源專案設定；依來源噴嘴直徑對應 U1 的 process 家族（0.2/0.4/0.6/0.8），
+     寫入 U1 system preset 名稱（`printer_model`/`printer_settings_id`/`print_settings_id`/`filament_settings_id`）。
+  2. **相容性修正**（比照社群既有做法，但自行實作）：啟用 Exclude Object、關閉多餘 Brim、
+     偵測到可變層高（adaptive layer height）時把 Tree 支撐改為 Hybrid。
+  3. **多盤座標換算**：以 U1 的 `printable_area`（270×270、中心 135.5）為基準，
+     對照來源機型（同為本機 Orca profile 的資料源）的盤面中心與間距，平移各盤物件；
+     保留物件排列、旋轉、縮放、Z 高度與盤間距；無法安全換算的盤整盤不動。
+  4. **保留來源線材設定**（最大體積流速、溫度、冷卻等 filament override），
+     避免回退成 U1 系統預設。
+  5. 沿用既有 3MF 寫入器（paint_color／色表／材質色一律不動）。
+- **資料源**：只讀本機 Snapmaker Orca 的 system profiles（`/Applications/Snapmaker Orca.app/Contents/Resources/profiles/`），
+  不連網、不內嵌第三方 profile 檔、不複製任何第三方轉換程式碼。
+- **驗收**：用使用者櫃子裡的真實非 U1 檔（`Molly茉莉-太空人-13cm.3mf` Bambu H2S、`拉屎茉莉.3mf` P1S、`警徽多色.3mf` P1S）
+  轉換後在 Snapmaker Orca GUI 開啟：無相容性警告、盤面物件落在 U1 列印範圍內、色彩／多盤結構完整。
+
 ### 3.8 設定頁
 - **櫃根目錄**：預設 `~/3mf-library/`，可改成任意路徑（如 iCloud Drive 資料夾）。
   更改根目錄時 App **不自動搬檔**，只把索引切到新路徑並對其重建（DB 中指向舊根的記錄標「遺失」）。
