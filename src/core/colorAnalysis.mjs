@@ -50,3 +50,22 @@ export function analyzeColors(colors, slotCount = U1_SLOTS.length) {
   }
   return warnings;
 }
+
+/**
+ * Overall perceived colour of a dithered (Full Spectrum) distribution: the
+ * face-weighted average of the filament colours in LINEAR light (optical
+ * mixing of adjacent dots), returned as "#RRGGBB". An estimate.
+ */
+export function mixedAverage(colors) {
+  const lin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const enc = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
+  const sum = [0, 0, 0];
+  let total = 0;
+  for (const c of colors) {
+    const rgb = hexToRgb(c.color).map((v) => lin(v / 255));
+    rgb.forEach((v, k) => (sum[k] += v * c.faces));
+    total += c.faces;
+  }
+  if (!total) return null;
+  return '#' + sum.map((v) => Math.round(enc(v / total) * 255).toString(16).padStart(2, '0')).join('').toUpperCase();
+}

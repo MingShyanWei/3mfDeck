@@ -16,7 +16,7 @@ export const CHUNK_FACES = 262144;
 let worker = null;
 let seq = 0;
 const pending = new Map();
-function prepareInWorker(payload) {
+function prepareInWorker(payload, options) {
   if (!worker) {
     worker = new MeshWorker();
     worker.onmessage = ({ data }) => {
@@ -30,7 +30,7 @@ function prepareInWorker(payload) {
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject });
     // Transfer the input buffers: the worker owns them from here on
-    worker.postMessage({ id, payload }, [payload.positions.buffer, payload.indices.buffer, payload.faceColor.buffer]);
+    worker.postMessage({ id, payload, options }, [payload.positions.buffer, payload.indices.buffer, payload.faceColor.buffer]);
   });
 }
 
@@ -49,8 +49,8 @@ const grayMaterial = () => new THREE.MeshLambertMaterial({ color: GRAY, flatShad
  * arrays the viewer swaps between: original colours and their nearest U1
  * slot colours. Uncoloured faces stay grey.
  */
-async function buildPainted(payload) {
-  const { positions, center, half, original, filament } = await prepareInWorker(payload);
+async function buildPainted(payload, { estimate = false } = {}) {
+  const { positions, center, half, original, filament, estimate: est } = await prepareInWorker(payload, { estimate });
   const group = new THREE.Group();
   group.scale.set(...half);
   group.position.set(...center);
@@ -69,11 +69,11 @@ async function buildPainted(payload) {
     geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), Math.sqrt(3));
     if (original) {
       geometry.setAttribute('color', new THREE.BufferAttribute(original.subarray(a, b), 3, true));
-      chunks.push({ geometry, original: original.subarray(a, b), filament: filament.subarray(a, b) });
+      chunks.push({ geometry, original: original.subarray(a, b), filament: filament.subarray(a, b), estimate: est?.subarray(a, b) ?? null });
     }
     group.add(new THREE.Mesh(geometry, material));
   }
-  return { object: group, zUp: true, paint: original ? { chunks } : null };
+  return { object: group, zUp: true, paint: original ? { chunks, hasEstimate: Boolean(est) } : null };
 }
 
 function withGray(object) {
@@ -83,11 +83,14 @@ function withGray(object) {
   return object;
 }
 
-/** Returns { object, zUp, paint } — paint is null unless the model has paint colours. */
-export async function buildModel(payload) {
+/**
+ * Returns { object, zUp, paint } — paint is null unless the model has paint
+ * colours. `estimate`: also compute the Full Spectrum mixed-colour estimate.
+ */
+export async function buildModel(payload, { estimate = false } = {}) {
   switch (payload.format) {
     case '3mf':
-      return buildPainted(payload);
+      return buildPainted(payload, { estimate });
     case 'stl':
       return { object: new THREE.Mesh(new STLLoader().parse(exactBuffer(payload.bytes)), grayMaterial()), zUp: true, paint: null };
     case 'amf':

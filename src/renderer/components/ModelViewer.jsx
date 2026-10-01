@@ -1,13 +1,16 @@
-// Interactive 3D preview (SPEC 3.4): OrbitControls + three shading modes.
+// Interactive 3D preview (SPEC 3.4): OrbitControls + shading modes.
+// Full Spectrum (dithered) files get a mixed-colour estimate mode, and their
+// filament summary lists the file's own spools instead of CMYK quantization.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Viewer } from '../viewer/Viewer.js';
 import { buildModel } from '../viewer/buildModel.js';
-import { mapToSlots } from '../../core/filament.mjs';
+import { mapToSlots, U1_SLOTS } from '../../core/filament.mjs';
 
 const MODE_LABELS = [
   ['original', '原始', 'mdi-palette-outline'],
   ['filament', '耗材映射', 'mdi-printer-3d-nozzle-outline'],
+  ['estimate', '混色估計', 'mdi-blur'],
   ['wireframe', '線框', 'mdi-cube-scan'],
 ];
 
@@ -63,7 +66,7 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
         if (payload.unsupported) return setStatus('unsupported');
         if (payload.format === '3mf' && !payload.indices.length) return setStatus('empty');
         performance.mark('preview:build');
-        const built = await buildModel(payload);
+        const built = await buildModel(payload, { estimate: model.full_spectrum });
         performance.measure('preview:buildModel', 'preview:build');
         if (cancelled) return;
         performance.mark('preview:render');
@@ -87,14 +90,17 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
     };
   }, [model.id, plate]);
 
+  const fs = model.full_spectrum;
   useEffect(() => {
     const viewer = viewerRef.current;
     if (status !== 'ready') return;
-    viewer.setMode(mode);
+    // Full Spectrum: the faces already carry the spools' own colours
+    viewer.setMode(fs && mode === 'filament' ? 'original' : mode);
     viewer.render();
-  }, [mode, status]);
+  }, [mode, status, fs]);
 
-  const spools = useMemo(() => (colors?.length ? mapToSlots(colors) : null), [colors]);
+  const spools = useMemo(() => (colors?.length && !fs ? mapToSlots(colors) : null), [colors, fs]);
+  const modes = MODE_LABELS.filter(([k]) => k !== 'estimate' || fs);
 
   return (
     <div className="viewer">
@@ -106,7 +112,7 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
         {status === 'error' && <div className="viewer-msg error"><i className="mdi mdi-alert-outline" /> {error}</div>}
       </div>
       <div className="seg-group modes">
-        {MODE_LABELS.map(([k, label, icon]) => (
+        {modes.map(([k, label, icon]) => (
           <button
             key={k}
             data-testid={`mode-${k}`}
@@ -119,6 +125,32 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
           </button>
         ))}
       </div>
+      {mode === 'estimate' && (
+        <div className="callout warn estimate-note" data-testid="estimate-note">
+          <i className="mdi mdi-information-outline" />
+          <span className="grow">估計值，實際以 Orca 渲染為準（相鄰面顏色以線性光平均，模擬 Full Spectrum 抖色的視覺混色）</span>
+        </div>
+      )}
+      {mode === 'filament' && fs && colors?.length > 0 && (
+        <div className="spools" data-testid="spools">
+          <div className="small muted" data-testid="fs-spools-title">
+            Full Spectrum 抖色檔 · 以檔案設定的捲色列出（不量化到 CMYK）· 這檔案會用到 {colors.length} 捲
+          </div>
+          <div className="spool-row">
+            {colors.map((c) => (
+              <span key={c.color} className="spool" data-testid="spool">
+                <span className="swatch" style={{ background: c.color }} />
+                {c.color} · {c.pct}%
+              </span>
+            ))}
+          </div>
+          {colors.length > U1_SLOTS.length && (
+            <div className="small warn-text" data-testid="fs-slots-warning">
+              需要 {colors.length} 捲，超過 U1 的 {U1_SLOTS.length} 個耗材槽
+            </div>
+          )}
+        </div>
+      )}
       {mode === 'filament' && spools && (
         <div className="spools" data-testid="spools">
           <div className="small muted">U1 預設 CMYK 耗材槽 · 這檔案會用到 {spools.used.length} 捲</div>

@@ -208,3 +208,9 @@ button.icon:hover { color: var(--text); }
 .badge-plates { color: var(--accent); border-color: currentColor; }
 .dist tr.other-plate td { color: var(--muted); }
 .dist td.total { color: var(--muted); }
+
+.estimate-note { margin: 8px 0 0; }
+.warn-text { color: var(--warn); margin-top: 6px; font-weight: 600; }
+.mixing { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.mixing-head { font-weight: 600; margin-bottom: 6px; }
+.mixing .info { grid-template-columns: 76px 1fr; }

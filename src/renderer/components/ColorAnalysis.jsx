@@ -1,12 +1,15 @@
 // Colour analysis panel (SPEC 3.5): distribution table + warnings.
 import { useMemo } from 'react';
-import { analyzeColors } from '../../core/colorAnalysis.mjs';
+import { analyzeColors, mixedAverage } from '../../core/colorAnalysis.mjs';
+import { U1_SLOTS } from '../../core/filament.mjs';
+import { FULL_SPECTRUM } from '../../core/fullSpectrum.mjs';
 
 const ICONS = { dither: 'mdi-select-compare', 'few-colors': 'mdi-check-circle-outline', 'needs-mixing': 'mdi-palette-swatch-variant' };
 
 // Multi-plate files: `colors` is the selected plate's distribution, `totals`
 // the whole file's (shown as an extra column), `title` names the plate.
-export default function ColorAnalysis({ colors, totals = null, title = '' }) {
+// `mixing`: { vertexMixedPct } for Full Spectrum (dithered) files, else null.
+export default function ColorAnalysis({ colors, totals = null, title = '', mixing = null }) {
   const warnings = useMemo(() => (colors.length ? analyzeColors(colors) : []), [colors]);
   const ditherColors = new Set(warnings.filter((w) => w.type === 'dither').flatMap((w) => w.colors));
   const max = Math.max(...colors.map((c) => c.pct), 0);
@@ -20,6 +23,29 @@ export default function ColorAnalysis({ colors, totals = null, title = '' }) {
         顏色分析 · {title ? `${title}：` : ''}
         {colors.length} 色{totals ? ` ／ 全檔 ${totals.length} 色` : ''}
       </h3>
+      {mixing && colors.length > 0 && (
+        <div className="mixing" data-testid="mixing-stats">
+          <div className="mixing-head">
+            <i className="mdi mdi-blur" /> Full Spectrum 混色統計
+          </div>
+          <dl className="info">
+            <dt>判定</dt>
+            <dd data-testid="mixing-detect">
+              抖色檔（頂點混色率 {mixing.vertexMixedPct}%，門檻 {FULL_SPECTRUM.minVertexMixedPct}%）
+            </dd>
+            <dt>參與捲</dt>
+            <dd data-testid="mixing-spools">
+              {colors.length} 捲
+              {colors.length > U1_SLOTS.length ? `（超過 U1 的 ${U1_SLOTS.length} 個耗材槽）` : `（U1 ${U1_SLOTS.length} 槽可容納）`}
+            </dd>
+            <dt>估計整體色</dt>
+            <dd data-testid="mixing-average">
+              <span className="swatch" style={{ background: mixedAverage(colors) }} /> {mixedAverage(colors)}
+              <span className="muted small">（估計值，實際以 Orca 渲染為準）</span>
+            </dd>
+          </dl>
+        </div>
+      )}
       {totals && !colors.length && <div className="callout note"><i className="mdi mdi-information-outline" /><span className="grow">這個盤面沒有物件。</span></div>}
       {warnings.map((w, i) => (
         <div key={i} className={`callout ${w.type === 'few-colors' ? 'note' : 'warn'}`} data-testid={`warning-${w.type}`}>

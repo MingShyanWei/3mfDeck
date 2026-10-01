@@ -34,6 +34,7 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
   };
 
   const trashed = model.rel_path.startsWith('.trash/');
+  const mixing = model.full_spectrum ? { vertexMixedPct: model.vertex_mixed_pct } : null;
   const plateInfo = model.plates.length > 1 ? model.plates.find((p) => p.plate === plate) : null;
   // Delete / restore move the model out of the current list view
   const trash = async () => {
@@ -103,9 +104,9 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
       <ModelViewer model={model} plate={plate} colors={plateInfo ? plateInfo.colors : model.colors} />
       {model.format === '3mf' && model.colors.length > 0 &&
         (plateInfo ? (
-          <ColorAnalysis colors={plateInfo.colors} totals={model.colors} title={`盤 ${plateInfo.plate}`} />
+          <ColorAnalysis colors={plateInfo.colors} totals={model.colors} title={`盤 ${plateInfo.plate}`} mixing={mixing} />
         ) : (
-          <ColorAnalysis colors={model.colors} />
+          <ColorAnalysis colors={model.colors} mixing={mixing} />
         ))}
       {model.missing && (
         <div className="callout danger"><i className="mdi mdi-file-alert-outline" /> 遺失：目前的根目錄下找不到這個檔案。</div>

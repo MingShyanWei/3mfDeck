@@ -9,6 +9,7 @@ import { StringDecoder } from 'node:string_decoder';
 import { Readable } from 'node:stream';
 import { XMLParser } from 'fast-xml-parser';
 import { decodePaintColor } from '../paintColor.mjs';
+import { FULL_SPECTRUM } from '../fullSpectrum.mjs';
 import { emptyBox, growBox, transformBox, mulAffine, applyAffine, boxSize, IDENTITY } from './geom.mjs';
 
 const UNIT_MM = { micron: 0.001, millimeter: 1, centimeter: 10, inch: 25.4, foot: 304.8, meter: 1000 };
@@ -88,6 +89,7 @@ async function scanModel(zipFile, partPath, model) {
       if (name === 'vertex' && obj) {
         const x = +attr(attrs, 'x'), y = +attr(attrs, 'y'), z = +attr(attrs, 'z');
         growBox(obj.mesh.box, x, y, z);
+        obj.mesh.vcount++;
         if (obj.mesh.verts) obj.mesh.verts.push(x), obj.mesh.verts.push(y), obj.mesh.verts.push(z);
       } else if (name === 'triangle' && obj) {
         const mesh = obj.mesh;
@@ -110,16 +112,31 @@ async function scanModel(zipFile, partPath, model) {
           dominant = (pid !== undefined && model.groups.get(`${partPath}#${pid}`)?.[p1]) || 'S0';
           mesh.keys[dominant] = (mesh.keys[dominant] || 0) + 1;
         }
+        const ki = keyIndex(model, dominant);
+        const v1 = +attr(attrs, 'v1'), v2 = +attr(attrs, 'v2'), v3 = +attr(attrs, 'v3');
+        // Vertex colour mixing (Full Spectrum detection): remember each vertex's
+        // first face colour and flag it once a face of another colour touches it.
+        if (!mesh.vfirst) (mesh.vfirst = new Uint16Array(mesh.vcount)), (mesh.vmixed = new Uint8Array(mesh.vcount));
+        for (const v of [v1, v2, v3]) {
+          if (!mesh.vfirst[v]) mesh.vfirst[v] = ki + 1;
+          else if (mesh.vfirst[v] !== ki + 1) mesh.vmixed[v] = 1;
+        }
         if (mesh.indices) {
-          mesh.indices.push(+attr(attrs, 'v1'));
-          mesh.indices.push(+attr(attrs, 'v2'));
-          mesh.indices.push(+attr(attrs, 'v3'));
-          mesh.faceKey.push(keyIndex(model, dominant));
+          mesh.indices.push(v1);
+          mesh.indices.push(v2);
+          mesh.indices.push(v3);
+          mesh.faceKey.push(ki);
         }
       } else if ((name === 'base' || name === 'color') && group && !close) {
         group.push(normHex(attr(attrs, name === 'base' ? 'displaycolor' : 'color')));
       } else if (close) {
         if (name === 'object') obj = null;
+        else if (name === 'mesh' && obj?.mesh?.vfirst) {
+          // Keep only the counts; the per-vertex arrays can be large
+          const { vfirst, vmixed } = obj.mesh;
+          for (let v = 0; v < vfirst.length; v++) if (vfirst[v]) (obj.mesh.usedVerts++, (obj.mesh.mixedVerts += vmixed[v]));
+          obj.mesh.vfirst = obj.mesh.vmixed = null;
+        }
         else if (name === 'basematerials' || name === 'colorgroup') group = null;
         else if (name === 'metadata' && metaName) {
           model.metadata[metaName] = decodeEntities(metaText.trim());
@@ -132,7 +149,7 @@ async function scanModel(zipFile, partPath, model) {
         obj = { id: attr(attrs, 'id'), pid: attr(attrs, 'pid'), pindex: attr(attrs, 'pindex'), mesh: null, components: [] };
         model.objects.set(`${partPath}#${obj.id}`, obj);
       } else if (name === 'mesh' && obj) {
-        obj.mesh = { box: emptyBox(), tris: 0, keys: {} };
+        obj.mesh = { box: emptyBox(), tris: 0, keys: {}, vcount: 0, usedVerts: 0, mixedVerts: 0 };
         if (model.geometry) Object.assign(obj.mesh, { verts: new Grow(Float32Array), indices: new Grow(Uint32Array), faceKey: new Grow(Uint16Array) });
       } else if (name === 'component' && obj) {
         const p = attr(attrs, 'p:path');
@@ -308,6 +325,8 @@ export async function parse3mf(buffer, { geometry = false, plate = null } = {}) 
   const box = emptyBox();
   const byColour = {};
   let triCount = 0;
+  let usedVerts = 0;
+  let mixedVerts = 0;
   const geo = geometry && { positions: new Grow(Float32Array), indices: new Grow(Uint32Array), faceColor: new Grow(Uint16Array), palette: [], paletteIndex: new Map() };
   const paletteIndex = (hex) => {
     if (!hex) return 0;
@@ -327,6 +346,8 @@ export async function parse3mf(buffer, { geometry = false, plate = null } = {}) 
     if (o.mesh && o.mesh.tris) {
       transformBox(o.mesh.box, m, box);
       triCount += o.mesh.tris;
+      usedVerts += o.mesh.usedVerts;
+      mixedVerts += o.mesh.mixedVerts;
       if (pl) pl.tris += o.mesh.tris;
       const defExt = depth === 0 ? rootExt : ext.parts[`${rootId}/${o.id}`] || rootExt;
       for (const [key, w] of Object.entries(o.mesh.keys)) {
@@ -362,6 +383,12 @@ export async function parse3mf(buffer, { geometry = false, plate = null } = {}) 
   }
 
   const colorStats = toStats(byColour, triCount);
+  const vertexMixedPct = usedVerts ? Math.round((mixedVerts / usedVerts) * 1000) / 10 : 0;
+  const mixing = {
+    vertexMixedPct,
+    fullSpectrum:
+      vertexMixedPct >= FULL_SPECTRUM.minVertexMixedPct && (colorStats?.length ?? 0) >= FULL_SPECTRUM.minColors && triCount >= FULL_SPECTRUM.minFaces,
+  };
   const plates = perPlate.size
     ? [...perPlate.entries()]
         .sort(([a], [b]) => a - b)
@@ -374,6 +401,7 @@ export async function parse3mf(buffer, { geometry = false, plate = null } = {}) 
     color_count: colorStats ? colorStats.length : null,
     colorStats,
     plates,
+    mixing,
     metadata: model.metadata,
     provenanceHint: provenanceHint(model.metadata),
     ...(geo && {

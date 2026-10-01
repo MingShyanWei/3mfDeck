@@ -46,6 +46,12 @@ CREATE TABLE IF NOT EXISTS plates (
   tri_count INTEGER,
   PRIMARY KEY (model_id, plate)
 );
+-- Full Spectrum (dithered) detection (SPEC 3.4 M6). Additive: §4 has no place for it.
+CREATE TABLE IF NOT EXISTS color_mixing (
+  model_id         INTEGER PRIMARY KEY REFERENCES models(id) ON DELETE CASCADE,
+  vertex_mixed_pct REAL,
+  full_spectrum    INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS plate_color_stats (
   model_id INTEGER REFERENCES models(id) ON DELETE CASCADE,
   plate    INTEGER,
@@ -105,6 +111,9 @@ export function insertModel(db, { name, relPath, parsed }) {
     for (const c of parsed.colorStats || []) ins.run(id, c.color, c.faces, c.pct);
     const insPlate = db.prepare('INSERT INTO plates (model_id, plate, name, tri_count) VALUES (?, ?, ?, ?)');
     const insPlateColor = db.prepare('INSERT INTO plate_color_stats (model_id, plate, color, faces, pct) VALUES (?, ?, ?, ?, ?)');
+    if (parsed.mixing) {
+      db.prepare('INSERT INTO color_mixing (model_id, vertex_mixed_pct, full_spectrum) VALUES (?, ?, ?)').run(id, parsed.mixing.vertexMixedPct, parsed.mixing.fullSpectrum ? 1 : 0);
+    }
     for (const p of parsed.plates || []) {
       insPlate.run(id, p.plate, p.name, p.tri_count);
       for (const c of p.colorStats || []) insPlateColor.run(id, p.plate, c.color, c.faces, c.pct);
@@ -145,6 +154,8 @@ const LIST_COLUMNS = `m.id, m.name, m.rel_path, m.format, m.size_bytes, m.tri_co
   m.provenance_type, m.platform, m.url, m.prompt, m.retrieved_at, m.notes, m.imported_at, m.updated_at,
   m.thumb IS NOT NULL AS has_thumb,
   (SELECT COUNT(*) FROM plates p WHERE p.model_id = m.id) AS plate_count,
+  (SELECT cm.full_spectrum FROM color_mixing cm WHERE cm.model_id = m.id) AS full_spectrum,
+  (SELECT cm.vertex_mixed_pct FROM color_mixing cm WHERE cm.model_id = m.id) AS vertex_mixed_pct,
   (SELECT json_group_array(t.name) FROM model_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.model_id = m.id) AS tags`;
 
 const SORTS = {
@@ -153,7 +164,7 @@ const SORTS = {
   colors: 'm.color_count IS NULL, m.color_count DESC, m.name COLLATE NOCASE',
 };
 
-const rowOut = (r) => ({ ...r, has_thumb: Boolean(r.has_thumb), tags: JSON.parse(r.tags), bbox_mm: r.bbox_mm ? JSON.parse(r.bbox_mm) : null });
+const rowOut = (r) => ({ ...r, has_thumb: Boolean(r.has_thumb), full_spectrum: Boolean(r.full_spectrum), tags: JSON.parse(r.tags), bbox_mm: r.bbox_mm ? JSON.parse(r.bbox_mm) : null });
 
 // Trashed models keep their row (metadata survives a restore); their file
 // lives under <root>/.trash/, so rel_path tells them apart.

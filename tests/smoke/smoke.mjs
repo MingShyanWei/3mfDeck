@@ -574,6 +574,45 @@ try {
   }
   await page.fill('[data-testid=search]', '');
 
+  // 12) M6: Full Spectrum (dithered) filament mapping + mixed-colour estimate
+  await importViaMenu([await stage('dithered.3mf'), await stage('regions.3mf')]);
+  await page.click('[data-testid=import-skip-all]');
+  await openModel('dithered');
+  const modeNames = await page.$$eval('.modes button', (b) => b.map((x) => x.dataset.testid));
+  assert.deepEqual(modeNames, ['mode-original', 'mode-filament', 'mode-estimate', 'mode-wireframe']);
+  assert.match(await page.textContent('[data-testid=mixing-detect]'), /抖色檔（頂點混色率 9\d\.\d%，門檻 50%）/);
+  assert.match(await page.textContent('[data-testid=mixing-spools]'), /5 捲（超過 U1 的 4 個耗材槽）/);
+  assert.match(await page.textContent('[data-testid=mixing-average]'), /#D7BE8C.*估計值，實際以 Orca 渲染為準/);
+  const pure = (c) => ['cyan', 'magenta', 'yellow', 'black', 'red', 'green', 'blue'].reduce((s, k) => s + (c[k] || 0), 0);
+  const opaque = (c) => Object.entries(c).filter(([k]) => k !== 'transparent').reduce((s, [, n]) => s + n, 0);
+  await setMode('filament');
+  const fsSpools = await page.$$eval('[data-testid=spool]', (e) => e.map((x) => x.textContent.trim()));
+  assert.equal(fsSpools.length, 5);
+  assert.match(await page.textContent('[data-testid=fs-spools-title]'), /不量化到 CMYK.*會用到 5 捲/);
+  assert.match(await page.textContent('[data-testid=fs-slots-warning]'), /需要 5 捲，超過 U1 的 4 個耗材槽/);
+  const pxFil = await viewerPixels();
+  assert.ok(present(pxFil).includes('yellow') && present(pxFil).includes('magenta'), 'own spool colours, not CMYK-quantized ' + JSON.stringify(pxFil));
+  await setMode('original');
+  const pxOrig = await viewerPixels();
+  await setMode('estimate');
+  assert.match(await page.textContent('[data-testid=estimate-note]'), /估計值，實際以 Orca 渲染為準/);
+  const pxEst = await viewerPixels();
+  const pureOrig = pure(pxOrig) / opaque(pxOrig);
+  const pureEst = pure(pxEst) / opaque(pxEst);
+  assert.ok(pureOrig > 0.5 && pureEst < pureOrig / 3, `estimate blends the dots: pure-colour pixels ${pureOrig.toFixed(2)} -> ${pureEst.toFixed(2)}`);
+  step(`dithered.3mf: modes ${modeNames.join('/')}; spools ${fsSpools.join(' | ')}; pure-colour pixels 原始 ${(pureOrig * 100).toFixed(0)}% -> 混色估計 ${(pureEst * 100).toFixed(0)}%`);
+  await page.$eval('[data-testid=detail-panel]', (el) => el.scrollTo(0, 0));
+  await page.screenshot({ path: path.join(base, 'fullspectrum.png') });
+
+  await openModel('regions');
+  assert.equal(await page.$('[data-testid=mode-estimate]'), null, 'region-painted files have no estimate mode');
+  assert.equal(await page.$('[data-testid=mixing-stats]'), null);
+  await setMode('filament');
+  const regionSpools = await page.$$eval('[data-testid=spool]', (e) => e.map((x) => x.textContent.trim()));
+  assert.ok(regionSpools.every((t) => /^槽\d [CMYK] /.test(t)), 'non-dithered: nearest single U1 slot ' + regionSpools.join(' | '));
+  step('regions.3mf (not dithered): no estimate mode, nearest-slot mapping ' + regionSpools.join(' | '));
+  await page.fill('[data-testid=search]', '');
+
   await page.screenshot({ path: path.join(base, 'smoke.png') });
   step('screenshot: ' + path.join(base, 'smoke.png'));
 } finally {

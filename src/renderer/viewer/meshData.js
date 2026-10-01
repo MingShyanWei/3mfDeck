@@ -60,16 +60,82 @@ export function faceColours(faceColor, palette) {
   return out;
 }
 
+const srgbToLinear = (b) => {
+  const s = b / 255;
+  return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+};
+
+export const ESTIMATE_PASSES = 2;
+
+/**
+ * Estimated perceived colour of a Full Spectrum (dithered) model. Neighbouring
+ * single-filament triangles blend optically like halftone dots, i.e. their
+ * reflected light averages in LINEAR light. Each pass averages face colours
+ * onto the shared vertices and back; the result is per-vertex (smoothly
+ * interpolated), returned de-indexed as linear colour bytes (3 per corner).
+ * It is an estimate: Orca's own render is the reference.
+ */
+export function estimateColours(indices, faceColor, palette, vertexCount, passes = ESTIMATE_PASSES) {
+  const lin = new Float32Array((palette.length + 1) * 3);
+  [GRAY_HEX, ...palette].forEach((hex, i) => {
+    const n = parseInt(hex.slice(1, 7), 16);
+    lin.set([(n >> 16) & 255, (n >> 8) & 255, n & 255].map(srgbToLinear), i * 3);
+  });
+  const faces = faceColor.length;
+  let face = new Float32Array(faces * 3);
+  for (let f = 0; f < faces; f++) {
+    const p = (faceColor[f] <= palette.length ? faceColor[f] : 0) * 3;
+    face[f * 3] = lin[p];
+    face[f * 3 + 1] = lin[p + 1];
+    face[f * 3 + 2] = lin[p + 2];
+  }
+  const count = new Uint32Array(vertexCount);
+  for (let i = 0; i < indices.length; i++) count[indices[i]]++;
+  const vert = new Float32Array(vertexCount * 3);
+  for (let pass = 0; pass < passes; pass++) {
+    vert.fill(0);
+    for (let i = 0; i < indices.length; i++) {
+      const v = indices[i] * 3, f = ((i / 3) | 0) * 3;
+      vert[v] += face[f];
+      vert[v + 1] += face[f + 1];
+      vert[v + 2] += face[f + 2];
+    }
+    for (let v = 0; v < vertexCount; v++) {
+      if (!count[v]) continue;
+      vert[v * 3] /= count[v];
+      vert[v * 3 + 1] /= count[v];
+      vert[v * 3 + 2] /= count[v];
+    }
+    if (pass === passes - 1) break;
+    for (let f = 0; f < faces; f++) {
+      for (let k = 0; k < 3; k++) {
+        face[f * 3 + k] = (vert[indices[f * 3] * 3 + k] + vert[indices[f * 3 + 1] * 3 + k] + vert[indices[f * 3 + 2] * 3 + k]) / 3;
+      }
+    }
+  }
+  face = null;
+  const out = new Uint8Array(indices.length * 3);
+  for (let i = 0; i < indices.length; i++) {
+    const v = indices[i] * 3;
+    out[i * 3] = Math.round(vert[v] * 255);
+    out[i * 3 + 1] = Math.round(vert[v + 1] * 255);
+    out[i * 3 + 2] = Math.round(vert[v + 2] * 255);
+  }
+  return out;
+}
+
 /**
  * Everything the viewer needs for a painted 3MF: quantized de-indexed
- * positions, original colours and nearest-U1-slot colours (null without a palette).
+ * positions, original colours, nearest-U1-slot colours (null without a
+ * palette) and, for Full Spectrum files (`estimate`), the mixed-colour estimate.
  */
-export function prepareMesh({ positions, indices, faceColor, palette }) {
+export function prepareMesh({ positions, indices, faceColor, palette }, { estimate = false } = {}) {
   const q = quantizeFaces(positions, indices);
-  if (!palette.length) return { ...q, original: null, filament: null };
+  if (!palette.length) return { ...q, original: null, filament: null, estimate: null };
   return {
     ...q,
     original: faceColours(faceColor, palette),
     filament: faceColours(faceColor, palette.map((c) => nearestSlot(c).hex)),
+    estimate: estimate ? estimateColours(indices, faceColor, palette, positions.length / 3) : null,
   };
 }

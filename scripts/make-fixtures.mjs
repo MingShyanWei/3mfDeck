@@ -240,6 +240,54 @@ ${plate(3, '', [[6, 1]])}
   return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 }
 
+// 80 x 80 grid (shared vertices, 12,800 faces), 5 filaments C/M/Y/K/W as in
+// FullSpectrum Lizard. `paintOf(face, x, y)` returns the 1-based filament.
+// Paint strings are OrcaSlicer's CONST_FILAMENTS (one filament per face).
+const ORCA_FILAMENT = ['', '4', '8', '0C', '1C', '2C'];
+const CMYKW = ['#0086D6', '#EC008C', '#F4EE2A', '#000000', '#FFFFFF'];
+async function grid3mf(paintOf) {
+  const N = 80;
+  const verts = [];
+  for (let y = 0; y <= N; y++) for (let x = 0; x <= N; x++) verts.push(`<vertex x="${x}" y="${y}" z="0"/>`);
+  const tris = [];
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const a = y * (N + 1) + x, b = a + 1, c = a + N + 1, d = c + 1;
+      for (const [i, t] of [[a, b, d], [a, d, c]].entries()) {
+        tris.push(`<triangle v1="${t[0]}" v2="${t[1]}" v3="${t[2]}" paint_color="${ORCA_FILAMENT[paintOf(tris.length, x, y, i)]}"/>`);
+      }
+    }
+  }
+  const model = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+ <metadata name="Application">BambuStudio-02.04.00.70</metadata>
+ <resources>
+  <object id="1" type="model"><mesh>
+   <vertices>${verts.join('')}</vertices>
+   <triangles>${tris.join('')}</triangles>
+  </mesh></object>
+ </resources>
+ <build><item objectid="1"/></build>
+</model>
+`;
+  const zip = newZip();
+  zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>');
+  zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>');
+  zip.file('3D/3dmodel.model', model);
+  zip.file('Metadata/project_settings.config', JSON.stringify({ filament_colour: CMYKW }, null, 4));
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+}
+
+// Deterministic PRNG (mulberry32) so the dithered fixture is reproducible
+function rng(seed) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 // Plain core-spec 3MF (no slicer metadata, no paint_color, no materials), unit = centimeter
 async function plain3mf() {
   const { v, tris } = box(1, 2, 3);
@@ -421,6 +469,18 @@ await fs.writeFile(path.join(OUT, 'offpalette.3mf'), await painted3mf(['#1E90FF'
 await fs.writeFile(path.join(OUT, 'textured.glb'), texturedGlb());
 await fs.writeFile(path.join(OUT, 'materials.3mf'), await materials3mf());
 await fs.writeFile(path.join(OUT, 'multiplate.3mf'), await multiplate3mf());
+// Full Spectrum style: every face an independent random filament with
+// Lizard-like shares (C 15 %, M 21 %, Y 45 %, K 9 %, W 10 %) -> dithered.
+{
+  const r = rng(20261001);
+  const cum = [0.15, 0.36, 0.81, 0.9, 1];
+  await fs.writeFile(path.join(OUT, 'dithered.3mf'), await grid3mf(() => {
+    const v = r();
+    return cum.findIndex((c) => v < c) + 1;
+  }));
+}
+// Same grid painted in 5 vertical bands (16 columns each) -> region painting.
+await fs.writeFile(path.join(OUT, 'regions.3mf'), await grid3mf((_, x) => Math.floor(x / 16) + 1));
 // paint_color + basematerials in one file: 6 painted faces cyan, 2 magenta,
 // 4 unpainted -> material orange (not the part's default extruder 4).
 await fs.writeFile(

@@ -16,7 +16,8 @@
     "test": "vitest run",
     "smoke": "vite build && node tests/smoke/smoke.mjs",
     "dist": "vite build && electron-builder --mac dmg",
-    "realfiles": "vite build && node tests/smoke/realfiles.mjs"
+    "realfiles": "vite build && node tests/smoke/realfiles.mjs",
+    "orcacompare": "vite build && node tests/smoke/orcacompare.mjs"
   },
   "build": {
     "appId": "tw.aktzin.mf-cabinet",

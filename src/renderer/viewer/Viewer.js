@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { VIEW_DIR, fitDistance } from './fit.js';
 
-export const MODES = ['original', 'filament', 'wireframe'];
+export const MODES = ['original', 'filament', 'estimate', 'wireframe'];
 
 export class Viewer {
   constructor(canvas, { preserveDrawingBuffer = false } = {}) {
@@ -68,7 +68,7 @@ export class Viewer {
     this.camera.updateProjectionMatrix();
   }
 
-  /** 'original' | 'filament' (needs paint data) | 'wireframe' */
+  /** 'original' | 'filament' (needs paint data) | 'estimate' (Full Spectrum estimate) | 'wireframe' */
   setMode(mode) {
     if (!this.root) return;
     this.root.traverse((o) => {
@@ -81,7 +81,7 @@ export class Viewer {
       // Swap the backing array (same length) instead of copying 50 MB+ on big models
       for (const c of paint.chunks) {
         const attr = c.geometry.getAttribute('color');
-        attr.array = mode === 'filament' ? c.filament : c.original;
+        attr.array = mode === 'filament' ? c.filament : mode === 'estimate' && c.estimate ? c.estimate : c.original;
         attr.needsUpdate = true;
       }
     }
