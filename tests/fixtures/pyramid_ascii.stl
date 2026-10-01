@@ -1,0 +1,44 @@
+solid pyramid
+  facet normal 0 0 0
+    outer loop
+      vertex 0 0 0
+      vertex 4 4 0
+      vertex 4 0 0
+    endloop
+  endfacet
+  facet normal 0 0 0
+    outer loop
+      vertex 0 0 0
+      vertex 0 4 0
+      vertex 4 4 0
+    endloop
+  endfacet
+  facet normal 0 0 0
+    outer loop
+      vertex 0 0 0
+      vertex 4 0 0
+      vertex 2 2 3
+    endloop
+  endfacet
+  facet normal 0 0 0
+    outer loop
+      vertex 4 0 0
+      vertex 4 4 0
+      vertex 2 2 3
+    endloop
+  endfacet
+  facet normal 0 0 0
+    outer loop
+      vertex 4 4 0
+      vertex 0 4 0
+      vertex 2 2 3
+    endloop
+  endfacet
+  facet normal 0 0 0
+    outer loop
+      vertex 0 4 0
+      vertex 0 0 0
+      vertex 2 2 3
+    endloop
+  endfacet
+endsolid pyramid

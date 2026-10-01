@@ -1,0 +1,46 @@
+{
+  "name": "mf-cabinet",
+  "productName": "3MF 櫃",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.mjs",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "vite build && electron .",
+    "build": "vite build",
+    "start": "electron .",
+    "fixtures": "node scripts/make-fixtures.mjs",
+    "test": "vitest run",
+    "smoke": "vite build && node tests/smoke/smoke.mjs"
+  },
+  "build": {
+    "appId": "tw.aktzin.mf-cabinet",
+    "productName": "3MF 櫃",
+    "mac": {
+      "target": "dmg"
+    }
+  },
+  "dependencies": {
+    "@mdi/font": "^7.4.47",
+    "better-sqlite3": "^13.0.3",
+    "fast-xml-parser": "^5.11.2",
+    "jszip": "^3.10.2",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.1",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "playwright-core": "^1.63.0",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.3"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true,
+    "electron-winstaller": false
+  }
+}
