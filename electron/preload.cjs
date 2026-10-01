@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('api', {
   get: (id) => ipcRenderer.invoke('lib:get', id),
   sidebar: () => ipcRenderer.invoke('lib:sidebar'),
   colorRanking: () => ipcRenderer.invoke('lib:colorRanking'),
+  appInfo: () => ipcRenderer.invoke('app:info'),
+  openRepo: () => ipcRenderer.invoke('app:openRepo'),
   convertU1: (id) => ipcRenderer.invoke('lib:convertU1', id),
   update: (id, fields) => ipcRenderer.invoke('lib:update', id, fields),
   setTags: (id, names) => ipcRenderer.invoke('lib:setTags', id, names),

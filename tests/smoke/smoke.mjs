@@ -1166,6 +1166,33 @@ try {
     step(`M21 縮圖: m19-pictures 用封面、m17-painted 用 3D 渲染；全黑零件渲染成有明暗的深灰（暗像素 ${(blackThumb.darkShare * 100).toFixed(1)}%）；黑剪影縮圖 -> 格式圖示；表格同序`);
   }
 
+  // 18) M22: build version + author / repository, bottom left of the sidebar
+  {
+    const version = (await page.textContent('[data-testid=app-version]')).trim();
+    assert.match(version, APP_PATH ? /^v1\.\d{10}$/ : /^v1\.\d{10} dev$/, `version label: ${version}`);
+    assert.ok(await page.isVisible('[data-testid=app-version]'));
+    const tooltip = await page.getAttribute('[data-testid=app-version]', 'title');
+    assert.match(tooltip, /^建置時間 \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} · git ([0-9a-f]{7,}(\+dirty)?|unknown)/);
+    // the label is the build time in the tooltip, minutes precision
+    const [, y, mo, d, h, mi] = /(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/.exec(tooltip);
+    assert.equal(version.split(' ')[0], `v1.${y.slice(2)}${mo}${d}${h}${mi}`);
+    if (!APP_PATH) {
+      const built = JSON.parse(await fs.readFile(path.join(ROOT, 'dist', 'build-info.json'), 'utf8'));
+      assert.match(tooltip, new RegExp(`git ${built.commit.replace('+', '\\+')}`));
+    }
+    const credit = await page.$eval('[data-testid=app-credit]', (b) => [...b.querySelectorAll('span')].map((s) => s.textContent.trim()).join(' · '));
+    assert.equal(credit, 'Caspar Wei · github.com/MingShyanWei/3mfDeck');
+    assert.equal(await page.$eval('[data-testid=app-credit] span:last-child', (s) => s.scrollWidth <= s.clientWidth), true, 'repository shown in full');
+    await app.evaluate(({ shell }) => {
+      shell.openExternal = async (url) => {
+        globalThis.__openedExternal = url; // no browser in tests
+      };
+    });
+    await page.click('[data-testid=app-credit]');
+    assert.equal(await app.evaluate(() => globalThis.__openedExternal), 'https://github.com/MingShyanWei/3mfDeck');
+    step(`M22 版本: ${version}（${tooltip}）；作者列「${credit}」點擊交給系統瀏覽器`);
+  }
+
   await page.screenshot({ path: path.join(base, 'smoke.png') });
   step('screenshot: ' + path.join(base, 'smoke.png'));
 

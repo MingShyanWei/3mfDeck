@@ -9,6 +9,7 @@ import JSZip from 'jszip';
 import { listEmbeddedImages, mimeOf } from '../src/core/embeddedImages.mjs';
 import { convertToU1, readSourcePrinter } from '../src/core/u1Convert.mjs';
 import { migrateUserData, OLD_APP_NAME } from '../src/core/userDataMigration.mjs';
+import { versionLabel, AUTHOR, REPO, REPO_URL } from '../src/core/version.mjs';
 import { loadU1Profiles, DEFAULT_PROFILES_DIR } from '../src/core/orcaProfiles.mjs';
 import { cabinetColors } from '../src/core/purchase.mjs';
 import { loadPreviewData, storeThumb, previewPlate } from '../src/core/preview.mjs';
@@ -73,7 +74,22 @@ function buildMenu() {
   );
 }
 
+// M22 (SPEC 3.11): version = build time, from dist/build-info.json written by `vite build`
+function appInfo() {
+  let info = { time: new Date().toISOString(), commit: 'unknown' };
+  try {
+    info = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', 'dist', 'build-info.json'), 'utf8'));
+  } catch {
+    // no build info (should not happen after vite build): show the launch time, still marked dev when unpackaged
+  }
+  return { ...versionLabel(info, app.isPackaged), commit: info.commit, author: AUTHOR, repo: REPO };
+}
+
 function registerIpc() {
+  ipcMain.handle('app:info', () => appInfo());
+  // Opens the project page in the system browser; the app itself never makes a
+  // network request (SPEC: fully offline). Only this fixed URL can be opened.
+  ipcMain.handle('app:openRepo', () => shell.openExternal(REPO_URL));
   ipcMain.handle('lib:list', (_e, opts) => {
     // 遺失 filter: records whose file is not under the current root
     if (opts?.filter === 'missing') return markMissing(listModels(db, { ...opts, filter: 'all' }), root).filter((m) => m.missing);
@@ -348,6 +364,8 @@ app.whenReady().then(() => {
   }
   registerIpc();
   buildMenu();
+  const about = appInfo();
+  app.setAboutPanelOptions({ applicationName: '3mfDeck', applicationVersion: about.version, version: `git ${about.commit}`, credits: `作者 ${AUTHOR}\n${REPO}` });
   win = new BrowserWindow({
     width: 1280,
     height: 820,

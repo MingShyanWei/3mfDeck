@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { PROVENANCE } from '../format.js';
 import { LABELS, swatchOf } from '../../core/colorNames.mjs';
 
@@ -10,6 +11,28 @@ function Item({ id, filter, onFilter, icon, label, count, warn, danger }) {
         <span className="count">{count ?? 0}</span>
       </button>
     </li>
+  );
+}
+
+// M22 (SPEC 3.11): build version (1.<YYMMDDHHMM>, from the build time) and the
+// author / repository, bottom left. The link opens the system browser through
+// main (shell.openExternal); the app makes no network request itself.
+function AppFooter() {
+  const [info, setInfo] = useState(null);
+  useEffect(() => {
+    window.api.appInfo().then(setInfo);
+  }, []);
+  if (!info) return null;
+  return (
+    <footer className="app-footer">
+      <div className="app-version" data-testid="app-version" title={info.tooltip}>
+        v{info.version}
+      </div>
+      <button className="app-credit" data-testid="app-credit" title={`在瀏覽器開啟 https://${info.repo}`} onClick={() => window.api.openRepo()}>
+        <span><i className="mdi mdi-github" /> {info.author}</span>
+        <span>{info.repo}</span>
+      </button>
+    </footer>
   );
 }
 
@@ -78,6 +101,7 @@ export default function Sidebar({ counts, filter, onFilter, colors = [], onToggl
           <Item key={t.name} id={`tag:${t.name}`} filter={filter} onFilter={onFilter} icon="mdi-tag-outline" label={t.name} count={t.n} />
         ))}
       </ul>
+      <AppFooter />
     </aside>
   );
 }

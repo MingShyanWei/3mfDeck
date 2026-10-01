@@ -392,3 +392,12 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
 .list .thumb-col { width: 52px; padding: 4px 6px; }
 .list .thumb-col img { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; display: block; background: var(--sunken); }
 .list .thumb-col .mdi { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 8px; background: var(--sunken); color: var(--muted); font-size: 20px; }
+
+/* M22: version + author, bottom left of the sidebar (muted, small) */
+.sidebar { display: flex; flex-direction: column; }
+.app-footer { margin-top: auto; padding: 18px 4px 2px; display: flex; flex-direction: column; gap: 2px; font-size: 10.5px; color: var(--muted); }
+.app-version { font-family: var(--num); letter-spacing: 0.02em; cursor: default; }
+.app-credit { background: none; border: none; padding: 0; text-align: left; font-size: 10.5px; color: var(--muted); display: flex; flex-direction: column; }
+.app-credit span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-credit:hover:not(:disabled) { color: var(--accent); border-color: transparent; }
+.app-credit .mdi { font-size: 11px; }
