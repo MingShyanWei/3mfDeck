@@ -2,6 +2,12 @@
   "name": "mf-cabinet",
   "productName": "3mfDeck",
   "version": "0.1.0",
+  "description": "Offline 3MF library and filament colour advisor",
+  "author": {
+    "name": "Caspar Wei",
+    "url": "https://github.com/MingShyanWei"
+  },
+  "license": "MIT",
   "private": true,
   "type": "module",
   "main": "electron/main.mjs",

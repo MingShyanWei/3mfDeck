@@ -6,7 +6,7 @@
 
 把散在硬碟、MakerWorld、Meshy 的 3MF 檔收進一個櫃子，看得見 3D、看得懂顏色、算得出該用哪幾捲線材，最後匯出可以直接在 Snapmaker Orca 開啟列印的檔案。
 
-<!-- Screenshots live in docs/screenshots/ (open-source/own fixture models only). -->
+![3mfDeck 檔案櫃與示範模型](docs/screenshots/zh-TW/1-library.png)
 
 ---
 
@@ -59,6 +59,15 @@
 - 側欄左下顯示版本號 `1.<YYMMDDHHMM>`（建置時間），滑過去可看完整時間與 commit。
 
 ---
+
+## 截圖
+
+截圖全部使用 [`scripts/make-demo-models.mjs`](scripts/make-demo-models.mjs) 產生的示範模型（本專案自製），匯入乾淨的暫存檔案櫃；可用 `node scripts/readme-screenshots.mjs` 重新產生。花瓶的「原檔圖」是該腳本把花瓶本身的渲染圖嵌入 3MF 而來。
+
+| | |
+|---|---|
+| ![顏色分析](docs/screenshots/zh-TW/2-colour-analysis.png) **顏色分析**：面積佔比、色名標籤、每色的列印方式 | ![原檔圖](docs/screenshots/zh-TW/3-embedded-images.png) **原檔圖**：3MF 內嵌的封面與盤面圖 |
+| ![建議捲色](docs/screenshots/zh-TW/4-spool-suggestions.png) **建議捲色**：理想色、從線材庫挑、標準配置 | ![採購建議](docs/screenshots/zh-TW/5-purchase-suggestions.png) **採購建議**：整個檔案櫃最缺哪些顏色 |
 
 ## 支援格式與環境
 

@@ -6,7 +6,7 @@
 
 把散落在硬盘、MakerWorld、Meshy 的 3MF 文件收进一个库里：看得见 3D、看得懂颜色、算得出该用哪几卷耗材，最后导出可以直接在 Snapmaker Orca 打开打印的文件。
 
-<!-- Screenshots live in docs/screenshots/ (open-source/own fixture models only). -->
+![3mfDeck 模型库与示例模型](docs/screenshots/zh-CN/1-library.png)
 
 ---
 
@@ -59,6 +59,15 @@
 - 侧栏左下显示版本号 `1.<YYMMDDHHMM>`（构建时间），悬停可看完整时间与 commit。
 
 ---
+
+## 截图
+
+截图全部使用 [`scripts/make-demo-models.mjs`](scripts/make-demo-models.mjs) 生成的示例模型（本项目自制），导入干净的临时模型库；可用 `node scripts/readme-screenshots.mjs` 重新生成。花瓶的“原文件图”是该脚本把花瓶本身的渲染图嵌入 3MF 而来。
+
+| | |
+|---|---|
+| ![颜色分析](docs/screenshots/zh-CN/2-colour-analysis.png) **颜色分析**：面积占比、色名标签、每色的打印方式 | ![原文件图](docs/screenshots/zh-CN/3-embedded-images.png) **原文件图**：3MF 内嵌的封面与盘面图 |
+| ![建议料卷颜色](docs/screenshots/zh-CN/4-spool-suggestions.png) **建议料卷颜色**：理想色、从耗材库挑、标准配置 | ![采购建议](docs/screenshots/zh-CN/5-purchase-suggestions.png) **采购建议**：整个模型库最缺哪些颜色 |
 
 ## 支持格式与环境
 
