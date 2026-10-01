@@ -9,7 +9,7 @@ import { openDb, getModel } from '../../src/core/db.mjs';
 import { importPaths } from '../../src/core/importer.mjs';
 import { tmpDir } from './helpers.mjs';
 
-// User-provided reference file (CLAUDE.md); copied, never moved.
+// User-provided reference document; copied, never moved.
 const WINE = process.env.MF_WINE_3MF || path.join(os.homedir(), 'Library/Mobile Documents/com~apple~CloudDocs/3mf/Wine-U1.3mf');
 const haveWine = existsSync(WINE);
 
