@@ -88,6 +88,7 @@
     },
     "linux": {
       "icon": "build/icon.png",
+      "maintainer": "Caspar Wei <6902864+MingShyanWei@users.noreply.github.com>",
       "category": "Utility",
       "target": [
         {
