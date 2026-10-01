@@ -120,7 +120,6 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
         {status === 'unsupported' && <div className="viewer-msg">STEP 為 B-rep 格式，暫不支援預覽</div>}
         {status === 'empty' && <div className="viewer-msg">這個盤面沒有物件</div>}
         {status === 'error' && <div className="viewer-msg error"><i className="mdi mdi-alert-outline" /> {error}</div>}
-      </div>
       <div className="seg-group modes">
         {modes.map(([k, label, icon]) => (
           <button
@@ -134,6 +133,7 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
             <i className={`mdi ${icon}`} /> {label}
           </button>
         ))}
+      </div>
       </div>
       {mode === 'estimate' && (
         <div className="callout warn estimate-note" data-testid="estimate-note">

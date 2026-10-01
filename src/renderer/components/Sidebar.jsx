@@ -16,10 +16,13 @@ export default function Sidebar({ counts, filter, onFilter }) {
   if (!counts) return <aside className="sidebar" />;
   return (
     <aside className="sidebar">
-      <h3>來源</h3>
+      <div className="brand"><span className="logo" />3MF 櫃</div>
       <ul>
         <Item id="all" filter={filter} onFilter={onFilter} icon="mdi-cube-outline" label="全部" count={counts.all} />
         <Item id="unlabeled" filter={filter} onFilter={onFilter} icon="mdi-help-circle-outline" label="未標" count={counts.unlabeled} warn />
+      </ul>
+      <h3>來源</h3>
+      <ul>
         {['ai_generated', 'downloaded', 'self_made'].map((t) => (
           <Item key={t} id={`type:${t}`} filter={filter} onFilter={onFilter} icon={PROVENANCE[t].icon} label={PROVENANCE[t].label} count={counts.types[t]} />
         ))}

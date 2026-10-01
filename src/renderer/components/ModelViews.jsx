@@ -38,13 +38,17 @@ export function ModelGrid({ models, selectedId, onSelect, picked = null, onPick 
               </>
             )}
           </div>
+          <div className="badges">
+            <MissingBadge model={m} />
+            <ProvenanceBadge model={m} />
+            <PlateBadge model={m} />
+          </div>
           <div className="card-body">
             <div className="name" title={m.name}>{m.name}</div>
-            <div className="badges">
-              <MissingBadge model={m} />
-              <ProvenanceBadge model={m} />
-              <PlateBadge model={m} />
+            <div className="sub">
               <ColorBadge model={m} />
+              {m.color_count != null && <span>·</span>}
+              <span>{m.format.toUpperCase()} · {formatBytes(m.size_bytes)}</span>
             </div>
           </div>
         </button>

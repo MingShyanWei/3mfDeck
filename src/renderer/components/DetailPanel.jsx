@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import MetadataForm, { toDraft, saveDraft } from './MetadataForm.jsx';
 import ModelViewer from './ModelViewer.jsx';
 import ColorAnalysis from './ColorAnalysis.jsx';
+import { ProvenanceBadge, PlateBadge } from './Badges.jsx';
 import { isUnlabeled, formatBytes, formatInt, formatBbox, formatDate } from '../format.js';
 
 export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose }) {
@@ -81,13 +82,10 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
 
   return (
     <aside className="detail" data-testid="detail-panel">
-      <header>
-        <h2 title={model.name}>{model.name}</h2>
-        {!model.missing && model.format === '3mf' && (
-          <button className="primary" data-testid="export-quantized" onClick={export3mf} title="匯出量化 3MF（單捲印不出的顏色寫成混合耗材 Mix）">
-            <i className="mdi mdi-printer-3d-nozzle-outline" /> 量化 3MF…
-          </button>
-        )}
+      <header className="detail-top">
+        <ProvenanceBadge model={model} />
+        <PlateBadge model={model} />
+        <span className="spacer" />
         <button className="icon" data-testid="export" onClick={exportFile} disabled={model.missing} title="匯出（複製到資料夾）">
           <i className="mdi mdi-export-variant" />
         </button>
@@ -161,20 +159,35 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
         </div>
       )}
       <ModelViewer model={model} plate={plate} colors={plateInfo ? plateInfo.colors : model.colors} />
-      {model.format === '3mf' && model.colors.length > 0 &&
-        (plateInfo ? (
-          <ColorAnalysis colors={plateInfo.colors} totals={model.colors} title={`盤 ${plateInfo.plate}`} mixing={mixing} />
-        ) : (
-          <ColorAnalysis colors={model.colors} mixing={mixing} />
-        ))}
+      <div className="detail-title">
+        <h2 title={model.name}>{model.name}</h2>
+        {!model.missing && model.format === '3mf' && (
+          <button className="primary" data-testid="export-quantized" onClick={export3mf} title="匯出量化 3MF（單捲印不出的顏色寫成混合耗材 Mix）">
+            <i className="mdi mdi-printer-3d-nozzle-outline" /> 量化 3MF…
+          </button>
+        )}
+      </div>
+      {model.format === '3mf' && model.colors.length > 0 && (
+        <div className="panel-card">
+          {plateInfo ? (
+            <ColorAnalysis colors={plateInfo.colors} totals={model.colors} title={`盤 ${plateInfo.plate}`} mixing={mixing} />
+          ) : (
+            <ColorAnalysis colors={model.colors} mixing={mixing} />
+          )}
+        </div>
+      )}
       {isUnlabeled(model) && (
         <div className="callout warn"><i className="mdi mdi-alert-outline" /> 來源未標，請補上來源類型。</div>
       )}
-      <MetadataForm draft={draft} onChange={(d) => { setDraft(d); setSaved(false); }} platforms={platforms} />
-      <div className="row end">
-        {saved && !dirty && <span className="ok small"><i className="mdi mdi-check" /> 已儲存</span>}
-        <button className="primary" data-testid="detail-save" disabled={!dirty} onClick={save}>儲存</button>
+      <div className="panel-card">
+        <h3>來源與備註</h3>
+        <MetadataForm draft={draft} onChange={(d) => { setDraft(d); setSaved(false); }} platforms={platforms} />
+        <div className="row end">
+          {saved && !dirty && <span className="ok small"><i className="mdi mdi-check" /> 已儲存</span>}
+          <button className="primary" data-testid="detail-save" disabled={!dirty} onClick={save}>儲存</button>
+        </div>
       </div>
+      <div className="panel-card">
       <h3>檔案資訊</h3>
       <dl className="info">
         <dt>路徑</dt><dd className="mono">{model.rel_path}</dd>
@@ -185,6 +198,7 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
         <dt>色數</dt><dd>{model.color_count ?? '—'}</dd>
         <dt>匯入</dt><dd>{formatDate(model.imported_at)}</dd>
       </dl>
+      </div>
     </aside>
   );
 }

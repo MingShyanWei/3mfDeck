@@ -51,6 +51,14 @@ export default function ColorAnalysis({ colors, totals = null, title = '', mixin
           </button>
         )}
       </h3>
+      {colors.length > 0 && (
+        <>
+          <div className="spectrum" title="各色面積比例">
+            {colors.map((c) => <i key={c.color} style={{ width: `${c.pct}%`, background: c.color }} title={`${c.color} ${c.pct}%`} />)}
+          </div>
+          <div className="spectrum-cap"><span>面積比例</span><span>{colors.reduce((n, c) => n + c.faces, 0).toLocaleString('zh-TW')} 面</span></div>
+        </>
+      )}
       {mixing && colors.length > 0 && (
         <div className="mixing" data-testid="mixing-stats">
           <div className="mixing-head">
