@@ -4,7 +4,7 @@ import { ModelGrid, ModelList } from './components/ModelViews.jsx';
 import DetailPanel from './components/DetailPanel.jsx';
 import ImportDialog from './components/ImportDialog.jsx';
 import SettingsDialog from './components/SettingsDialog.jsx';
-import { SlotsContext } from './slots.js';
+import { SlotsContext, SetSpoolsContext } from './slots.js';
 import { slotsFromColours, DEFAULT_SPOOLS } from '../core/filament.mjs';
 import RecoverDialog from './components/RecoverDialog.jsx';
 import { runThumbQueue } from './thumbQueue.js';
@@ -125,6 +125,7 @@ export default function App() {
   const platforms = counts?.platforms.map((p) => p.name) || [];
 
   return (
+    <SetSpoolsContext.Provider value={setSpools}>
     <SlotsContext.Provider value={slots}>
     <div
       className="app"
@@ -287,5 +288,6 @@ export default function App() {
       )}
     </div>
     </SlotsContext.Provider>
+    </SetSpoolsContext.Provider>
   );
 }

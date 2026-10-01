@@ -24,6 +24,7 @@ const mixCache = new Map();
  * Returns { compA, compB, mixB, mixHex, deltaE }.
  */
 export function bestMix(hex, slots) {
+  if (slots.length < 2) return null; // no pair to blend
   const key = hex + '|' + slots.map((s) => s.hex).join();
   if (mixCache.has(key)) return mixCache.get(key);
   const target = rgbToLab(hexToRgb(hex));
@@ -55,6 +56,7 @@ export function mixPrintPlan(hex, slots, threshold = MIX_DELTA_E) {
   const near = nearestSlot(hex, slots);
   if (near.deltaE <= threshold) return { mode: 'single', extruder: near.slot, hex: near.hex, deltaE: Math.round(near.deltaE * 10) / 10 };
   const mix = bestMix(hex, slots);
+  if (!mix) return { mode: 'mix', mix, mixable: false, extruder: near, hex: near.hex, deltaE: Math.round(near.deltaE * 10) / 10, nearest: near };
   const mixable = mix.deltaE <= threshold;
   return { mode: 'mix', mix, mixable, extruder: mix, hex: mix.mixHex, deltaE: mix.deltaE, nearest: near };
 }

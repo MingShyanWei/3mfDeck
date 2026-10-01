@@ -4,6 +4,7 @@ import { analyzeColors, mixedAverage } from '../../core/colorAnalysis.mjs';
 import { printPlan, recipeText, MIX_DELTA_E, slotName } from '../../core/filament.mjs';
 import { useSlots } from '../slots.js';
 import { FULL_SPECTRUM } from '../../core/fullSpectrum.mjs';
+import SpoolSuggest from './SpoolSuggest.jsx';
 
 const ICONS = { dither: 'mdi-select-compare', 'few-colors': 'mdi-check-circle-outline', 'needs-mixing': 'mdi-palette-swatch-variant' };
 
@@ -111,6 +112,7 @@ export default function ColorAnalysis({ colors, totals = null, title = '', mixin
           ))}
         </tbody>
       </table>
+      {!mixing && <SpoolSuggest colors={totals || colors} />}
     </section>
   );
 }

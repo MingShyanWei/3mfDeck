@@ -487,6 +487,35 @@ try {
   const mixRows = await page.$$eval('[data-testid=mapping-row]', (els) => els.map((e) => e.dataset.mode));
   assert.deepEqual(mixRows, ['mix', 'mix', 'mix', 'mix']);
   step('mixneeded.3mf: 列印方式 ' + printCells.map((r) => `${r[0]}=${r[1]} ${r[2]}`).join(' | ') + '; filament preview uses mix colours');
+  // 9c) M11: spool suggestion from area + colour accuracy, then apply
+  await page.waitForSelector('[data-testid=spool-suggest]');
+  await page.click('[data-testid=suggest-spools]');
+  await page.waitForSelector('[data-testid=suggest-spools-list]');
+  await page.waitForSelector('[data-testid=suggest-results]');
+  const recK = Number((await page.textContent('[data-testid=suggest-recommended]')).match(/建議 (\d) 捲/)[1]);
+  const kCoverage = await page.$$eval('[data-testid=suggest-results] input[type=radio]', (els) => els.map((e) => e.parentElement.textContent.trim()));
+  assert.equal(kCoverage.length, 4, '1..4 spool options');
+  assert.match(kCoverage.join('|'), /4 捲：單捲 100%（含 .*100%）|4 捲：.*含混色 100%/);
+  // apply the recommended suggestion, verify the slots changed and mapping reflects them
+  await page.click(`[data-testid=suggest-k${recK === 4 ? 4 : recK}]`); // pick recommended k (radio re-runs)
+  await page.waitForSelector('[data-testid=suggest-spools-list]');
+  await page.click('[data-testid=suggest-apply]');
+  await page.waitForSelector('[data-testid=suggest-apply]:disabled');
+  const newSpools = (await page.textContent('[data-testid=export-mapping] h3')).match(/\d 捲：(#[0-9A-F]{6}[^）]*)/)[1].trim().split(' ');
+  assert.equal(newSpools.length, recK, `applied ${recK} suggested spools`);
+  // restore the default CMYK spools: later steps (regions.3mf, exports) assume them
+  await page.click('[data-testid=settings-button]');
+  await page.waitForSelector('[data-testid=spool-editor]');
+  await page.selectOption('[data-testid=spool-count]', '4');
+  await page.fill('[data-testid=spool-1]', '#00FFFF');
+  await page.fill('[data-testid=spool-2]', '#FF00FF');
+  await page.fill('[data-testid=spool-3]', '#FFFF00');
+  await page.fill('[data-testid=spool-4]', '#000000');
+  await page.click('[data-testid=spool-save]');
+  await page.waitForSelector('[data-testid=spool-message]');
+  await page.click('[data-testid=settings-done]');
+  await page.waitForSelector('[data-testid=viewer][data-status=ready]');
+  step(`M11 建議捲色: 建議 ${recK} 捲（${newSpools.join(' ')}），已套用後還原 CMYK；覆蓋率選項 ${kCoverage.length} 組`);
   await page.$eval('[data-testid=detail-panel]', (el) => el.scrollTo(0, 0));
   await page.screenshot({ path: path.join(base, 'mixneeded.png') });
   await page.fill('[data-testid=search]', '');
