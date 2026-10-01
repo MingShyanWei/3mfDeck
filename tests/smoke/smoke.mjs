@@ -970,6 +970,51 @@ try {
   await page.click('[data-testid=settings-done]');
   await page.fill('[data-testid=search]', '');
 
+  // 13) M17: colour labels, colour filter, colour-name search, cabinet purchase suggestions
+  await importViaMenu([await stage('painted.3mf', 'm17-painted.3mf'), await stage('materials.3mf', 'm17-materials.3mf')]);
+  await page.click('[data-testid=import-skip-all]');
+  await page.fill('[data-testid=search]', 'm17');
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 2);
+  const cardLabels = async () =>
+    page.$$eval('[data-testid=model-card]', (cards) =>
+      Object.fromEntries(cards.map((c) => [c.querySelector('.name').textContent, [...c.querySelectorAll('[data-testid=color-tags] .ctag')].map((t) => t.dataset.label)])),
+    );
+  assert.deepEqual(await cardLabels(), { 'm17-materials': ['橙', '藍', '白'], 'm17-painted': ['青', '粉', '黃'] });
+  // sidebar 顏色 filter: chips with counts; several selected = all must match
+  assert.match(await page.textContent('[data-testid=filter-color-藍]'), /藍\s*\d+/);
+  await page.click('[data-testid=filter-color-藍]');
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 1);
+  assert.equal(await page.textContent('[data-testid=model-card] .name'), 'm17-materials');
+  await page.click('[data-testid=filter-color-青]');
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 0);
+  await page.click('[data-testid=color-filter-clear]');
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 2);
+  // search box: colour names 「藍色」 / 「青」
+  await page.fill('[data-testid=search]', '藍色');
+  await page.waitForFunction(() => [...document.querySelectorAll('[data-testid=model-card] .name')].some((n) => n.textContent === 'm17-materials'));
+  assert.ok(!(await page.$$eval('[data-testid=model-card] .name', (n) => n.map((x) => x.textContent))).includes('m17-painted'), '「藍色」 does not match the CMYK file');
+  // detail panel: colour badges with shares
+  await openModel('m17-painted');
+  assert.deepEqual(await page.$$eval('[data-testid=detail-color-tags] .ctag', (t) => t.map((x) => x.textContent.trim())), ['青50%', '粉25%', '黃16.67%']);
+  step('M17 顏色標籤: m17-painted 青/粉/黃, m17-materials 橙/藍/白; 過濾「藍」-> 1, 「藍+青」-> 0; 搜尋「藍色」命中 materials; 詳情徽章含佔比');
+  // purchase suggestions (cabinet level), add one to the inventory
+  await page.click('[data-testid=purchase-open]');
+  await page.waitForSelector('[data-testid=purchase-row]');
+  const purchaseRows = await page.$$eval('[data-testid=purchase-row]', (r) => r.map((x) => [x.dataset.label, x.dataset.suggest]));
+  assert.ok(purchaseRows.length >= 8, 'every colour name in the cabinet is ranked ' + JSON.stringify(purchaseRows));
+  const firstSuggest = purchaseRows.find(([, s]) => s === '1')[0];
+  assert.match(await page.textContent('[data-testid=purchase-suggestions]'), new RegExp(`建議優先購買：.*${firstSuggest}`));
+  await page.click(`[data-testid=purchase-add-${firstSuggest}]`);
+  await page.waitForSelector(`[data-testid=purchase-added-${firstSuggest}]`);
+  const inv = (await page.evaluate(() => window.api.getSettings())).inventory;
+  assert.equal(inv.length, 1);
+  assert.match(inv[0].name, new RegExp(`^${firstSuggest}（建議色）$`));
+  assert.equal(await page.getAttribute(`[data-testid=purchase-row][data-label=${firstSuggest}]`, 'data-suggest'), '0', 'added colour is now covered by the inventory');
+  await page.click('[data-testid=purchase-close]');
+  await page.evaluate(() => window.api.setInventory([])); // leave the inventory empty again
+  step(`M17 採購建議: ${purchaseRows.length} 個色名排行，建議 ${purchaseRows.filter(([, s]) => s === '1').map(([l]) => l).join('/')}；「加入線材庫」${firstSuggest} -> ${inv[0].name} ${inv[0].hex}`);
+  await page.fill('[data-testid=search]', '');
+
   await page.screenshot({ path: path.join(base, 'smoke.png') });
   step('screenshot: ' + path.join(base, 'smoke.png'));
 } finally {

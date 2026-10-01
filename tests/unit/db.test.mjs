@@ -21,7 +21,7 @@ describe('schema', () => {
     ]);
     expect(cols('tags')).toEqual(['id', 'name']);
     expect(cols('model_tags')).toEqual(['model_id', 'tag_id']);
-    expect(cols('color_stats')).toEqual(['model_id', 'color', 'faces', 'pct']);
+    expect(cols('color_stats')).toEqual(['model_id', 'color', 'faces', 'pct', 'label']); // label: M17 (SPEC 3.5d)
   });
 });
 

@@ -1,4 +1,5 @@
 import { PROVENANCE } from '../format.js';
+import { LABELS, swatchOf } from '../../core/colorNames.mjs';
 
 function Item({ id, filter, onFilter, icon, label, count, warn, danger }) {
   return (
@@ -12,7 +13,7 @@ function Item({ id, filter, onFilter, icon, label, count, warn, danger }) {
   );
 }
 
-export default function Sidebar({ counts, filter, onFilter }) {
+export default function Sidebar({ counts, filter, onFilter, colors = [], onToggleColor, onClearColors, onPurchase }) {
   if (!counts) return <aside className="sidebar" />;
   return (
     <aside className="sidebar">
@@ -41,6 +42,34 @@ export default function Sidebar({ counts, filter, onFilter }) {
         <Item id="missing" filter={filter} onFilter={onFilter} icon="mdi-file-alert-outline" label="遺失" count={counts.missing} danger />
         <Item id="trash" filter={filter} onFilter={onFilter} icon="mdi-delete-outline" label="回收桶" count={counts.trash} />
       </ul>
+      <h3 className="row">
+        <span className="grow">顏色</span>
+        {colors.length > 0 && (
+          <button className="link-btn" data-testid="color-filter-clear" onClick={onClearColors}>清除</button>
+        )}
+      </h3>
+      <div className="color-filter" data-testid="color-filter">
+        {LABELS.map((l) => ({ label: l, n: counts.colors?.find((c) => c.label === l)?.n || 0 }))
+          .filter((c) => c.n > 0 || colors.includes(c.label))
+          .map((c) => (
+            <button
+              key={c.label}
+              className={`color-chip${colors.includes(c.label) ? ' on' : ''}`}
+              data-testid={`filter-color-${c.label}`}
+              title={`含「${c.label}」的檔案（面積 ≥ 5%）；可多選，需同時含所選顏色`}
+              onClick={() => onToggleColor(c.label)}
+            >
+              <i className="dot" style={{ background: swatchOf(c.label) || 'conic-gradient(#e33, #3c3, #39f, #e33)' }} />
+              {c.label}
+              <span className="count">{c.n}</span>
+            </button>
+          ))}
+        {!counts.colors?.length && <p className="muted small pad">尚無顏色資料</p>}
+      </div>
+      <button className="side-item purchase-open" data-testid="purchase-open" onClick={onPurchase}>
+        <i className="mdi mdi-cart-outline" />
+        <span className="grow">採購建議…</span>
+      </button>
       <h3>標籤</h3>
       {counts.tags.length === 0 && <p className="muted small pad">尚無標籤</p>}
       <ul>

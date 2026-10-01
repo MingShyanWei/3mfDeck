@@ -1,4 +1,5 @@
 import { PROVENANCE, isUnlabeled } from '../format.js';
+import { swatchOf } from '../../core/colorNames.mjs';
 
 export function ProvenanceBadge({ model }) {
   if (isUnlabeled(model)) {
@@ -39,6 +40,22 @@ export function ColorBadge({ model }) {
   return (
     <span className="badge badge-colors" title="paint_color 色數">
       <i className="mdi mdi-palette-outline" /> {model.color_count} 色
+    </span>
+  );
+}
+
+// M17: colour-name badges (top labels by area); `pct` also shows each share
+export function ColorLabels({ labels, pct = false, testid = 'color-tags' }) {
+  if (!labels?.length) return null;
+  return (
+    <span className="color-tags" data-testid={testid}>
+      {labels.map((l) => (
+        <span key={l.label} className="ctag" data-label={l.label} title={`${l.label} ${l.pct}%`}>
+          <i className="dot" style={{ background: swatchOf(l.label) || 'conic-gradient(#e33, #3c3, #39f, #e33)' }} />
+          {l.label}
+          {pct && <small>{l.pct}%</small>}
+        </span>
+      ))}
     </span>
   );
 }

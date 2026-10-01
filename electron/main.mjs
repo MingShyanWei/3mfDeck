@@ -3,7 +3,8 @@ import { app, BrowserWindow, Menu, ipcMain, dialog, protocol, shell } from 'elec
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb } from '../src/core/db.mjs';
+import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb, cabinetColorRows } from '../src/core/db.mjs';
+import { cabinetColors } from '../src/core/purchase.mjs';
 import { loadPreviewData, storeThumb, previewPlate } from '../src/core/preview.mjs';
 import { importPaths, indexNewFiles } from '../src/core/importer.mjs';
 import { trashModel, restoreModel, emptyTrash } from '../src/core/trash.mjs';
@@ -74,6 +75,8 @@ function registerIpc() {
     ...sidebarCounts(db),
     missing: markMissing(listModels(db), root).filter((m) => m.missing).length,
   }));
+  // M17: cabinet-wide colour ranking (purchase suggestions are matched against the inventory in the renderer)
+  ipcMain.handle('lib:colorRanking', () => cabinetColors(cabinetColorRows(db)));
   ipcMain.handle('lib:update', (_e, id, fields) => updateModel(db, id, fields));
   ipcMain.handle('lib:setTags', (_e, id, names) => setTags(db, id, names));
   ipcMain.handle('lib:importPaths', (_e, paths) => importAndNotify(paths));

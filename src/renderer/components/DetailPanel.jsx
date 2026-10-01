@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import MetadataForm, { toDraft, saveDraft } from './MetadataForm.jsx';
 import ModelViewer from './ModelViewer.jsx';
 import ColorAnalysis from './ColorAnalysis.jsx';
-import { ProvenanceBadge, PlateBadge } from './Badges.jsx';
+import { ProvenanceBadge, PlateBadge, ColorLabels } from './Badges.jsx';
 import { isUnlabeled, formatBytes, formatInt, formatBbox, formatDate } from '../format.js';
 
 export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose }) {
@@ -149,7 +149,10 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
       )}
       <ModelViewer model={model} plate={plate} colors={plateInfo ? plateInfo.colors : model.colors} />
       <div className="detail-title">
-        <h2 title={model.name}>{model.name}</h2>
+        <div className="grow">
+          <h2 title={model.name}>{model.name}</h2>
+          <ColorLabels labels={model.color_labels} pct testid="detail-color-tags" />
+        </div>
         {!model.missing && model.format === '3mf' && (
           <button className="primary" data-testid="export-quantized" onClick={export3mf} title="匯出 3MF：顏色量化到捲色，單捲印不出的寫成混合耗材 Mix（原檔不動）">
             <i className="mdi mdi-cube-send" /> 匯出 3MF…

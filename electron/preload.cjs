@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   list: (opts) => ipcRenderer.invoke('lib:list', opts),
   get: (id) => ipcRenderer.invoke('lib:get', id),
   sidebar: () => ipcRenderer.invoke('lib:sidebar'),
+  colorRanking: () => ipcRenderer.invoke('lib:colorRanking'),
   update: (id, fields) => ipcRenderer.invoke('lib:update', id, fields),
   setTags: (id, names) => ipcRenderer.invoke('lib:setTags', id, names),
   importDialog: () => ipcRenderer.invoke('lib:importDialog'),

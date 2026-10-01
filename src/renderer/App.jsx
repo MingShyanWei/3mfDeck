@@ -7,6 +7,7 @@ import SettingsDialog from './components/SettingsDialog.jsx';
 import { SlotsContext, SetSpoolsContext } from './slots.js';
 import { slotsFromColours, DEFAULT_SPOOLS } from '../core/filament.mjs';
 import RecoverDialog from './components/RecoverDialog.jsx';
+import PurchaseDialog from './components/PurchaseDialog.jsx';
 import { runThumbQueue } from './thumbQueue.js';
 
 const SORTS = [
@@ -20,6 +21,8 @@ export default function App() {
   const [counts, setCounts] = useState(null);
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all');
+  const [colors, setColors] = useState([]); // M17 colour-label filter (all must match)
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [sort, setSort] = useState('imported');
   const [view, setView] = useState('grid');
   const [selectedId, setSelectedId] = useState(null);
@@ -55,10 +58,10 @@ export default function App() {
   };
 
   const refresh = useCallback(async () => {
-    const [list, c] = await Promise.all([window.api.list({ q, filter, sort }), window.api.sidebar()]);
+    const [list, c] = await Promise.all([window.api.list({ q, filter, sort, colors }), window.api.sidebar()]);
     setModels(list);
     setCounts(c);
-  }, [q, filter, sort]);
+  }, [q, filter, sort, colors]);
 
   useEffect(() => {
     refresh();
@@ -138,12 +141,20 @@ export default function App() {
       }}
       onDrop={onDrop}
     >
-      <Sidebar counts={counts} filter={filter} onFilter={setFilter} />
+      <Sidebar
+        counts={counts}
+        filter={filter}
+        onFilter={setFilter}
+        colors={colors}
+        onToggleColor={(l) => setColors(colors.includes(l) ? colors.filter((c) => c !== l) : [...colors, l])}
+        onClearColors={() => setColors([])}
+        onPurchase={() => setPurchaseOpen(true)}
+      />
       <main className="main">
         <div className="toolbar">
           <div className="search">
             <i className="mdi mdi-magnify" />
-            <input data-testid="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋名稱、標籤、備註" />
+            <input data-testid="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋名稱、標籤、備註、色名（如：紅）" />
             {q && <button className="icon" onClick={() => setQ('')} title="清除"><i className="mdi mdi-close-circle" /></button>}
           </div>
           <label className="sort">
@@ -264,6 +275,7 @@ export default function App() {
           }}
         />
       )}
+      {purchaseOpen && <PurchaseDialog onClose={() => setPurchaseOpen(false)} />}
       {recoverOpen && (
         <RecoverDialog
           onClose={() => setRecoverOpen(false)}

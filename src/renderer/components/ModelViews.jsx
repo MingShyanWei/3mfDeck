@@ -1,5 +1,5 @@
 // Card grid and list (table) views of the library.
-import { ProvenanceBadge, ColorBadge, MissingBadge, PlateBadge } from './Badges.jsx';
+import { ProvenanceBadge, ColorBadge, MissingBadge, PlateBadge, ColorLabels } from './Badges.jsx';
 import { isUnlabeled, formatBytes, formatInt, formatDate } from '../format.js';
 
 // `picked` (a Set of ids, or null): multi-select checkboxes, used by the 遺失 view
@@ -45,6 +45,7 @@ export function ModelGrid({ models, selectedId, onSelect, picked = null, onPick 
           </div>
           <div className="card-body">
             <div className="name" title={m.name}>{m.name}</div>
+            <ColorLabels labels={m.color_labels} />
             <div className="sub">
               <ColorBadge model={m} />
               {m.color_count != null && <span>·</span>}

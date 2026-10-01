@@ -1,6 +1,7 @@
 // SQLite index (better-sqlite3). Schema per SPEC.md §4.
 // The file system is the source of truth; this is only an index.
 import Database from 'better-sqlite3';
+import { labelFor, labelInQuery, MODEL_LABEL_MIN_PCT } from './colorNames.mjs';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS models (
@@ -36,6 +37,7 @@ CREATE TABLE IF NOT EXISTS color_stats (
   color    TEXT,
   faces    INTEGER,
   pct      REAL,
+  label    TEXT,                -- colour name (M17, colorNames.mjs)
   PRIMARY KEY (model_id, color)
 );
 -- Multi-plate 3MF (SPEC 3.6). Additive: §4 has no plate storage.
@@ -74,7 +76,23 @@ export function openDb(file) {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
+  // M17: databases created before colour labels lack color_stats.label
+  if (!db.prepare('PRAGMA table_info(color_stats)').all().some((c) => c.name === 'label')) {
+    db.exec('ALTER TABLE color_stats ADD COLUMN label TEXT');
+  }
+  backfillColorLabels(db);
   return db;
+}
+
+/** One-time fill of colour labels for rows imported before M17 (label IS NULL). Returns the rows updated. */
+export function backfillColorLabels(db) {
+  const rows = db.prepare('SELECT model_id, color FROM color_stats WHERE label IS NULL').all();
+  if (!rows.length) return 0;
+  const set = db.prepare('UPDATE color_stats SET label = ? WHERE model_id = ? AND color = ?');
+  db.transaction(() => {
+    for (const r of rows) set.run(labelFor(r.color), r.model_id, r.color);
+  })();
+  return rows.length;
 }
 
 /**
@@ -115,8 +133,8 @@ export function insertModel(db, { name, relPath, parsed }) {
 
 // Per-model rows derived from the file: colour stats, plates, mixing
 function insertDerivedRows(db, id, parsed) {
-  const ins = db.prepare('INSERT INTO color_stats (model_id, color, faces, pct) VALUES (?, ?, ?, ?)');
-  for (const c of parsed.colorStats || []) ins.run(id, c.color, c.faces, c.pct);
+  const ins = db.prepare('INSERT INTO color_stats (model_id, color, faces, pct, label) VALUES (?, ?, ?, ?, ?)');
+  for (const c of parsed.colorStats || []) ins.run(id, c.color, c.faces, c.pct, labelFor(c.color));
   const insPlate = db.prepare('INSERT INTO plates (model_id, plate, name, tri_count) VALUES (?, ?, ?, ?)');
   const insPlateColor = db.prepare('INSERT INTO plate_color_stats (model_id, plate, color, faces, pct) VALUES (?, ?, ?, ?, ?)');
   if (parsed.mixing) {
@@ -185,7 +203,14 @@ const LIST_COLUMNS = `m.id, m.name, m.rel_path, m.format, m.size_bytes, m.tri_co
   (SELECT COUNT(*) FROM plates p WHERE p.model_id = m.id) AS plate_count,
   (SELECT cm.full_spectrum FROM color_mixing cm WHERE cm.model_id = m.id) AS full_spectrum,
   (SELECT cm.vertex_mixed_pct FROM color_mixing cm WHERE cm.model_id = m.id) AS vertex_mixed_pct,
-  (SELECT json_group_array(t.name) FROM model_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.model_id = m.id) AS tags`;
+  (SELECT json_group_array(t.name) FROM model_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.model_id = m.id) AS tags,
+  (SELECT json_group_array(json_object('label', l.label, 'pct', l.pct)) FROM (
+     SELECT cs.label, ROUND(SUM(cs.pct), 2) AS pct FROM color_stats cs WHERE cs.model_id = m.id
+     GROUP BY cs.label HAVING SUM(cs.pct) >= ${MODEL_LABEL_MIN_PCT} ORDER BY SUM(cs.pct) DESC LIMIT 3) l) AS color_labels`;
+
+// A model "has" colour label @x when that label covers >= MODEL_LABEL_MIN_PCT of its area
+const hasLabel = (param) => `EXISTS (SELECT 1 FROM color_stats cs WHERE cs.model_id = m.id AND cs.label = @${param}
+  GROUP BY cs.label HAVING SUM(cs.pct) >= ${MODEL_LABEL_MIN_PCT})`;
 
 const SORTS = {
   imported: 'm.imported_at DESC, m.id DESC',
@@ -193,7 +218,7 @@ const SORTS = {
   colors: 'm.color_count IS NULL, m.color_count DESC, m.name COLLATE NOCASE',
 };
 
-const rowOut = (r) => ({ ...r, has_thumb: Boolean(r.has_thumb), full_spectrum: Boolean(r.full_spectrum), tags: JSON.parse(r.tags), bbox_mm: r.bbox_mm ? JSON.parse(r.bbox_mm) : null });
+const rowOut = (r) => ({ ...r, has_thumb: Boolean(r.has_thumb), full_spectrum: Boolean(r.full_spectrum), tags: JSON.parse(r.tags), color_labels: JSON.parse(r.color_labels), bbox_mm: r.bbox_mm ? JSON.parse(r.bbox_mm) : null });
 
 // Trashed models keep their row (metadata survives a restore); their file
 // lives under <root>/.trash/, so rel_path tells them apart.
@@ -201,19 +226,27 @@ const TRASHED = `m.rel_path LIKE '.trash/%'`;
 
 /**
  * List models.
- * - q: substring match on name, notes, tags (case-insensitive)
+ * - q: substring match on name, notes, tags (case-insensitive); a colour name
+ *   (「紅」/「紅色」) also matches models carrying that colour label
  * - filter: 'all' | 'unlabeled' | 'type:<provenance_type>' | 'platform:<name>' | 'tag:<name>' | 'trash'
  *   (every filter except 'trash' excludes trashed models)
+ * - colors: colour labels; a model must carry every one of them (M17)
  * - sort: 'imported' | 'name' | 'colors'
  */
-export function listModels(db, { q = '', filter = 'all', sort = 'imported' } = {}) {
+export function listModels(db, { q = '', filter = 'all', sort = 'imported', colors = [] } = {}) {
   const where = [filter === 'trash' ? TRASHED : `NOT ${TRASHED}`];
   const params = {};
   if (q.trim()) {
     params.q = `%${q.trim()}%`;
+    const qLabel = labelInQuery(q);
+    if (qLabel) params.qlabel = qLabel;
     where.push(`(m.name LIKE @q OR m.notes LIKE @q OR EXISTS (
-      SELECT 1 FROM model_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.model_id = m.id AND t.name LIKE @q))`);
+      SELECT 1 FROM model_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.model_id = m.id AND t.name LIKE @q)${qLabel ? ` OR ${hasLabel('qlabel')}` : ''})`);
   }
+  colors.forEach((c, i) => {
+    params[`c${i}`] = c;
+    where.push(hasLabel(`c${i}`));
+  });
   if (filter === 'unlabeled') where.push(`(m.provenance_type IS NULL OR m.provenance_type = 'unknown')`);
   else if (filter.startsWith('type:')) {
     where.push('m.provenance_type = @ftype');
@@ -233,7 +266,7 @@ export function listModels(db, { q = '', filter = 'all', sort = 'imported' } = {
 export function getModel(db, id) {
   const row = db.prepare(`SELECT ${LIST_COLUMNS} FROM models m WHERE m.id = ?`).get(id);
   if (!row) return null;
-  const colors = db.prepare('SELECT color, faces, pct FROM color_stats WHERE model_id = ? ORDER BY faces DESC, color').all(id);
+  const colors = db.prepare('SELECT color, faces, pct, label FROM color_stats WHERE model_id = ? ORDER BY faces DESC, color').all(id);
   const plateColors = db.prepare('SELECT color, faces, pct FROM plate_color_stats WHERE model_id = ? AND plate = ? ORDER BY faces DESC, color');
   const plates = db
     .prepare('SELECT plate, name, tri_count FROM plates WHERE model_id = ? ORDER BY plate')
@@ -259,7 +292,21 @@ export function sidebarCounts(db) {
       .prepare(`SELECT t.name, COUNT(*) AS n FROM tags t JOIN model_tags mt ON mt.tag_id = t.id JOIN models m ON m.id = mt.model_id WHERE ${live} GROUP BY t.id ORDER BY t.name COLLATE NOCASE`)
       .all(),
     trash: one(`SELECT COUNT(*) FROM models m WHERE ${TRASHED}`),
+    // models per colour label (M17); same rule as the list filter
+    colors: db
+      .prepare(
+        `SELECT label, COUNT(*) AS n FROM (
+           SELECT cs.model_id, cs.label FROM color_stats cs JOIN models m ON m.id = cs.model_id WHERE ${live}
+           GROUP BY cs.model_id, cs.label HAVING SUM(cs.pct) >= ${MODEL_LABEL_MIN_PCT})
+         GROUP BY label`,
+      )
+      .all(),
   };
+}
+
+/** Colour rows of every live model, for the cabinet-wide colour summary (M17). */
+export function cabinetColorRows(db) {
+  return db.prepare(`SELECT cs.model_id, cs.color, cs.pct, cs.label FROM color_stats cs JOIN models m ON m.id = cs.model_id WHERE NOT ${TRASHED}`).all();
 }
 
 export function setRelPath(db, id, relPath) {
