@@ -1,3 +1,4 @@
+import { t } from './i18n/index.mjs';
 // M22 (SPEC 3.11): the version is the build time — 1.<YYMMDDHHMM>, local time.
 // Injected at `vite build` (vite.config.js define); nothing is fetched.
 const pad = (n) => String(n).padStart(2, '0');
@@ -21,7 +22,7 @@ export function formatBuildTime(date) {
 export function versionLabel(info, packaged) {
   const date = new Date(info.time);
   const version = formatVersion(date) + (packaged ? '' : ' dev');
-  return { version, tooltip: `建置時間 ${formatBuildTime(date)} · git ${info.commit}${packaged ? '' : ' · 開發模式（未打包）'}` };
+  return { version, tooltip: t(packaged ? 'version.tooltip' : 'version.tooltipDev', { time: formatBuildTime(date), commit: info.commit }) };
 }
 
 // Author and source repository, shown in the sidebar footer and the About panel.

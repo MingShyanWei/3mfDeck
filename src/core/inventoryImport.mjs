@@ -1,3 +1,4 @@
+import { t as tr } from './i18n/index.mjs';
 // M12b: import a 3dfilamentprofiles.com "My Spools" export into the inventory.
 // Format (verified against a real export, 2026-10-01): a JSON array of
 //   { brand, material, material_type, color, rgb, ... }
@@ -59,7 +60,7 @@ export function import3dfpInventory(text) {
   if (t.startsWith('[') || t.startsWith('{')) {
     const data = JSON.parse(t);
     rows = Array.isArray(data) ? data : Array.isArray(data.spools) ? data.spools : null;
-    if (!rows) throw new Error('無法辨識的匯出格式（預期為陣列）');
+    if (!rows) throw new Error(tr('inventory.err.format'));
   } else {
     rows = parseCsv(t);
   }
@@ -69,7 +70,7 @@ export function import3dfpInventory(text) {
   for (const s of rows) {
     const hex = String(s.rgb ?? '').trim().toUpperCase();
     if (!HEX.test(hex)) {
-      skipped.push({ raw: JSON.stringify(s).slice(0, 80), why: '缺少有效 rgb 色碼' });
+      skipped.push({ raw: JSON.stringify(s).slice(0, 80), why: tr('inventory.err.noRgb') });
       continue;
     }
     if (seen.has(hex)) continue; // duplicate colour: keep the first

@@ -54,8 +54,8 @@ describe('migrateUserData', () => {
     expect(JSON.parse(await fs.readFile(path.join(fresh, MARKER), 'utf8'))).toMatchObject({ from: old, at: '2026-10-02T00:00:00.000Z' });
     const db = openDb(path.join(fresh, 'library.db'));
     expect(listModels(db).map((m) => [m.name, m.color_labels.map((l) => l.label)])).toEqual([
-      ['materials', ['橙', '藍', '白']],
-      ['painted', ['青', '粉', '黃']],
+      ['materials', ['orange', 'white', 'blue']], // white and blue tie at 25 %
+      ['painted', ['cyan', 'pink', 'yellow']],
     ]);
     db.close();
   });

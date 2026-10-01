@@ -1,125 +1,132 @@
 # 3mfDeck
 
-**離線的 3MF 檔案櫃 ＋ 線材配色參謀。**
+**English** · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md)
 
-把散在硬碟、MakerWorld、Meshy 的 3MF 檔收進一個櫃子，看得見 3D、看得懂顏色、算得出該用哪幾捲線材，最後匯出可以直接在 Snapmaker Orca 開啟列印的檔案。
+**An offline 3MF library and filament colour advisor.**
+
+Collect the 3MF files scattered across your disk, MakerWorld and Meshy into one library: see them in 3D, understand their colours, work out which spools to load, and export files that open and print straight away in Snapmaker Orca.
 
 <!-- Screenshots live in docs/screenshots/ (open-source/own fixture models only). -->
 
 ---
 
-## 為什麼做這個
+## Why
 
-下載模型很容易，之後才是麻煩：
+Downloading models is easy; the trouble starts afterwards:
 
-| 痛點 | 3mfDeck 怎麼解 |
+| Pain point | How 3mfDeck solves it |
 |---|---|
-| 檔案四散，忘記哪個是原始檔、哪個是轉檔 | 匯入即**搬進**集中資料夾（`~/3mf-library/`，可在設定頁改根目錄），檔案系統為真、DB 只是索引 |
-| 開檔才知道長什麼樣 | 櫃子裡直接 **3D 預覽**；MakerWorld 專案還能看到**創作者產品圖與實拍照** |
-| 不知道這件作品要用哪幾捲線材 | **顏色分析**（面積加權）＋**建議捲色**（Lab k-means，能 3 捲就不叫你買 4 捲） |
-| Full Spectrum 混色全靠猜 | 混色**偵測與配方**：兩捲顏料模型算出混出來的色與 ΔE，告訴你哪一槽幾 % |
-| 匯出的 3MF 在 Orca 打開一堆警告 | **匯出 3MF**：剝除不相容的切片設定，只寫幾何＋顏色＋捲色表；混色寫入 Orca 原生 Mix 虛擬擠出頭 |
-| 別人分享的檔案不是自家印表機的 | **Snapmaker U1 相容性檢查**：非 U1 檔案會警示（含來源機型），可一鍵轉換（噴嘴對應、相容性修正、多盤座標換算） |
-| 刪檔手滑 | 一律進 `.trash/`，可還原，不真刪；同名不覆蓋（加 `-2`） |
+| Files everywhere; which one is the original, which one a conversion? | Importing **moves** files into one library folder (`~/3mf-library/`, changeable in Settings). The file system is the truth; the database is only an index |
+| You only know what a file looks like after opening it | **3D preview** right in the library; MakerWorld projects also show the **creator's product images and photos** |
+| Which spools does this model need? | **Colour analysis** (area-weighted) + **spool suggestions** (Lab k-means — if 3 spools do, it won't tell you to buy 4) |
+| Full Spectrum mixing is guesswork | Mix **detection and recipes**: a two-spool pigment model computes the mixed colour and its ΔE, and tells you which slot at what % |
+| Exported 3MF files open in Orca with a pile of warnings | **Export 3MF**: strips incompatible slicer settings, writes only geometry + colours + spool table; mixes are written as Orca's native Mix virtual extruders |
+| Shared files are set up for someone else's printer | **Snapmaker U1 compatibility check**: non-U1 files are flagged (with the source printer) and can be converted in one click (nozzle matching, compatibility fixes, multi-plate coordinate conversion) |
+| Deleted the wrong file | Everything goes to `.trash/` and can be restored — nothing is really deleted; same names are never overwritten (`-2` is added) |
 
 ---
 
-## 主要功能
+## Features
 
-**檔案櫃**
-- 匯入（選檔／資料夾／拖放）、搜尋、標籤、來源紀錄（MakerWorld／Printables／Meshy／自繪…）、排序、卡片格與表格兩種檢視
-- 遺失處置：根目錄換過導致對不上時，標示「遺失」、可重新定位或移除記錄
-- 多盤 3MF：每盤分開列出，可切換檢視
+**Library**
+- Import (files / folders / drag and drop), search, tags, source records (MakerWorld / Printables / Meshy / self-made…), sorting, card and table views
+- Missing files: when records no longer match (e.g. after changing the library folder) they are marked “missing” and can be relocated or removed
+- Multi-plate 3MF: each plate listed separately, switchable in the viewer
 
-**3D 預覽**
-- three.js 渲染，三種著色模式（原始顏色／耗材映射／混色估計）
-- 詳情面板可切「原檔圖」看 3MF 內嵌的封面、創作者實拍與 Orca 盤面渲染
-- 卡片縮圖優先用內嵌產品主圖，沒有才用 3D 渲染
+**3D preview**
+- three.js rendering with three shading modes (original colours / filament mapping / mix estimate)
+- The detail panel can switch to “Images” to show the 3MF's embedded cover, creator photos and Orca plate renders
+- Card thumbnails use the embedded product image first and fall back to a 3D render
 
-**顏色與線材**
-- 顏色分析：逐面 `paint_color`／`basematerials` 解析，面積加權佔比、抖色偵測
-- 顏色標籤：自動對應中文色名（黑／白／灰／紅／橙／黃／綠／青／藍／紫／粉／棕／膚／金），可依顏色搜尋與過濾
-- 線材庫：登記自己的線捲（品牌、材質、RGB、剩餘量），支援匯入 3dfilamentprofiles 的 JSON/CSV
-- 建議捲色：從現有線材挑，或給理想色碼；CMYK／CMYW 標準配置比較；單色作品也建議
-- 採購建議：統計整個櫃子的面積佔比，對照線材庫算出該優先買哪些顏色
+**Colours and filaments**
+- Colour analysis: per-face `paint_color` / `basematerials` parsing, area-weighted shares, dither detection
+- Colour labels: every colour is mapped to a fixed name (black / white / gray / red / orange / yellow / green / cyan / blue / purple / pink / brown / skin / gold) for searching and filtering; search accepts the name in any UI language (“blue”, 「藍」 and 「蓝」 all work)
+- Filament inventory: register your own spools (brand, material, RGB, remaining amount); imports 3dfilamentprofiles JSON/CSV exports
+- Spool suggestions: pick from what you own, or get ideal colour codes; compare with the CMYK / CMYW standard sets; single-colour models get suggestions too
+- Purchase suggestions: area shares across the whole library, checked against your inventory, tell you which colours to buy first
 
-**匯出**
-- 匯出 3MF：量化到最近捲（含 ΔE 標示），剝除來源切片設定避免 Orca 警告
-- 混色耗材：寫入 `mixed_filament_definitions`（Orca 原生 Full Spectrum 混合耗材），配方僅供參考、不回寫原檔
-- 原檔永不修改，一律產新檔
+**Export**
+- Export 3MF: quantized to the nearest spool (with ΔE), source slicer settings stripped to avoid Orca warnings
+- Mixed filaments: written to `mixed_filament_definitions` (Orca's native Full Spectrum mixed filament); recipes are guidance only and never written back to the original
+- Originals are never modified; every export is a new file
 
-**離線保證**
-- App 本身**不發任何網路請求**（無帳號、無雲端、不連印表機）。唯一的外部呼叫是點側欄作者連結時交給系統瀏覽器開啟。
-- 側欄左下顯示版本號 `1.<YYMMDDHHMM>`（建置時間），滑過去可看完整時間與 commit。
+**UI language**
+- English / 繁體中文 / 简体中文; follows the system language by default, can be switched in Settings and is remembered; dates and numbers are formatted for the language
+
+**Offline guarantee**
+- The app itself **makes no network requests** (no account, no cloud, no printer connection). The only outside call is handing the author link in the sidebar to the system browser.
+- The bottom of the sidebar shows the version `1.<YYMMDDHHMM>` (build time); hover for the full time and commit.
 
 ---
 
-## 支援格式與環境
+## Formats and platforms
 
-| 項目 | 內容 |
+| Item | Details |
 |---|---|
-| 模型格式 | 3MF（完整支援：顏色、多盤、內嵌圖、混色）、STL、OBJ、AMF、GLB／glTF、STEP |
-| 平台 | macOS（主要開發與驗證）、Windows、Linux（**見下方限制**） |
-| 執行環境（開發） | Node ≥ 24（vitest／vite 在 Node 20 會崩） |
+| Model formats | 3MF (full support: colours, plates, embedded images, mixing), STL, OBJ, AMF, GLB / glTF, STEP |
+| Platforms | macOS (main development and verification), Windows, Linux (**see limitations below**) |
+| Runtime (development) | Node ≥ 24 (vitest / vite crash on Node 20) |
 
-## 安裝
+## Install
 
-從 [Releases](https://github.com/MingShyanWei/3mfDeck/releases) 下載對應平台的檔案：
+Download the file for your platform from [Releases](https://github.com/MingShyanWei/3mfDeck/releases):
 
-- **macOS**：`3mfDeck-<版本>-arm64.dmg`，拖進「應用程式」。目前未做 Apple 簽章與公證，第一次開啟請右鍵 →「打開」，或執行
+- **macOS**: `3mfDeck-<version>-arm64.dmg`, drag it into Applications. The app is not yet signed or notarized by Apple; the first time, right-click → “Open”, or run
   `xattr -dr com.apple.quarantine /Applications/3mfDeck.app`
-- **Windows**：`.exe`（NSIS 安裝檔）或免安裝版
-- **Linux**：`.AppImage`（`chmod +x` 後直接執行）或 `.deb`
+- **Windows**: `.exe` (NSIS installer) or the portable version
+- **Linux**: `.AppImage` (`chmod +x`, then run it) or `.deb`
 
-## 開發
+## Development
 
 ```bash
 git clone git@github.com:MingShyanWei/3mfDeck.git
 cd 3mfDeck
 npm install
-npm run dev        # vite build + 啟動 Electron
-npm test           # Vitest 單元測試（235 項）
-npm run smoke      # Electron 端到端 smoke（用隔離的資料夾與資料庫）
-npm run dist       # 打包 macOS dmg
+npm run dev        # vite build + start Electron
+npm test           # Vitest unit tests (249)
+npm run smoke      # Electron end-to-end smoke test (isolated folders and database)
+npm run dist       # package the macOS dmg
 ```
 
-常用環境變數（測試用）：
+Useful environment variables (for testing):
 
-| 變數 | 用途 |
+| Variable | Purpose |
 |---|---|
-| `MF_USER_DATA` | 指定 userData 目錄（隔離測試） |
-| `MF_APP_PATH` | 對安裝版 App 跑 smoke（例：`/Applications/3mfDeck.app/Contents/MacOS/3mfDeck`） |
-| `MF_WINE_3MF` | 指定真實 3MF 檔做實檔驗證 |
+| `MF_USER_DATA` | Use this userData folder (isolated tests) |
+| `MF_APP_PATH` | Run the smoke test against the installed app (e.g. `/Applications/3mfDeck.app/Contents/MacOS/3mfDeck`) |
+| `MF_WINE_3MF` | A real 3MF file for real-file verification |
+| `MF_LANG` | UI language when none has been chosen in Settings (`en` / `zh-TW` / `zh-CN`) |
 
-## 專案結構
+## Project layout
 
 ```
-electron/          Electron 主程序（視窗、IPC、自訂圖片協定 mfimg/mfthumb）
-src/core/          純邏輯，可單獨測試：解析、顏色、混色、匯出、轉換、DB、設定
-  parse/           3MF／STL／OBJ／AMF／GLB／STEP 解析
-  u1Convert.mjs    Snapmaker U1 相容性轉換
-  orcaProfiles.mjs 讀本機 Snapmaker Orca 的機型 profile（僅取幾何資料，不連網）
-src/renderer/      React UI（three.js 預覽、詳情面板、彈窗）
-tests/unit/        Vitest（29 個檔、235 項）
-tests/smoke/       真實 Electron 端到端測試
-reports/           各里程碑驗收證據（截圖、Orca GUI 驗證紀錄）
-SPEC.md            完整功能規格（已定稿）
+electron/          Electron main process (window, IPC, custom image protocols mfimg/mfthumb)
+src/core/          Pure logic, testable on its own: parsing, colours, mixing, export, conversion, DB, settings
+  parse/           3MF / STL / OBJ / AMF / GLB / STEP parsers
+  u1Convert.mjs    Snapmaker U1 compatibility conversion
+  orcaProfiles.mjs Reads the local Snapmaker Orca printer profiles (geometry only, no network)
+src/core/i18n/     UI dictionaries (en / zh-TW / zh-CN)
+src/renderer/      React UI (three.js preview, detail panel, dialogs)
+tests/unit/        Vitest (30 files, 249 tests)
+tests/smoke/       Real Electron end-to-end test
+reports/           Acceptance evidence per milestone (screenshots, Orca GUI verification notes)
+SPEC.md            Full functional specification (final)
 ```
 
-## 設計原則
+## Design principles
 
-1. **檔案系統為真**：DB 只是索引，刪掉能從檔案重建。
-2. **刪檔不真刪**：一律進 `.trash/`，可還原。
-3. **原檔永不動**：匯出、轉換都產新檔。
-4. **匯入即搬檔**：集中管理，不搬不給匯入。
-5. **離線**：任何功能都不需要網路。
+1. **The file system is the truth**: the DB is only an index and can be rebuilt from the files.
+2. **Deleting never really deletes**: everything goes to `.trash/` and can be restored.
+3. **Originals are never touched**: exports and conversions always create new files.
+4. **Import means move**: one managed library; files are moved in on import.
+5. **Offline**: no feature needs the network.
 
-## 已知限制
+## Known limitations
 
-- **Windows／Linux 未有實機驗證**：目前以 CI 產出安裝檔，尚未在實機跑過 smoke；macOS 是唯一完成端到端驗證的平台。
-- **Orca CLI 不能用來驗 3MF**：沒載印表機 profile 會 segfault（`exit 139`），連原始檔也一樣。驗證一律以 **Orca GUI 開啟**為準。
-- **混色配方無法逐面寫兩捲**：Orca 逐面只記一捲，因此混色以虛擬擠出頭（Mix）表達。
-- **大檔案**：內含 500MB 以上模型（如某些 Meshy 匯出）需用串流解析，處理時間較長。
+- **Windows / Linux not verified on real machines**: installers are currently produced by CI and have not been smoke-tested on real hardware; macOS is the only platform verified end to end.
+- **The Orca CLI cannot validate 3MF files**: without a printer profile loaded it segfaults (`exit 139`), even on the original file. Verification is always done by **opening the file in the Orca GUI**.
+- **Mix recipes cannot be written per face as two spools**: Orca records one spool per face, so mixes are expressed as virtual extruders (Mix).
+- **Large files**: models of 500 MB or more (e.g. some Meshy exports) need streaming parsing and take longer.
 
 ## License
 

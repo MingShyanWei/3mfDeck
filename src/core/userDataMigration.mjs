@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const OLD_APP_NAME = '3MF 櫃';
+export const OLD_APP_NAME = '3MF 櫃'; // i18n-ignore: the old userData folder name, not UI text
 // The SQLite database with its WAL companions (copied together so no committed
 // page is lost) and the settings file; nothing else in the folder is app data
 // (the rest is Chromium cache, rebuilt on demand).

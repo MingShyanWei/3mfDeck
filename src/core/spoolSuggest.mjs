@@ -5,6 +5,7 @@
 // smallest k meeting the target is recommended.
 import { rgbToLab, hexToRgb, nearestSlot, deltaE2000, MIX_DELTA_E, slotsFromColours } from './filament.mjs';
 import { mixPrintPlan } from './mixExport.mjs';
+import { t } from './i18n/index.mjs';
 
 /** CIE L*a*b* (D65) -> sRGB hex (inverse of rgbToLab). */
 export function labToHex([L, a, b]) {
@@ -29,8 +30,8 @@ const dist2 = (p, q) => (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) 
  * CMYK for dark palettes, CMYW (white instead of black) for light ones.
  */
 export const STANDARD_PRESETS = [
-  { id: 'cmyk', name: 'CMYK 標準四色', hexes: ['#00FFFF', '#FF00FF', '#FFFF00', '#000000'] },
-  { id: 'cmyw', name: 'CMYW 淡色用（白代黑）', hexes: ['#00FFFF', '#FF00FF', '#FFFF00', '#FFFFFF'] },
+  { id: 'cmyk', get name() { return t('preset.cmyk'); }, hexes: ['#00FFFF', '#FF00FF', '#FFFF00', '#000000'] },
+  { id: 'cmyw', get name() { return t('preset.cmyw'); }, hexes: ['#00FFFF', '#FF00FF', '#FFFF00', '#FFFFFF'] },
 ];
 
 /**
@@ -122,7 +123,7 @@ export function suggestSpools(colorStats, maxK = 4, { threshold = MIX_DELTA_E, t
     for (const c of colorStats) {
       const near = nearestSlot(c.color, slots);
       let mode = 'single';
-      let via = `槽${near.slot}`;
+      let via = t('slot.n', { n: near.slot });
       if (near.deltaE > threshold) {
         const plan = mixPrintPlan(c.color, slots, threshold);
         if (plan.mode === 'mix' && plan.mixable) {
@@ -130,7 +131,7 @@ export function suggestSpools(colorStats, maxK = 4, { threshold = MIX_DELTA_E, t
           via = plan.mix.text;
         } else {
           mode = 'buy';
-          via = `最近 槽${near.slot} ΔE ${Math.round(near.deltaE * 10) / 10}`;
+          via = t('suggest.viaNearest', { slot: t('slot.n', { n: near.slot }), dE: Math.round(near.deltaE * 10) / 10 });
         }
       }
       if (mode !== 'buy') singleFaces += mode === 'single' ? c.faces : 0;

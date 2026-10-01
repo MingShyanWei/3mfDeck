@@ -4,6 +4,7 @@ import path from 'node:path';
 import { indexNewFiles } from './importer.mjs';
 import { listModels, getModel } from './db.mjs';
 import { DEFAULT_SPOOLS } from './filament.mjs';
+import { t } from './i18n/index.mjs';
 
 const file = (userDataDir) => path.join(userDataDir, 'config.json');
 
@@ -22,6 +23,7 @@ export function loadSettings(userDataDir, defaultRoot) {
     notifiedMissing: saved.notifiedMissing || [],
     spools: saved.spools || DEFAULT_SPOOLS,
     inventory: (Array.isArray(saved.inventory) ? saved.inventory : []),
+    language: saved.language ?? null, // M24: null until the user picks one (then the system locale decides)
   };
 }
 
@@ -30,12 +32,12 @@ export function loadSettings(userDataDir, defaultRoot) {
  * The suggestion picks spools from here first. Throws on invalid input.
  */
 export function validateInventory(list) {
-  if (!Array.isArray(list)) throw new Error('線材庫格式錯誤');
+  if (!Array.isArray(list)) throw new Error(t('settings.err.inventoryFormat'));
   const seen = new Set();
   return list.map((f) => {
     const hex = String(f?.hex || '').toUpperCase();
-    if (!/^#[0-9A-F]{6}$/.test(hex)) throw new Error(`色碼格式錯誤：${f?.hex}（需為 #RRGGBB）`);
-    if (seen.has(hex)) throw new Error(`線材庫有重複色碼：${hex}`);
+    if (!/^#[0-9A-F]{6}$/.test(hex)) throw new Error(t('settings.err.hex', { hex: f?.hex }));
+    if (seen.has(hex)) throw new Error(t('settings.err.duplicate', { hex }));
     seen.add(hex);
     return { name: String(f?.name || '').trim().slice(0, 60), hex };
   });
@@ -46,9 +48,9 @@ export function validateInventory(list) {
  * actual filaments loaded. Throws on invalid input; returns the normalized list.
  */
 export function validateSpools(spools) {
-  if (!Array.isArray(spools) || spools.length < 1 || spools.length > 4) throw new Error('捲數必須是 1–4');
+  if (!Array.isArray(spools) || spools.length < 1 || spools.length > 4) throw new Error(t('settings.err.spoolCount'));
   return spools.map((h) => {
-    if (!/^#[0-9a-fA-F]{6}$/.test(h)) throw new Error(`色碼格式錯誤：${h}（需為 #RRGGBB）`);
+    if (!/^#[0-9a-fA-F]{6}$/.test(h)) throw new Error(t('settings.err.hex', { hex: h }));
     return h.toUpperCase();
   });
 }

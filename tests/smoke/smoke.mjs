@@ -54,12 +54,15 @@ function colourCounts(buf, order = 'rgba') {
   return counts;
 }
 const present = (counts, min = 150) => Object.keys(counts).filter((k) => counts[k] >= min && k !== 'transparent' && k !== 'other').sort();
+// colour label keys -> the Traditional Chinese names the zh-TW UI shows
+const ZH_LABEL = { black: '黑', white: '白', gray: '灰', red: '紅', orange: '橙', yellow: '黃', green: '綠', cyan: '青', blue: '藍', purple: '紫', pink: '粉', brown: '棕', skin: '膚', gold: '金', other: '其他' };
 const step = (msg) => console.log(`• ${msg}`);
 
 const consoleProblems = [];
 const APP_PATH = process.env.MF_APP_PATH;
 async function launch(extraEnv = {}) {
-  const env = { ...process.env, MF_USER_DATA: path.join(base, 'userData'), MF_LIBRARY_ROOT: lib, ...extraEnv };
+  // MF_LANG: the steps below assert the Traditional Chinese UI (a saved language choice still wins)
+  const env = { ...process.env, MF_USER_DATA: path.join(base, 'userData'), MF_LIBRARY_ROOT: lib, MF_LANG: 'zh-TW', ...extraEnv };
   const a = await electron.launch(APP_PATH ? { executablePath: APP_PATH, args: [], env } : { args: [ROOT], env });
   a.process().stderr.on('data', (d) => {
     const s = d.toString();
@@ -979,13 +982,14 @@ try {
     page.$$eval('[data-testid=model-card]', (cards) =>
       Object.fromEntries(cards.map((c) => [c.querySelector('.name').textContent, [...c.querySelectorAll('[data-testid=color-tags] .ctag')].map((t) => t.dataset.label)])),
     );
-  assert.deepEqual(await cardLabels(), { 'm17-materials': ['橙', '藍', '白'], 'm17-painted': ['青', '粉', '黃'] });
+  // labels are language-neutral keys (M24), shown in the UI language
+  assert.deepEqual(await cardLabels(), { 'm17-materials': ['orange', 'white', 'blue'], 'm17-painted': ['cyan', 'pink', 'yellow'] });
   // sidebar 顏色 filter: chips with counts; several selected = all must match
-  assert.match(await page.textContent('[data-testid=filter-color-藍]'), /藍\s*\d+/);
-  await page.click('[data-testid=filter-color-藍]');
+  assert.match(await page.textContent('[data-testid=filter-color-blue]'), /藍\s*\d+/);
+  await page.click('[data-testid=filter-color-blue]');
   await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 1);
   assert.equal(await page.textContent('[data-testid=model-card] .name'), 'm17-materials');
-  await page.click('[data-testid=filter-color-青]');
+  await page.click('[data-testid=filter-color-cyan]');
   await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 0);
   await page.click('[data-testid=color-filter-clear]');
   await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 2);
@@ -1003,12 +1007,13 @@ try {
   const purchaseRows = await page.$$eval('[data-testid=purchase-row]', (r) => r.map((x) => [x.dataset.label, x.dataset.suggest]));
   assert.ok(purchaseRows.length >= 8, 'every colour name in the cabinet is ranked ' + JSON.stringify(purchaseRows));
   const firstSuggest = purchaseRows.find(([, s]) => s === '1')[0];
-  assert.match(await page.textContent('[data-testid=purchase-suggestions]'), new RegExp(`建議優先購買：.*${firstSuggest}`));
+  const firstSuggestName = ZH_LABEL[firstSuggest];
+  assert.match(await page.textContent('[data-testid=purchase-suggestions]'), new RegExp(`建議優先購買：.*${firstSuggestName}`));
   await page.click(`[data-testid=purchase-add-${firstSuggest}]`);
   await page.waitForSelector(`[data-testid=purchase-added-${firstSuggest}]`);
   const inv = (await page.evaluate(() => window.api.getSettings())).inventory;
   assert.equal(inv.length, 1);
-  assert.match(inv[0].name, new RegExp(`^${firstSuggest}（建議色）$`));
+  assert.match(inv[0].name, new RegExp(`^${firstSuggestName}（建議色）$`));
   assert.equal(await page.getAttribute(`[data-testid=purchase-row][data-label=${firstSuggest}]`, 'data-suggest'), '0', 'added colour is now covered by the inventory');
   await page.click('[data-testid=purchase-close]');
   await page.evaluate(() => window.api.setInventory([])); // leave the inventory empty again
@@ -1191,6 +1196,61 @@ try {
     await page.click('[data-testid=app-credit]');
     assert.equal(await app.evaluate(() => globalThis.__openedExternal), 'https://github.com/MingShyanWei/3mfDeck');
     step(`M22 版本: ${version}（${tooltip}）；作者列「${credit}」點擊交給系統瀏覽器`);
+  }
+
+  // 17) M24: UI language — settings switch (en / zh-CN / zh-TW), menu, Intl, cross-language colour search, remembered
+  {
+    const sidebarText = () => page.textContent('.sidebar');
+    const menuLabels = () => app.evaluate(({ Menu }) => Menu.getApplicationMenu().items.map((i) => i.label));
+    const cards = () => page.$$eval('[data-testid=model-card] .name', (n) => n.map((x) => x.textContent));
+    const search = async (q, name) => {
+      await page.fill('[data-testid=search]', q);
+      await page.waitForFunction((n) => [...document.querySelectorAll('[data-testid=model-card] .name')].some((x) => x.textContent === n), name);
+      assert.ok(!(await cards()).includes('m17-painted'), `「${q}」 does not match the CMYK file`);
+    };
+    const setLanguage = async (lang, marker) => {
+      await page.click('[data-testid=settings-button]');
+      await page.selectOption('[data-testid=settings-language]', lang);
+      await page.waitForFunction((m) => document.querySelector('.sidebar').textContent.includes(m), marker);
+      await page.click('[data-testid=settings-done]');
+    };
+    await page.click('[data-testid=settings-button]');
+    assert.equal(await page.inputValue('[data-testid=settings-language]'), 'zh-TW');
+    assert.deepEqual(await page.$$eval('[data-testid=settings-language] option', (o) => o.map((x) => x.textContent)), ['English', '繁體中文', '简体中文']);
+    await page.click('[data-testid=settings-done]');
+
+    await setLanguage('en', 'Trash');
+    assert.match(await sidebarText(), /All.*Source.*Colours.*Tags/s);
+    assert.match(await page.textContent('[data-testid=filter-color-blue]'), /Blue\s*\d+/);
+    assert.equal(await page.getAttribute('[data-testid=search]', 'placeholder'), 'Search names, tags, notes, colours (e.g. red)');
+    assert.ok(!/[\u4e00-\u9fff]/.test((await sidebarText()).replace('3mfDeck', '')), 'no Chinese left in the English sidebar: ' + (await sidebarText()));
+    assert.ok((await menuLabels()).includes('File'), 'menu rebuilt in English: ' + (await menuLabels()));
+    await search('white', 'm17-materials');
+    await search('白', 'm17-materials'); // a Chinese name still works in the English UI
+    await openModel('m17-painted');
+    assert.match(await page.textContent('[data-testid=detail-panel]'), /Colour analysis/);
+    assert.deepEqual(await page.$$eval('[data-testid=detail-color-tags] .ctag', (t) => t.map((x) => x.textContent.trim())), ['Cyan50%', 'Pink25%', 'Yellow16.67%']);
+    const enInfo = await page.textContent('[data-testid=detail-panel]');
+    const enDate = enInfo.match(/Imported\s*(\d{2}\/\d{2}\/\d{4})/)?.[1];
+    assert.ok(enDate, 'English date MM/DD/YYYY: ' + enInfo.slice(0, 400));
+
+    await setLanguage('zh-CN', '回收站');
+    assert.match(await page.textContent('[data-testid=filter-color-blue]'), /蓝\s*\d+/);
+    assert.ok((await menuLabels()).includes('文件'), 'menu rebuilt in Simplified Chinese: ' + (await menuLabels()));
+    assert.match(await page.textContent('[data-testid=detail-panel]'), /颜色分析/);
+    await search('蓝色', 'm17-materials');
+    await search('blue', 'm17-materials');
+
+    // remembered across restarts (the saved choice beats MF_LANG=zh-TW)
+    assert.equal((await page.evaluate(() => window.api.getSettings())).language, 'zh-CN');
+    await app.close();
+    [app, page] = await launch();
+    assert.match(await sidebarText(), /回收站/);
+    await setLanguage('zh-TW', '回收桶');
+    assert.equal((await page.evaluate(() => window.api.getSettings())).language, 'zh-TW');
+    assert.ok((await menuLabels()).includes('檔案'));
+    await page.fill('[data-testid=search]', '');
+    step(`M24 語言: 設定頁切換 en（側欄/選單 File/搜尋 placeholder/顏色分析/徽章 Cyan50%/日期 ${enDate}）→ zh-CN（回收站/选单 文件/颜色分析）→ 重啟仍為 zh-CN → 切回 zh-TW；跨語言搜尋 white/白/蓝色/blue 皆命中 m17-materials`);
   }
 
   await page.screenshot({ path: path.join(base, 'smoke.png') });

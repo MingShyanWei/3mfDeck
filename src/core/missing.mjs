@@ -10,6 +10,7 @@ import { getModel, listModels, setRelPath, deleteModels, knownRelPaths, replaceD
 import { parseFile, SUPPORTED_EXTS } from './parse/index.mjs';
 import { loadSettings, saveSettings } from './settings.mjs';
 import { untrackedFiles } from './importer.mjs';
+import { t } from './i18n/index.mjs';
 
 /** Ids of all records (library and trash) whose file does not exist under root. */
 export function missingIds(db, root) {
@@ -54,10 +55,10 @@ export const isInside = (root, abs) => {
  */
 export async function relocateModel(db, root, id, absPath, now = new Date()) {
   if (!getModel(db, id)) throw new Error(`no model ${id}`);
-  if (!SUPPORTED_EXTS.includes(path.extname(absPath).toLowerCase())) throw new Error(`不支援的格式：${path.basename(absPath)}`);
+  if (!SUPPORTED_EXTS.includes(path.extname(absPath).toLowerCase())) throw new Error(t('missing.err.unsupported', { file: path.basename(absPath) }));
   if (isInside(root, absPath)) {
     const rel = path.relative(root, absPath);
-    if (knownRelPaths(db).has(rel)) throw new Error(`這個檔案已經在櫃中（${rel}）`);
+    if (knownRelPaths(db).has(rel)) throw new Error(t('missing.err.alreadyIndexed', { rel }));
     await apply(db, root, id, rel);
     return rel;
   }
@@ -172,7 +173,7 @@ export async function findInTrash(root, relPath) {
 export async function restoreMissingFromTrash(db, root, id) {
   const m = getModel(db, id);
   const found = await findInTrash(root, m.rel_path);
-  if (!found) throw new Error(`回收桶裡找不到 ${m.rel_path}`);
+  if (!found) throw new Error(t('missing.err.notInTrash', { rel: m.rel_path }));
   const rel = await moveWithinRoot(root, found, m.rel_path);
   setRelPath(db, id, rel);
   return rel;

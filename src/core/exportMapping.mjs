@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import { decodePaintColor } from './paintColor.mjs';
 import { printPlan, recipeText, U1_SLOTS, MIX_DELTA_E } from './filament.mjs';
 import { mixPrintPlan, mixedFilamentDefinitions, MIXED_PROJECT_DEFAULTS } from './mixExport.mjs';
+import { t } from './i18n/index.mjs';
 
 // Orca's paint_color string for extruder n (Model.cpp CONST_FILAMENTS; 1..17)
 export function encodeExtruder(n) {
@@ -71,12 +72,12 @@ const csvCell = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '
  * 原始色, 面數, 佔比, 指定捲槽 (the slot the quantized export uses), ΔE 或配方, 備註.
  */
 export function mappingCsv(colors, slots = U1_SLOTS, { threshold = MIX_DELTA_E, overThreshold = 'nearest' } = {}) {
-  const rows = [['原始色', '面數', '佔比', '指定捲槽', 'ΔE 或配方', '備註']];
+  const rows = [['csv.color', 'csv.faces', 'csv.share', 'csv.slot', 'csv.deltaOrRecipe', 'csv.note'].map((k) => t(k))];
   for (const c of colors) {
     const plan = printPlan(c.color, slots, threshold);
-    const slot = [`槽${plan.nearest.slot}`, plan.nearest.name, plan.nearest.hex].filter(Boolean).join(' ');
+    const slot = [t('slot.n', { n: plan.nearest.slot }), plan.nearest.name, plan.nearest.hex].filter(Boolean).join(' ');
     if (plan.mode === 'single') {
-      rows.push([c.color, c.faces, pctText(c.pct), slot, `ΔE ${plan.nearest.deltaE}`, '單捲']);
+      rows.push([c.color, c.faces, pctText(c.pct), slot, `ΔE ${plan.nearest.deltaE}`, t('csv.single')]);
       continue;
     }
     const skipped = overThreshold === 'skip';
@@ -84,9 +85,9 @@ export function mappingCsv(colors, slots = U1_SLOTS, { threshold = MIX_DELTA_E, 
       c.color,
       c.faces,
       pctText(c.pct),
-      skipped ? '（跳過，不指定）' : slot,
-      `配方 ${recipeText(plan.recipe)}（ΔE ${plan.recipe.deltaE}）；量化到最近捲 ΔE ${plan.nearest.deltaE}`,
-      `${plan.mixable ? '需混色' : '需購買'}；量化匯出：${skipped ? '跳過該面' : `量化到最近捲（ΔE ${plan.nearest.deltaE}）`}`,
+      skipped ? t('csv.skippedSlot') : slot,
+      t('csv.recipe', { recipe: recipeText(plan.recipe), dE: plan.recipe.deltaE, nearDE: plan.nearest.deltaE }),
+      t(plan.mixable ? 'csv.noteMix' : 'csv.noteBuy', { export: skipped ? t('csv.exportSkip') : t('csv.exportNearest', { dE: plan.nearest.deltaE }) }),
     ]);
   }
   return '﻿' + rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';

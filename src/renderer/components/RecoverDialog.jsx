@@ -1,7 +1,8 @@
 // 「依檔名找回」: preview name matches for missing records, apply the confirmed ones.
 import { useEffect, useState } from 'react';
+import { t } from '../../core/i18n/index.mjs';
 
-const STATUS = { match: '找到', ambiguous: '多個候選', none: '找不到' };
+const STATUS = { match: 'recover.match', ambiguous: 'recover.ambiguous', none: 'recover.none' };
 
 export default function RecoverDialog({ onClose, onApplied }) {
   const [rows, setRows] = useState(null);
@@ -30,24 +31,24 @@ export default function RecoverDialog({ onClose, onApplied }) {
   const count = (s) => rows?.filter((r) => r.status === s).length ?? 0;
   return (
     <div className="modal-backdrop">
-      <div className="modal wide" role="dialog" aria-label="依檔名找回" data-testid="recover-dialog">
+      <div className="modal wide" role="dialog" aria-label={t('recover.title')} data-testid="recover-dialog">
         <header>
-          <h2><i className="mdi mdi-file-find-outline" /> 依檔名找回</h2>
-          <div className="muted small">在目前根目錄（含子資料夾）尋找與遺失記錄同名、尚未被使用的檔案；確認後原地重新定位，不搬檔。</div>
+          <h2><i className="mdi mdi-file-find-outline" /> {t('recover.title')}</h2>
+          <div className="muted small">{t('recover.intro')}</div>
         </header>
-        {!rows && <p className="muted"><i className="mdi mdi-loading mdi-spin" /> 搜尋中…</p>}
+        {!rows && <p className="muted"><i className="mdi mdi-loading mdi-spin" /> {t('recover.searching')}</p>}
         {rows && (
           <>
             <p className="small" data-testid="recover-summary">
-              找到 {count('match')} 筆 · 多個候選 {count('ambiguous')} 筆（請逐筆重新定位）· 找不到 {count('none')} 筆
+              {t('recover.summary', { match: count('match'), ambiguous: count('ambiguous'), none: count('none') })}
             </p>
             <table className="dist recover">
               <thead>
                 <tr>
                   <th />
-                  <th>記錄</th>
-                  <th>原路徑</th>
-                  <th>→ 找到的檔案</th>
+                  <th>{t('recover.record')}</th>
+                  <th>{t('recover.oldPath')}</th>
+                  <th>{t('recover.found')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -64,10 +65,10 @@ export default function RecoverDialog({ onClose, onApplied }) {
                       {r.status === 'match' ? (
                         <>
                           {r.match}
-                          {!r.sameSize && <span className="badge badge-warn" title="檔案大小與記錄不同，可能不是同一個檔案">大小不同</span>}
+                          {!r.sameSize && <span className="badge badge-warn" title={t('recover.sizeDiffTitle')}>{t('recover.sizeDiff')}</span>}
                         </>
                       ) : (
-                        <span className="muted">{STATUS[r.status]}：{r.candidates.join('、')}</span>
+                        <span className="muted">{t('recover.candidates', { status: t(STATUS[r.status]), list: r.candidates.join(t('common.listSep')) })}</span>
                       )}
                     </td>
                   </tr>
@@ -78,15 +79,15 @@ export default function RecoverDialog({ onClose, onApplied }) {
         )}
         {result && (
           <p className="small ok" data-testid="recover-result">
-            已重新定位 {result.done.length} 筆{result.errors.length ? `，失敗 ${result.errors.length} 筆：${result.errors.map((e) => e.error).join('；')}` : ''}
+            {t('recover.done', { n: result.done.length })}{result.errors.length ? t('recover.failed', { n: result.errors.length, errors: result.errors.map((e) => e.error).join(t('common.errorSep')) }) : ''}
           </p>
         )}
         <footer>
           <span className="spacer" />
-          <button onClick={onClose} data-testid="recover-close">{result ? '完成' : '取消'}</button>
+          <button onClick={onClose} data-testid="recover-close">{result ? t('common.done') : t('dlg.cancel')}</button>
           {!result && (
             <button className="primary" data-testid="recover-apply" disabled={!checked.size} onClick={apply}>
-              套用 {checked.size} 筆
+              {t('recover.apply', { n: checked.size })}
             </button>
           )}
         </footer>

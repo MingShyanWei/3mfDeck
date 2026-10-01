@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import { StringDecoder } from 'node:string_decoder';
 import JSZip from 'jszip';
 import { U1_MODEL } from './orcaProfiles.mjs';
+import { t } from './i18n/index.mjs';
 
 /** Printer info of a project_settings object: { printer, settingsId, process, isU1 }, or null without one. */
 export function detectPrinter(ps) {
@@ -94,7 +95,7 @@ export function u1ProjectSettings(ps, profiles, { variableLayerHeight = false } 
   const nozzle = nearestNozzle(Number([].concat(ps.nozzle_diameter ?? 0.4)[0]));
   const machine = profiles.machines.find((m) => m.nozzle === nozzle);
   const process = pickProcess(profiles, nozzle, Number(ps.layer_height ?? 0.2));
-  if (!machine || !process) throw new Error(`本機 Snapmaker Orca 沒有 ${nozzle} mm 噴嘴的 U1 設定檔`);
+  if (!machine || !process) throw new Error(t('u1.err.noNozzleProfile', { nozzle }));
   const colours = ps.filament_colour || [];
   const n = colours.length;
   const types = (ps.filament_type || []).slice(0, n);
@@ -128,14 +129,14 @@ export function u1ProjectSettings(ps, profiles, { variableLayerHeight = false } 
     if (!processKeys.includes(k)) processKeys.push(k);
     if (String(ps[k]) !== v) fixes.push(note);
   };
-  set('exclude_object', '1', '啟用 Exclude Object');
-  set('brim_type', 'no_brim', '關閉 Brim');
+  set('exclude_object', '1', t('u1.fix.excludeObject'));
+  set('brim_type', 'no_brim', t('u1.fix.noBrim'));
   const supportType = String(out.support_type ?? ps.support_type ?? '');
   const supportsOn = String(out.enable_support ?? ps.enable_support ?? '0') === '1';
   if (variableLayerHeight && supportsOn && supportType.startsWith('tree')) {
     // Orca: "Variable layer height is not supported with Organic supports" (Tree default = Organic)
     out.support_type = supportType;
-    set('support_style', 'tree_hybrid', '可變層高：Tree 支撐改為 Hybrid');
+    set('support_style', 'tree_hybrid', t('u1.fix.treeHybrid'));
   }
   const filamentKeys = colours.map(() => []);
   for (const k of FILAMENT_CARRY) {
@@ -314,13 +315,13 @@ export async function convertPlates(zip, rootPath, srcBed, u1Bed) {
     const tolX = srcBed.w * 0.1;
     const tolY = srcBed.h * 0.1;
     if (cx < srcBed.minX - tolX || cx > srcBed.maxX + tolX || cy < srcBed.minY - tolY || cy > srcBed.maxY + tolY) {
-      report.push({ plate, status: 'kept', reason: '物件不在來源盤面範圍內，無法安全換算' });
+      report.push({ plate, status: 'kept', reason: t('u1.kept.offPlate') });
       continue;
     }
     const w = local.maxX - local.minX;
     const h = local.maxY - local.minY;
     if (w > u1Bed.w + 1e-6 || h > u1Bed.h + 1e-6) {
-      report.push({ plate, status: 'kept', reason: `物件範圍 ${w.toFixed(1)}×${h.toFixed(1)} mm 超過 U1 ${u1Bed.w}×${u1Bed.h} mm` });
+      report.push({ plate, status: 'kept', reason: t('u1.kept.tooLarge', { w: w.toFixed(1), h: h.toFixed(1), bw: u1Bed.w, bh: u1Bed.h }) });
       continue;
     }
     // re-centre, then nudge inside the U1 area
@@ -355,17 +356,17 @@ const DROP = /^Metadata\/(slice_info\.config|plate_\d+\.json|plate_\d+\.gcode(\.
  * { from, machine, process, filaments, fixes, carried, plates }.
  */
 export async function convertToU1(srcPath, destPath, profiles) {
-  if (!profiles) throw new Error('找不到本機 Snapmaker Orca 設定檔（/Applications/Snapmaker Orca.app），無法轉換');
+  if (!profiles) throw new Error(t('u1.err.noOrca'));
   const zip = await JSZip.loadAsync(await fs.promises.readFile(srcPath));
   const psText = await zip.file('Metadata/project_settings.config')?.async('string');
-  if (!psText) throw new Error('這個 3MF 沒有專案設定（project_settings.config），無法判斷來源機型');
+  if (!psText) throw new Error(t('u1.err.noProject'));
   const ps = JSON.parse(psText);
   const from = detectPrinter(ps);
-  if (from?.isU1) throw new Error('已經是 Snapmaker U1 專案');
+  if (from?.isU1) throw new Error(t('u1.err.alreadyU1'));
   const variableLayerHeight = Boolean((await zip.file('Metadata/layer_heights_profile.txt')?.async('string'))?.trim());
   const conv = u1ProjectSettings(ps, profiles, { variableLayerHeight });
   const srcArea = ps.printable_area;
-  if (!Array.isArray(srcArea) || srcArea.length < 3) throw new Error('來源專案沒有盤面尺寸（printable_area）');
+  if (!Array.isArray(srcArea) || srcArea.length < 3) throw new Error(t('u1.err.noBed'));
   const u1Area = profiles.machines.find((m) => m.name === conv.machine).printableArea;
   const rootPath = /Target="\/?([^"]+\.model)"/.exec((await zip.file('_rels/.rels')?.async('string')) || '')?.[1] || '3D/3dmodel.model';
   const plates = await convertPlates(zip, rootPath, bedRect(srcArea), bedRect(u1Area));

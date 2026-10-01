@@ -7,6 +7,7 @@ import EmbeddedImages, { PreviewSwitch } from './EmbeddedImages.jsx';
 import { plateImage } from '../../core/embeddedImages.mjs';
 import { ProvenanceBadge, PlateBadge, ColorLabels, isNonU1 } from './Badges.jsx';
 import { isUnlabeled, formatBytes, formatInt, formatBbox, formatDate } from '../format.js';
+import { t } from '../../core/i18n/index.mjs';
 
 export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose, onOpen, onConverted }) {
   const [model, setModel] = useState(null);
@@ -102,30 +103,30 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
         <PlateBadge model={model} />
         <span className="spacer" />
         {trashed ? (
-          <button className="icon" data-testid="restore" onClick={restore} disabled={model.missing} title="還原">
+          <button className="icon" data-testid="restore" onClick={restore} disabled={model.missing} title={t('detail.restore')}>
             <i className="mdi mdi-restore" />
           </button>
         ) : (
-          <button className="icon" data-testid="trash" onClick={trash} disabled={model.missing} title="刪除（移到回收桶）">
+          <button className="icon" data-testid="trash" onClick={trash} disabled={model.missing} title={t('detail.trash')}>
             <i className="mdi mdi-delete-outline" />
           </button>
         )}
-        <button className="icon" data-testid="reveal" onClick={() => window.api.reveal(id)} disabled={model.missing} title="在 Finder 顯示">
+        <button className="icon" data-testid="reveal" onClick={() => window.api.reveal(id)} disabled={model.missing} title={t(navigator.userAgent.includes('Mac') ? 'detail.revealMac' : 'detail.reveal')}>
           <i className="mdi mdi-folder-search-outline" />
         </button>
-        <button className="icon" onClick={onClose} title="關閉"><i className="mdi mdi-close" /></button>
+        <button className="icon" onClick={onClose} title={t('common.close')}><i className="mdi mdi-close" /></button>
       </header>
       {model.missing && (
         <div className="callout danger missing-actions" data-testid="missing-actions">
           <i className="mdi mdi-file-alert-outline" />
           <div className="grow">
-            <div>遺失：目前的根目錄下找不到這個檔案（{model.rel_path}）。</div>
+            <div>{t('detail.missing', { rel: model.rel_path })}</div>
             <div className="row">
-              <button data-testid="relocate" onClick={relocate}>重新定位…</button>
-              <button data-testid="remove-record" onClick={removeRecord}>移除記錄</button>
+              <button data-testid="relocate" onClick={relocate}>{t('detail.relocate')}</button>
+              <button data-testid="remove-record" onClick={removeRecord}>{t('dlg.removeRecordButton')}</button>
               {inTrash && (
                 <button className="primary" data-testid="restore-missing" onClick={restoreMissing}>
-                  從回收桶還原
+                  {t('detail.restoreFromTrash')}
                 </button>
               )}
             </div>
@@ -137,8 +138,12 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
         <div className="callout note" data-testid="export-message">
           <i className="mdi mdi-check" />
           <span className="grow">
-            已匯出：{exported.path}
-            {exported.summary && `（${exported.summary.filter((x) => x.slot === null).length ? `跳過 ${exported.summary.filter((x) => x.slot === null).length} 色，` : ''}${exported.mixes ? `Mix ${exported.mixes} 組，` : ''}原檔未變動）`}
+            {t('detail.exported', { path: exported.path })}
+            {exported.summary &&
+              t('detail.exportedSummary', {
+                skipped: exported.summary.filter((x) => x.slot === null).length ? t('detail.exportedSkipped', { n: exported.summary.filter((x) => x.slot === null).length }) : '',
+                mixes: exported.mixes ? t('detail.exportedMixes', { n: exported.mixes }) : '',
+              })}
           </span>
         </div>
       )}
@@ -147,14 +152,13 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
           <i className="mdi mdi-printer-3d-off" />
           <div className="grow">
             <div>
-              這是 <b>{model.source_printer}</b> 的專案{model.source_process ? `（${model.source_process}）` : ''}，不是 Snapmaker U1：
-              直接開啟會沿用原機型的盤面與設定，物件可能超出 U1 盤面。
+              {t('u1.warningPre')}<b>{model.source_printer}</b>{t('u1.warningPost', { process: model.source_process ? t('u1.warningProcess', { process: model.source_process }) : '' })}
             </div>
             <div className="row">
               <button className="primary" data-testid="convert-u1" disabled={converting} onClick={convertU1}>
-                {converting ? <><i className="mdi mdi-loading mdi-spin" /> 轉換中…</> : <><i className="mdi mdi-swap-horizontal" /> 轉換為 Snapmaker U1</>}
+                {converting ? <><i className="mdi mdi-loading mdi-spin" /> {t('u1.converting')}</> : <><i className="mdi mdi-swap-horizontal" /> {t('u1.convert')}</>}
               </button>
-              <span className="small">另存為「-U1」新檔並匯入檔案櫃，原檔不動。</span>
+              <span className="small">{t('u1.convertNote')}</span>
             </div>
             {actionError && !model.missing && <div className="small" data-testid="u1-error">{actionError}</div>}
           </div>
@@ -164,22 +168,22 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
         <div className="callout note u1-result" data-testid="u1-result">
           <i className="mdi mdi-check" />
           <div className="grow">
-            <div>已轉換為「{converted.name}」（{converted.relPath}），原檔未變動。</div>
+            <div>{t('u1.converted', { name: converted.name, rel: converted.relPath })}</div>
             <ul className="u1-report small">
               <li>{converted.report.machine} · {converted.report.process}</li>
-              <li>線材：{[...new Set(converted.report.filaments)].join('、')}（保留原檔的流速、溫度、冷卻設定）</li>
-              {converted.report.fixes.length > 0 && <li>修正：{converted.report.fixes.join('、')}</li>}
+              <li>{t('u1.reportFilaments', { list: [...new Set(converted.report.filaments)].join(t('common.listSep')) })}</li>
+              {converted.report.fixes.length > 0 && <li>{t('u1.reportFixes', { list: converted.report.fixes.join(t('common.listSep')) })}</li>}
               <li data-testid="u1-plates">
-                盤面：{converted.report.plates.filter((p) => p.status === 'moved').length} 盤移到 U1 盤面
-                {converted.report.plates.filter((p) => p.status === 'kept').map((p) => `；盤 ${p.plate} 保持原位（${p.reason}）`).join('')}
+                {t('u1.reportPlates', { n: converted.report.plates.filter((p) => p.status === 'moved').length })}
+                {converted.report.plates.filter((p) => p.status === 'kept').map((p) => t('u1.reportKept', { plate: p.plate, reason: p.reason })).join('')}
               </li>
             </ul>
-            <button data-testid="u1-open-converted" onClick={() => onOpen(converted.id)}>開啟轉換檔</button>
+            <button data-testid="u1-open-converted" onClick={() => onOpen(converted.id)}>{t('u1.openConverted')}</button>
           </div>
         </div>
       )}
       {trashed && (
-        <div className="callout warn"><i className="mdi mdi-delete-outline" /> <span className="grow">此檔案在回收桶中，可按「還原」放回原位置。</span></div>
+        <div className="callout warn"><i className="mdi mdi-delete-outline" /> <span className="grow">{t('detail.inTrash')}</span></div>
       )}
       {plateInfo && (
         <div className="plates" data-testid="plate-switcher">
@@ -189,7 +193,7 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
                 key={p.plate}
                 className={p.plate === plate ? 'seg on' : 'seg'}
                 data-testid={`plate-${p.plate}`}
-                title={p.name || `盤 ${p.plate}`}
+                title={p.name || t('plate.n', { n: p.plate })}
                 onClick={() => {
                   setPlate(p.plate);
                   // the image view follows the plate switcher: plate N -> its Orca render
@@ -197,13 +201,13 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
                   if (img) setImagePath(img);
                 }}
               >
-                盤 {p.plate}
+                {t('plate.n', { n: p.plate })}
               </button>
             ))}
           </div>
           <div className="small muted" data-testid="plate-caption">
             {plateInfo.name ? `「${plateInfo.name}」 · ` : ''}
-            {formatInt(plateInfo.tri_count)} 面
+            {t('detail.faces', { n: formatInt(plateInfo.tri_count) })}
           </div>
         </div>
       )}
@@ -221,41 +225,41 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
           <ColorLabels labels={model.color_labels} pct testid="detail-color-tags" />
         </div>
         {!model.missing && model.format === '3mf' && (
-          <button className="primary" data-testid="export-quantized" onClick={export3mf} title="匯出 3MF：顏色量化到捲色，單捲印不出的寫成混合耗材 Mix（原檔不動）">
-            <i className="mdi mdi-cube-send" /> 匯出 3MF…
+          <button className="primary" data-testid="export-quantized" onClick={export3mf} title={t('detail.export3mfTitle')}>
+            <i className="mdi mdi-cube-send" /> {t('detail.export3mf')}
           </button>
         )}
       </div>
       {model.format === '3mf' && model.colors.length > 0 && (
         <div className="panel-card">
           {plateInfo ? (
-            <ColorAnalysis colors={plateInfo.colors} totals={model.colors} title={`盤 ${plateInfo.plate}`} mixing={mixing} />
+            <ColorAnalysis colors={plateInfo.colors} totals={model.colors} title={t('plate.n', { n: plateInfo.plate })} mixing={mixing} />
           ) : (
             <ColorAnalysis colors={model.colors} mixing={mixing} />
           )}
         </div>
       )}
       {isUnlabeled(model) && (
-        <div className="callout warn"><i className="mdi mdi-alert-outline" /> 來源未標，請補上來源類型。</div>
+        <div className="callout warn"><i className="mdi mdi-alert-outline" /> {t('detail.unlabeled')}</div>
       )}
       <div className="panel-card">
-        <h3>來源與備註</h3>
+        <h3>{t('detail.sourceAndNotes')}</h3>
         <MetadataForm draft={draft} onChange={(d) => { setDraft(d); setSaved(false); }} platforms={platforms} />
         <div className="row end">
-          {saved && !dirty && <span className="ok small"><i className="mdi mdi-check" /> 已儲存</span>}
-          <button className="primary" data-testid="detail-save" disabled={!dirty} onClick={save}>儲存</button>
+          {saved && !dirty && <span className="ok small"><i className="mdi mdi-check" /> {t('detail.saved')}</span>}
+          <button className="primary" data-testid="detail-save" disabled={!dirty} onClick={save}>{t('common.save')}</button>
         </div>
       </div>
       <div className="panel-card">
-      <h3>檔案資訊</h3>
+      <h3>{t('detail.fileInfo')}</h3>
       <dl className="info">
-        <dt>路徑</dt><dd className="mono">{model.rel_path}</dd>
-        <dt>格式</dt><dd>{model.format.toUpperCase()}</dd>
-        <dt>大小</dt><dd>{formatBytes(model.size_bytes)}</dd>
-        <dt>三角數</dt><dd>{formatInt(model.tri_count)}</dd>
-        <dt>尺寸</dt><dd>{formatBbox(model.bbox_mm)}</dd>
-        <dt>色數</dt><dd>{model.color_count ?? '—'}</dd>
-        <dt>匯入</dt><dd>{formatDate(model.imported_at)}</dd>
+        <dt>{t('info.path')}</dt><dd className="mono">{model.rel_path}</dd>
+        <dt>{t('col.format')}</dt><dd>{model.format.toUpperCase()}</dd>
+        <dt>{t('col.size')}</dt><dd>{formatBytes(model.size_bytes)}</dd>
+        <dt>{t('col.triangles')}</dt><dd>{formatInt(model.tri_count)}</dd>
+        <dt>{t('info.dimensions')}</dt><dd>{formatBbox(model.bbox_mm)}</dd>
+        <dt>{t('col.colors')}</dt><dd>{model.color_count ?? '—'}</dd>
+        <dt>{t('info.imported')}</dt><dd>{formatDate(model.imported_at)}</dd>
       </dl>
       </div>
     </aside>

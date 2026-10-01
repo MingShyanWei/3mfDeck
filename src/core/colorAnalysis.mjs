@@ -1,6 +1,7 @@
 // Colour analysis (SPEC 3.5): warnings over a 3MF colour distribution.
 // Shared by renderer and tests, so no Node APIs.
 import { deltaE2000, rgbToLab, hexToRgb, U1_SLOTS } from './filament.mjs';
+import { t } from './i18n/index.mjs';
 
 // "A large single-colour area split by dithering into two close values":
 // two colours that are perceptually near-identical, each holding a real
@@ -40,13 +41,13 @@ export function analyzeColors(colors, slotCount = U1_SLOTS.length) {
     warnings.push({
       type: 'dither',
       colors: p.colors,
-      message: `疑似抖色配對：${p.colors[0]}（${p.pcts[0]}%）與 ${p.colors[1]}（${p.pcts[1]}%）色差僅 ΔE ${p.deltaE}，合計 ${p.combined}%，可能是同一大色塊被抖色拆成兩個相近值`,
+      message: t('analysis.dither', { a: p.colors[0], pa: p.pcts[0], b: p.colors[1], pb: p.pcts[1], dE: p.deltaE, sum: p.combined }),
     });
   }
   if (colors.length <= slotCount) {
-    warnings.push({ type: 'few-colors', message: `色塊少於 ${slotCount} 色不需混色，量化成實色平塗最乾淨` });
+    warnings.push({ type: 'few-colors', message: t('analysis.fewColors', { n: slotCount }) });
   } else {
-    warnings.push({ type: 'needs-mixing', message: `超過 ${slotCount} 色，需 Full Spectrum 混色` });
+    warnings.push({ type: 'needs-mixing', message: t('analysis.needsMixing', { n: slotCount }) });
   }
   return warnings;
 }

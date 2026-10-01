@@ -1,6 +1,7 @@
 // Editable metadata: name, provenance (type/platform/url/prompt/retrieved_at), tags, notes.
 // Used by both the import dialog and the detail panel.
 import { PROVENANCE, PLATFORM_SUGGESTIONS } from '../format.js';
+import { t } from '../../core/i18n/index.mjs';
 
 export const toDraft = (m) => ({
   name: m.name || '',
@@ -26,11 +27,11 @@ export default function MetadataForm({ draft, onChange, platforms = [] }) {
   return (
     <div className="form">
       <label>
-        <span>名稱</span>
+        <span>{t('col.name')}</span>
         <input data-testid="f-name" value={draft.name} onChange={set('name')} />
       </label>
       <fieldset className="prov-types">
-        <legend>來源類型</legend>
+        <legend>{t('meta.sourceType')}</legend>
         {Object.entries(PROVENANCE).map(([k, p]) => (
           <button
             type="button"
@@ -44,30 +45,30 @@ export default function MetadataForm({ draft, onChange, platforms = [] }) {
         ))}
       </fieldset>
       <label>
-        <span>平台</span>
-        <input data-testid="f-platform" list="platform-list" value={draft.platform} onChange={set('platform')} placeholder="Meshy / Thingiverse / Printables / 其他" />
+        <span>{t('meta.platform')}</span>
+        <input data-testid="f-platform" list="platform-list" value={draft.platform} onChange={set('platform')} placeholder={t('meta.platformPlaceholder')} />
         <datalist id="platform-list">
           {suggestions.map((p) => <option key={p} value={p} />)}
         </datalist>
       </label>
       <label>
-        <span>來源網址</span>
+        <span>{t('meta.url')}</span>
         <input data-testid="f-url" type="url" value={draft.url} onChange={set('url')} placeholder="https://…" />
       </label>
       <label>
         <span>Prompt</span>
-        <textarea data-testid="f-prompt" rows={3} value={draft.prompt} onChange={set('prompt')} placeholder="AI 生成時的原始 prompt（可空）" />
+        <textarea data-testid="f-prompt" rows={3} value={draft.prompt} onChange={set('prompt')} placeholder={t('meta.promptPlaceholder')} />
       </label>
       <label>
-        <span>取得日期</span>
+        <span>{t('meta.retrieved')}</span>
         <input data-testid="f-retrieved" type="date" value={draft.retrieved_at} onChange={set('retrieved_at')} />
       </label>
       <label>
-        <span>標籤</span>
-        <input data-testid="f-tags" value={draft.tags} onChange={set('tags')} placeholder="以逗號分隔，例：鴨子, 禮物" />
+        <span>{t('col.tags')}</span>
+        <input data-testid="f-tags" value={draft.tags} onChange={set('tags')} placeholder={t('meta.tagsPlaceholder')} />
       </label>
       <label>
-        <span>備註</span>
+        <span>{t('meta.notes')}</span>
         <textarea data-testid="f-notes" rows={3} value={draft.notes} onChange={set('notes')} />
       </label>
     </div>

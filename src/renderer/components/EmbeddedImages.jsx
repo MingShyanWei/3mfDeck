@@ -2,8 +2,9 @@
 // Orca plate renders. The cover comes from the index (stored at import); the
 // others are read from the file one entry at a time.
 import { useEffect, useRef } from 'react';
+import { t } from '../../core/i18n/index.mjs';
 const src = (id, path, cover) => (path === cover ? `mfimg://cover/${id}` : `mfimg://entry/${id}?p=${encodeURIComponent(path)}`);
-const LABEL = { cover: '封面', thumb: '縮圖', photo: '實拍', plate: '盤' };
+const LABEL = { cover: 'images.cover', thumb: 'images.thumb', photo: 'images.photo' };
 
 /** 3D / 原檔圖 switch; renders nothing for a project without embedded images. */
 export function PreviewSwitch({ embedded, mode, onMode }) {
@@ -14,7 +15,7 @@ export function PreviewSwitch({ embedded, mode, onMode }) {
         <i className="mdi mdi-cube-outline" /> 3D
       </button>
       <button className={mode === 'images' ? 'seg on' : 'seg'} data-testid="preview-mode-images" onClick={() => onMode('images')}>
-        <i className="mdi mdi-image-multiple-outline" /> 原檔圖 <span className="muted">{embedded.images.length}</span>
+        <i className="mdi mdi-image-multiple-outline" /> {t('images.tab')} <span className="muted">{embedded.images.length}</span>
       </button>
     </div>
   );
@@ -43,7 +44,7 @@ export default function EmbeddedImages({ id, embedded, path, onPath }) {
             onClick={() => onPath(i.path)}
           >
             <img src={src(id, i.path, embedded.cover)} alt="" loading="lazy" draggable={false} />
-            <span>{i.kind === 'plate' ? `盤 ${i.plate}` : LABEL[i.kind]}</span>
+            <span>{i.kind === 'plate' ? t('plate.n', { n: i.plate }) : t(LABEL[i.kind])}</span>
           </button>
         ))}
       </div>

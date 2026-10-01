@@ -7,11 +7,12 @@ import { Viewer } from '../viewer/Viewer.js';
 import { buildModel } from '../viewer/buildModel.js';
 import { mapToSlots, MIX_DELTA_E, recipeText } from '../../core/filament.mjs';
 import { useSlots, isDefaultSlots } from '../slots.js';
+import { t, getLang } from '../../core/i18n/index.mjs';
 
 const MODE_LABELS = [
-  ['original', '原始', 'mdi-palette-outline'],
-  ['filament', '耗材映射', 'mdi-printer-3d-nozzle-outline'],
-  ['estimate', '混色估計', 'mdi-blur'],
+  ['original', 'viewer.original', 'mdi-palette-outline'],
+  ['filament', 'viewer.filament', 'mdi-printer-3d-nozzle-outline'],
+  ['estimate', 'viewer.estimate', 'mdi-blur'],
 ];
 
 // `plate`: show only that slicer plate (multi-plate 3MF); `colors`: the
@@ -66,7 +67,7 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
         if (cancelled) return;
         setLoaded(`${model.id}:${plate ?? ''}`);
         if (payload.missing) {
-          setError('檔案遺失，無法預覽');
+          setError(t('viewer.missing'));
           return setStatus('error');
         }
         if (payload.unsupported) return setStatus('unsupported');
@@ -108,16 +109,17 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
     viewer.render();
   }, [mode, status, fs]);
 
-  const spools = useMemo(() => (colors?.length && !fs ? mapToSlots(colors, slots) : null), [colors, fs, slots]);
+  const lang = getLang(); // slot names in the mapping are translated
+  const spools = useMemo(() => (colors?.length && !fs ? mapToSlots(colors, slots) : null), [colors, fs, slots, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   const modes = MODE_LABELS.filter(([k]) => k !== 'estimate' || fs);
 
   return (
     <div className="viewer">
       <div className="viewer-stage" ref={wrapRef} data-testid="viewer" data-status={status} data-mode={mode} data-loaded={loaded}>
         <canvas ref={canvasRef} data-testid="viewer-canvas" />
-        {status === 'loading' && <div className="viewer-msg"><i className="mdi mdi-loading mdi-spin" /> 載入中…</div>}
-        {status === 'unsupported' && <div className="viewer-msg">STEP 為 B-rep 格式，暫不支援預覽</div>}
-        {status === 'empty' && <div className="viewer-msg">這個盤面沒有物件</div>}
+        {status === 'loading' && <div className="viewer-msg"><i className="mdi mdi-loading mdi-spin" /> {t('viewer.loading')}</div>}
+        {status === 'unsupported' && <div className="viewer-msg">{t('viewer.step')}</div>}
+        {status === 'empty' && <div className="viewer-msg">{t('viewer.emptyPlate')}</div>}
         {status === 'error' && <div className="viewer-msg error"><i className="mdi mdi-alert-outline" /> {error}</div>}
       <div className="seg-group modes">
         {modes.map(([k, label, icon]) => (
@@ -126,10 +128,10 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
             data-testid={`mode-${k}`}
             className={mode === k ? 'seg on' : 'seg'}
             disabled={status !== 'ready' || (k === 'filament' && !hasPaint)}
-            title={k === 'filament' && !hasPaint ? '只有含 paint_color 或材質色的 3MF 可做耗材映射' : undefined}
+            title={k === 'filament' && !hasPaint ? t('viewer.noPaint') : undefined}
             onClick={() => setMode(k)}
           >
-            <i className={`mdi ${icon}`} /> {label}
+            <i className={`mdi ${icon}`} /> {t(label)}
           </button>
         ))}
       </div>
@@ -137,13 +139,13 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
       {mode === 'estimate' && (
         <div className="callout warn estimate-note" data-testid="estimate-note">
           <i className="mdi mdi-information-outline" />
-          <span className="grow">估計值，實際以 Orca 渲染為準（相鄰面顏色以線性光平均，模擬 Full Spectrum 抖色的視覺混色）</span>
+          <span className="grow">{t('viewer.estimateNote')}</span>
         </div>
       )}
       {mode === 'filament' && fs && colors?.length > 0 && (
         <div className="spools" data-testid="spools">
           <div className="small muted" data-testid="fs-spools-title">
-            Full Spectrum 抖色檔 · 以檔案設定的捲色列出（不量化到 CMYK）· 這檔案會用到 {colors.length} 捲
+            {t('viewer.fsSpools', { n: colors.length })}
           </div>
           <div className="spool-row">
             {colors.map((c) => (
@@ -155,7 +157,7 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
           </div>
           {colors.length > slots.length && (
             <div className="small warn-text" data-testid="fs-slots-warning">
-              需要 {colors.length} 捲，超過 U1 的 {slots.length} 個耗材槽
+              {t('viewer.fsOver', { n: colors.length, slots: slots.length })}
             </div>
           )}
         </div>
@@ -163,13 +165,13 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
       {mode === 'filament' && spools && (
         <div className="spools" data-testid="spools">
           <div className="small muted" data-testid="slots-title">
-            {isDefaultSlots(slots) ? 'U1 預設 CMYK 耗材槽' : `自訂耗材槽（${slots.length} 捲，設定頁）`} · 這檔案會用到 {spools.used.length} 捲
+            {isDefaultSlots(slots) ? t('viewer.defaultSlots') : t('viewer.customSlots', { n: slots.length })}{t('viewer.uses', { n: spools.used.length })}
           </div>
           <div className="spool-row">
             {spools.used.map((u) => (
               <span key={u.slot} className="spool" data-testid="spool">
                 <span className="swatch" style={{ background: u.hex }} />
-                槽{u.slot} {u.name} {u.label} · {u.pct}%
+                {t('slot.n', { n: u.slot })} {u.name} {u.label} · {u.pct}%
               </span>
             ))}
           </div>
@@ -179,11 +181,11 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
                 <li key={m.color} data-testid="mapping-row" data-mode={m.mode}>
                   <span className="swatch" style={{ background: m.color }} /> {m.color} →{' '}
                   {m.mode === 'single' ? (
-                    <>槽{m.slot}（ΔE {m.deltaE}）</>
+                    <>{t('viewer.single', { slot: m.slot, dE: m.deltaE })}</>
                   ) : (
                     <>
-                      混色 {recipeText(m.recipe)} ≈ <span className="swatch" style={{ background: m.recipe.mixHex }} /> {m.recipe.mixHex}（ΔE {m.recipe.deltaE}；單捲最近 {m.nearest.name} ΔE {m.deltaE}）
-                      {!m.mixable && <span className="badge badge-warn">CMYK 混不出，建議直接買此色線材</span>}
+                      {t('viewer.mix', { recipe: recipeText(m.recipe) })} <span className="swatch" style={{ background: m.recipe.mixHex }} /> {t('viewer.mixDetail', { hex: m.recipe.mixHex, dE: m.recipe.deltaE, nearest: m.nearest.name, nearestDE: m.deltaE })}
+                      {!m.mixable && <span className="badge badge-warn">{t('viewer.unmixable')}</span>}
                     </>
                   )}
                 </li>
@@ -192,7 +194,7 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
           )}
           {spools.mapping.some((m) => m.mode === 'mix') && (
             <div className="small muted" data-testid="mix-note">
-              單捲 ΔE &gt; {MIX_DELTA_E} 的顏色以兩捲混色（Full Spectrum 混合耗材，FilamentMixer 顏料模型，與「匯出 3MF」相同）估計，預覽顯示混色結果；實際以 Orca 為準。
+              {t('viewer.mixNote', { dE: MIX_DELTA_E })}
             </div>
           )}
         </div>

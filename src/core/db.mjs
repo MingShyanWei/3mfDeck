@@ -1,7 +1,7 @@
 // SQLite index (better-sqlite3). Schema per SPEC.md §4.
 // The file system is the source of truth; this is only an index.
 import Database from 'better-sqlite3';
-import { labelFor, labelInQuery, MODEL_LABEL_MIN_PCT } from './colorNames.mjs';
+import { labelFor, labelInQuery, MODEL_LABEL_MIN_PCT, LEGACY_LABELS } from './colorNames.mjs';
 import { U1_MODEL } from './orcaProfiles.mjs';
 
 const SCHEMA = `
@@ -92,8 +92,23 @@ export function openDb(file) {
   addColumn('models', 'embedded_images');
   addColumn('models', 'cover', 'BLOB');
   addColumn('models', 'thumb_dark', 'INTEGER');
+  migrateLegacyLabels(db);
   backfillColorLabels(db);
   return db;
+}
+
+/**
+ * M24: colour labels stored before i18n were Traditional Chinese names (黑, 膚,
+ * 其他, ...); turn them into the language-neutral keys in place. Idempotent,
+ * touches only color_stats.label. Returns the rows changed.
+ */
+export function migrateLegacyLabels(db) {
+  const set = db.prepare('UPDATE color_stats SET label = ? WHERE label = ?');
+  let changed = 0;
+  db.transaction(() => {
+    for (const [legacy, key] of Object.entries(LEGACY_LABELS)) changed += set.run(key, legacy).changes;
+  })();
+  return changed;
 }
 
 /** One-time fill of colour labels for rows imported before M17 (label IS NULL). Returns the rows updated. */

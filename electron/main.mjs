@@ -21,6 +21,7 @@ import { mappingCsv, exportQuantized3mf } from '../src/core/exportMapping.mjs';
 import { import3dfpInventory } from '../src/core/inventoryImport.mjs';
 import { slotsFromColours } from '../src/core/filament.mjs';
 import { SUPPORTED_EXTS } from '../src/core/parse/index.mjs';
+import { t, setLang, getLang, pickLang, LANGS } from '../src/core/i18n/index.mjs';
 
 // Test hooks: isolate userData / library root (used by the smoke test)
 if (process.env.MF_USER_DATA) app.setPath('userData', process.env.MF_USER_DATA);
@@ -45,9 +46,9 @@ async function importAndNotify(paths) {
 
 async function importViaDialog() {
   const r = await dialog.showOpenDialog(win, {
-    title: '匯入模型',
+    title: t('dlg.importTitle'),
     properties: ['openFile', 'openDirectory', 'multiSelections'],
-    filters: [{ name: '3D 模型', extensions: SUPPORTED_EXTS.map((e) => e.slice(1)) }],
+    filters: [{ name: t('dlg.models3d'), extensions: SUPPORTED_EXTS.map((e) => e.slice(1)) }],
   });
   if (r.canceled || !r.filePaths.length) return null;
   return importAndNotify(r.filePaths);
@@ -58,11 +59,11 @@ function buildMenu() {
     Menu.buildFromTemplate([
       { role: 'appMenu' },
       {
-        label: '檔案',
+        label: t('menu.file'),
         submenu: [
-          { id: 'import', label: '匯入…', accelerator: 'CmdOrCtrl+I', click: () => importViaDialog() },
+          { id: 'import', label: t('menu.import'), accelerator: 'CmdOrCtrl+I', click: () => importViaDialog() },
           { type: 'separator' },
-          { id: 'settings', label: '設定…', accelerator: 'CmdOrCtrl+,', click: () => win.webContents.send('ui:openSettings') },
+          { id: 'settings', label: t('menu.settings'), accelerator: 'CmdOrCtrl+,', click: () => win.webContents.send('ui:openSettings') },
           { type: 'separator' },
           { role: 'close' },
         ],
@@ -85,8 +86,22 @@ function appInfo() {
   return { ...versionLabel(info, app.isPackaged), commit: info.commit, author: AUTHOR, repo: REPO };
 }
 
+/** Switch the main process to `lang`: core messages, menu, About panel. */
+function applyLanguage(lang) {
+  setLang(lang);
+  buildMenu();
+  const about = appInfo();
+  app.setAboutPanelOptions({ applicationName: '3mfDeck', applicationVersion: about.version, version: `git ${about.commit}`, credits: t('about.credits', { author: AUTHOR, repo: REPO }) });
+}
+
 function registerIpc() {
   ipcMain.handle('app:info', () => appInfo());
+  ipcMain.handle('settings:setLanguage', (_e, lang) => {
+    if (!LANGS.includes(lang)) return { error: `unknown language ${lang}` };
+    saveSettings(app.getPath('userData'), { language: lang });
+    applyLanguage(lang);
+    return { language: lang };
+  });
   // Opens the project page in the system browser; the app itself never makes a
   // network request (SPEC: fully offline). Only this fixed URL can be opened.
   ipcMain.handle('app:openRepo', () => shell.openExternal(REPO_URL));
@@ -112,7 +127,7 @@ function registerIpc() {
       const report = await convertToU1(modelPath(db, root, id), dest, loadU1Profiles(process.env.MF_ORCA_PROFILES || DEFAULT_PROFILES_DIR));
       const res = await importPaths(db, root, [dest]);
       const newId = res.ids[0];
-      if (!newId) throw new Error(res.errors[0]?.error || '轉換檔匯入失敗');
+      if (!newId) throw new Error(res.errors[0]?.error || t('u1.err.importFailed'));
       const { provenance_type, platform, url, prompt, retrieved_at, notes } = src;
       updateModel(db, newId, { name: `${src.name}-U1`, provenance_type, platform, url, prompt, retrieved_at, notes });
       setTags(db, newId, src.tags);
@@ -149,18 +164,18 @@ function registerIpc() {
     if (!n) return 0;
     const first = await dialog.showMessageBox(win, {
       type: 'warning',
-      message: `清空回收桶？`,
-      detail: `回收桶內的 ${n} 個檔案將被永久刪除。`,
-      buttons: ['取消', '清空…'],
+      message: t('dlg.emptyTrash'),
+      detail: t('dlg.emptyTrashDetail', { n }),
+      buttons: [t('dlg.cancel'), t('dlg.emptyTrashButton')],
       defaultId: 0,
       cancelId: 0,
     });
     if (first.response !== 1) return null;
     const second = await dialog.showMessageBox(win, {
       type: 'warning',
-      message: `再次確認：永久刪除 ${n} 個檔案？`,
-      detail: '此動作無法復原。',
-      buttons: ['取消', '永久刪除'],
+      message: t('dlg.emptyTrashConfirm', { n }),
+      detail: t('dlg.cannotUndo'),
+      buttons: [t('dlg.cancel'), t('dlg.deleteForever')],
       defaultId: 0,
       cancelId: 0,
     });
@@ -171,18 +186,18 @@ function registerIpc() {
   // Missing-record actions. Errors come back as { error } for the UI to show.
   ipcMain.handle('lib:relocate', async (_e, id) => {
     const r = await dialog.showOpenDialog(win, {
-      title: '重新定位檔案',
+      title: t('dlg.relocateTitle'),
       properties: ['openFile'],
-      filters: [{ name: '3D 模型', extensions: SUPPORTED_EXTS.map((e) => e.slice(1)) }],
+      filters: [{ name: t('dlg.models3d'), extensions: SUPPORTED_EXTS.map((e) => e.slice(1)) }],
     });
     if (r.canceled || !r.filePaths.length) return null;
     const picked = r.filePaths[0];
     if (!isInside(root, picked)) {
       const ok = await dialog.showMessageBox(win, {
         type: 'question',
-        message: '這個檔案不在檔案櫃根目錄裡',
-        detail: `重新定位會把它搬進 ${path.join(root, String(new Date().getFullYear()))}（與匯入相同，同名自動加後綴、不覆蓋）。`,
-        buttons: ['取消', '搬進檔案櫃'],
+        message: t('dlg.outsideRoot'),
+        detail: t('dlg.outsideRootDetail', { dir: path.join(root, String(new Date().getFullYear())) }),
+        buttons: [t('dlg.cancel'), t('dlg.moveIn')],
         defaultId: 1,
         cancelId: 0,
       });
@@ -197,9 +212,9 @@ function registerIpc() {
   ipcMain.handle('lib:removeRecord', async (_e, id) => {
     const ok = await dialog.showMessageBox(win, {
       type: 'question',
-      message: `移除「${getModel(db, id).name}」的記錄？`,
-      detail: '只刪除檔案櫃的索引記錄（標籤、來源等），不會刪除任何檔案。',
-      buttons: ['取消', '移除記錄'],
+      message: t('dlg.removeRecord', { name: getModel(db, id).name }),
+      detail: t('dlg.removeRecordDetail'),
+      buttons: [t('dlg.cancel'), t('dlg.removeRecordButton')],
       defaultId: 0,
       cancelId: 0,
     });
@@ -212,18 +227,18 @@ function registerIpc() {
     if (!ids.length) return [];
     const first = await dialog.showMessageBox(win, {
       type: 'warning',
-      message: `移除 ${ids.length} 筆遺失記錄？`,
-      detail: '只刪除檔案櫃的索引記錄（標籤、來源、備註），不會刪除任何檔案。',
-      buttons: ['取消', '移除…'],
+      message: t('dlg.removeMissing', { n: ids.length }),
+      detail: t('dlg.removeMissingDetail'),
+      buttons: [t('dlg.cancel'), t('dlg.removeEllipsis')],
       defaultId: 0,
       cancelId: 0,
     });
     if (first.response !== 1) return null;
     const second = await dialog.showMessageBox(win, {
       type: 'warning',
-      message: `再次確認：移除 ${ids.length} 筆記錄？`,
-      detail: '這些記錄的標籤與來源資料將無法復原。',
-      buttons: ['取消', '移除記錄'],
+      message: t('dlg.removeMissingConfirm', { n: ids.length }),
+      detail: t('dlg.removeMissingConfirmDetail'),
+      buttons: [t('dlg.cancel'), t('dlg.removeRecordButton')],
       defaultId: 0,
       cancelId: 0,
     });
@@ -245,7 +260,7 @@ function registerIpc() {
   ipcMain.handle('lib:idsNeedingThumb', () => idsNeedingThumb(db));
   ipcMain.handle('lib:setThumb', (_e, id, bytes) => storeThumb(db, id, bytes, thumbIsBlack(bytes)));
   ipcMain.handle('lib:importDialog', () => importViaDialog());
-  ipcMain.handle('settings:get', () => ({ libraryRoot: root, spools: loadSettings(app.getPath('userData'), root).spools, inventory: loadSettings(app.getPath('userData'), root).inventory }));
+  ipcMain.handle('settings:get', () => ({ libraryRoot: root, spools: loadSettings(app.getPath('userData'), root).spools, inventory: loadSettings(app.getPath('userData'), root).inventory, language: getLang() }));
   ipcMain.handle('settings:setInventory', (_e, list) => {
     try {
       const clean = validateInventory(list);
@@ -257,7 +272,7 @@ function registerIpc() {
   });
   ipcMain.handle('settings:importInventory', async () => {
     const r = await dialog.showOpenDialog(win, {
-      title: '匯入線材庫（3dfilamentprofiles 匯出檔）',
+      title: t('dlg.importInventory'),
       filters: [{ name: 'JSON / CSV', extensions: ['json', 'csv'] }],
       properties: ['openFile'],
     });
@@ -266,7 +281,7 @@ function registerIpc() {
       const text = await fs.promises.readFile(r.filePaths[0], 'utf8');
       return { ...import3dfpInventory(text), path: r.filePaths[0] };
     } catch (err) {
-      return { error: `匯入失敗：${err.message}` };
+      return { error: t('inventory.err.importFailed', { message: err.message }) };
     }
   });
   ipcMain.handle('settings:setSpools', (_e, spools) => {
@@ -287,7 +302,7 @@ function registerIpc() {
   };
   ipcMain.handle('lib:exportCsv', async (_e, id, opts) => {
     const m = getModel(db, id);
-    const dest = await askSavePath('匯出映射報告', `${m.name}-映射報告.csv`, 'csv');
+    const dest = await askSavePath(t('dlg.exportCsv'), t('export.csvName', { name: m.name }), 'csv');
     if (!dest) return null;
     await fs.promises.writeFile(dest, mappingCsv(m.colors, userSlots(), opts));
     return { path: dest };
@@ -295,7 +310,7 @@ function registerIpc() {
   ipcMain.handle('lib:exportQuantized', async (_e, id, opts) => {
     const m = getModel(db, id);
     const slots = userSlots();
-    const dest = await askSavePath('匯出量化 3MF', `${m.name}-量化${slots.length}捲${opts?.mix ? 'mix' : ''}.3mf`, '3mf');
+    const dest = await askSavePath(t('dlg.export3mf'), t('export.quantizedName', { name: m.name, n: slots.length, mix: opts?.mix ? t('export.mixSuffix') : '' }), '3mf');
     if (!dest) return null;
     try {
       const r = await exportQuantized3mf(modelPath(db, root, id), dest, slots, { ...opts, overwrite: true });
@@ -306,7 +321,7 @@ function registerIpc() {
   });
   ipcMain.handle('settings:chooseRoot', async () => {
     const r = await dialog.showOpenDialog(win, {
-      title: '選擇檔案櫃根目錄',
+      title: t('dlg.chooseRoot'),
       defaultPath: root,
       properties: ['openDirectory', 'createDirectory'],
     });
@@ -363,9 +378,8 @@ app.whenReady().then(() => {
     else setThumb(db, id, thumb, false);
   }
   registerIpc();
-  buildMenu();
-  const about = appInfo();
-  app.setAboutPanelOptions({ applicationName: '3mfDeck', applicationVersion: about.version, version: `git ${about.commit}`, credits: `作者 ${AUTHOR}\n${REPO}` });
+  // M24 (SPEC 3.12): the saved choice, else (tests) MF_LANG, else the system locale; English by default
+  applyLanguage(loadSettings(app.getPath('userData'), root).language || process.env.MF_LANG || pickLang(app.getPreferredSystemLanguages()));
   win = new BrowserWindow({
     width: 1280,
     height: 820,

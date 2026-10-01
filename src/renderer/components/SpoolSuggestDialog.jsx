@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { suggestSpools, STANDARD_PRESETS } from '../../core/spoolSuggest.mjs';
 import { suggestFromInventory, coverageOf } from '../../core/inventorySuggest.mjs';
 import { useSetSpools, useSlots } from '../slots.js';
+import { t, getLang } from '../../core/i18n/index.mjs';
 
 // conic coverage ring: single-spool share, + mixing share, rest uncovered
 const ring = (c) => `conic-gradient(var(--text) 0 ${c.singlePct}%, var(--accent) ${c.singlePct}% ${c.mixPct}%, var(--ring-track) ${c.mixPct}% 100%)`;
@@ -61,7 +62,8 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
     }
   }, [sel, inv]);
 
-  const presets = useMemo(() => STANDARD_PRESETS.map((p) => ({ ...p, cov: coverageOf(colors, p.hexes, { maxColours: 60 }) })), [colors]);
+  const lang = getLang(); // preset names are translated getters, read when spread
+  const presets = useMemo(() => STANDARD_PRESETS.map((p) => ({ ...p, cov: coverageOf(colors, p.hexes, { maxColours: 60 }) })), [colors, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   const current = useMemo(() => coverageOf(colors, slots.map((s) => s.hex), { maxColours: 60 }), [colors, slots]);
   const idealPick = ideal.results.find((r) => r.k === idealK);
   const invPick = inv?.results?.find((r) => r.k === invK) || null;
@@ -78,43 +80,43 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
   // what the stage shows
   let stage;
   if (preset) {
-    stage = { kicker: ['mdi-palette-outline', '標準配置'], title: preset.name, desc: '不必想，直接裝；覆蓋率供比較。', cov: preset.cov, hexes: preset.hexes, names: preset.hexes.map(() => ''), worst: preset.cov.worst.map(gap), key: `preset:${preset.id}` };
+    stage = { kicker: ['mdi-palette-outline', t('suggest.presets')], title: preset.name, desc: t('suggest.presetDesc'), cov: preset.cov, hexes: preset.hexes, names: preset.hexes.map(() => ''), worst: preset.cov.worst.map(gap), key: `preset:${preset.id}` };
   } else if (sel === 'inventory') {
-    stage = invPick && { kicker: ['mdi-library', '從我的線材挑'], title: `線材庫 ${invPick.k} 捲`, desc: `從線材庫挑最合適的 ${invPick.k} 捲組合，裝上即可印。`, cov: invPick, hexes: invPick.spools.map((s) => s.hex), names: invPick.spools.map((s) => s.name || ''), worst: invPick.worst.map(gap), key: `inventory:${invPick.k}`, results: inv.results, k: invK, rec: inv.recommended, setK: setInvK };
+    stage = invPick && { kicker: ['mdi-library', t('suggest.fromInventory')], title: t('suggest.invTitle', { k: invPick.k }), desc: t('suggest.invDesc', { k: invPick.k }), cov: invPick, hexes: invPick.spools.map((s) => s.hex), names: invPick.spools.map((s) => s.name || ''), worst: invPick.worst.map(gap), key: `inventory:${invPick.k}`, results: inv.results, k: invK, rec: inv.recommended, setK: setInvK };
   } else {
-    stage = idealPick && { kicker: ['mdi-star-four-points', '理想建議'], title: `理想 ${idealPick.k} 捲`, desc: '依模型顏色算出的最佳捲色。色碼是理想值，採購時對照色卡選最近色。', cov: idealPick, hexes: idealPick.spools.map((s) => s.hex), names: idealPick.spools.map((s) => `佔 ${s.pct}%`), worst: idealPick.worst.map(gap), key: `ideal:${idealPick.k}`, results: ideal.results, k: idealK, rec: ideal.recommended, setK: setIdealK, flag: '需採購' };
+    stage = idealPick && { kicker: ['mdi-star-four-points', t('suggest.ideal')], title: t('suggest.idealTitle', { k: idealPick.k }), desc: t('suggest.idealDesc'), cov: idealPick, hexes: idealPick.spools.map((s) => s.hex), names: idealPick.spools.map((s) => t('suggest.share', { pct: s.pct })), worst: idealPick.worst.map(gap), key: `ideal:${idealPick.k}`, results: ideal.results, k: idealK, rec: ideal.recommended, setK: setIdealK, flag: t('suggest.needBuy') };
   }
   const isSuggestion = stage && !preset;
 
   return (
     <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose?.()}>
-      <div className="modal spool-suggest" role="dialog" aria-label="建議捲色" data-testid="spool-suggest">
+      <div className="modal spool-suggest" role="dialog" aria-label={t('suggest.title')} data-testid="spool-suggest">
         <nav className="sg-rail">
-          <h2>建議捲色</h2>
-          <div className="sub">{colors.length} 色 · 依面積加權</div>
-          <h4><i className="mdi mdi-star-four-points" />理想建議（需採購）</h4>
-          <Option testid="suggest-spools" on={sel === 'ideal'} rec cov={idealPick} hexes={idealPick?.spools.map((s) => s.hex)} title={`理想 ${idealK} 捲`} onClick={() => setSel('ideal')} />
-          <h4><i className="mdi mdi-library" />從我的線材挑</h4>
-          <Option testid="suggest-inventory" on={sel === 'inventory'} cov={invPick} hexes={invPick?.spools.map((s) => s.hex)} title={invPick ? `線材庫 ${invPick.k} 捲` : '我的線材'} onClick={() => setSel('inventory')}>
-            {!inv && <div className="cov">計算中…</div>}
-            {inv?.empty && <div className="cov">線材庫是空的（設定頁登記）</div>}
+          <h2>{t('suggest.title')}</h2>
+          <div className="sub">{t('suggest.sub', { n: colors.length })}</div>
+          <h4><i className="mdi mdi-star-four-points" />{t('suggest.idealHead')}</h4>
+          <Option testid="suggest-spools" on={sel === 'ideal'} rec cov={idealPick} hexes={idealPick?.spools.map((s) => s.hex)} title={t('suggest.idealTitle', { k: idealK })} onClick={() => setSel('ideal')} />
+          <h4><i className="mdi mdi-library" />{t('suggest.fromInventory')}</h4>
+          <Option testid="suggest-inventory" on={sel === 'inventory'} cov={invPick} hexes={invPick?.spools.map((s) => s.hex)} title={invPick ? t('suggest.invTitle', { k: invPick.k }) : t('suggest.myInventory')} onClick={() => setSel('inventory')}>
+            {!inv && <div className="cov">{t('suggest.computing')}</div>}
+            {inv?.empty && <div className="cov">{t('suggest.invEmpty')}</div>}
           </Option>
-          <h4><i className="mdi mdi-palette-outline" />標準配置</h4>
+          <h4><i className="mdi mdi-palette-outline" />{t('suggest.presets')}</h4>
           <div data-testid="standard-presets">
             {presets.map((p) => (
               <Option key={p.id} testid={`preset-${p.id}`} on={sel === p.id} cov={p.cov} hexes={p.hexes} title={p.name} onClick={() => setSel(p.id)}>
-                <div className="cov">覆蓋率：單捲 {p.cov.singlePct}%／含混色 {p.cov.mixPct}%</div>
+                <div className="cov">{t('suggest.presetCov', { single: p.cov.singlePct, mix: p.cov.mixPct })}</div>
               </Option>
             ))}
           </div>
-          <div className="sg-now" title="設定頁目前的捲色">
+          <div className="sg-now" title={t('suggest.nowTitle')}>
             <span className="mini-ring" style={{ background: ring(current) }} />
-            <span>目前捲色 <b>{one(current.mixPct)}%</b><br />設定頁現況 · 比較基準</span>
+            <span>{t('suggest.now')} <b>{one(current.mixPct)}%</b><br />{t('suggest.nowSub')}</span>
           </div>
         </nav>
         <section className="sg-stage">
-          <button className="icon x" onClick={onClose} title="關閉"><i className="mdi mdi-close" /></button>
-          {!stage && <div className="muted"><i className="mdi mdi-loading mdi-spin" /> 計算中…</div>}
+          <button className="icon x" onClick={onClose} title={t('common.close')}><i className="mdi mdi-close" /></button>
+          {!stage && <div className="muted"><i className="mdi mdi-loading mdi-spin" /> {t('suggest.computing')}</div>}
           {stage && (
             <>
               <div className="sg-kicker"><i className={`mdi ${stage.kicker[0]}`} />{stage.kicker[1]}{stage.flag && <span className="sg-flag">{stage.flag}</span>}</div>
@@ -122,7 +124,7 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
               <div className="sg-desc">{stage.desc}</div>
               <div className="sg-show">
                 <div className="sg-ring" style={{ background: ring(stage.cov) }}>
-                  <div className="c"><b>{one(stage.cov.mixPct)}<small>%</small></b><span>含混色覆蓋</span><em>單捲直印 {one(stage.cov.singlePct)}%</em></div>
+                  <div className="c"><b>{one(stage.cov.mixPct)}<small>%</small></b><span>{t('suggest.mixCov')}</span><em>{t('suggest.singleCov', { pct: one(stage.cov.singlePct) })}</em></div>
                 </div>
                 <div>
                   <div className="suggest-spools" data-testid={isSuggestion ? 'suggest-spools-list' : undefined}>
@@ -135,11 +137,11 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
                     ))}
                   </div>
                   <div className="row" style={{ marginTop: 14, gap: 14 }}>
-                    <div className="sg-legend"><span><i style={{ background: 'var(--text)' }} />單捲直印</span><span><i style={{ background: 'var(--accent)' }} />加上混色</span><span><i style={{ background: 'var(--ring-track)' }} />印不出</span></div>
+                    <div className="sg-legend"><span><i style={{ background: 'var(--text)' }} />{t('suggest.legendSingle')}</span><span><i style={{ background: 'var(--accent)' }} />{t('suggest.legendMix')}</span><span><i style={{ background: 'var(--ring-track)' }} />{t('suggest.legendNone')}</span></div>
                   </div>
                   <div className="small muted" style={{ marginTop: 8 }}>
-                    比目前捲色 {stage.cov.mixPct >= current.mixPct ? '+' : ''}{one(stage.cov.mixPct - current.mixPct)} 個百分點
-                    {isSuggestion && stage.rec && <span data-testid="suggest-recommended"> · 建議 {stage.rec.k} 捲即可達 {stage.rec.mixPct}% 覆蓋率</span>}
+                    {t('suggest.vsNow', { diff: `${stage.cov.mixPct >= current.mixPct ? '+' : ''}${one(stage.cov.mixPct - current.mixPct)}` })}
+                    {isSuggestion && stage.rec && <span data-testid="suggest-recommended">{t('suggest.recommended', { k: stage.rec.k, pct: stage.rec.mixPct })}</span>}
                   </div>
                 </div>
               </div>
@@ -148,15 +150,15 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
                   {stage.results.map((r) => (
                     <label key={r.k} className={`sg-k${r.k === stage.k ? ' on' : ''}`}>
                       <input type="radio" name="suggestk" data-testid={`suggest-k${r.k}`} checked={r.k === stage.k} onChange={() => stage.setK(r.k)} />
-                      <b>{r.k} 捲：</b>
-                      <span>單捲 {r.singlePct}%／含混色 {r.mixPct}%</span>
-                      {r.k === stage.rec?.k && <span className="rec">建議</span>}
+                      <b>{t('suggest.kSpools', { k: r.k })}</b>
+                      <span>{t('suggest.kCov', { single: r.singlePct, mix: r.mixPct })}</span>
+                      {r.k === stage.rec?.k && <span className="rec">{t('suggest.rec')}</span>}
                     </label>
                   ))}
                 </div>
               )}
               <div className="sg-gap">
-                <div className="h">印不出的顏色 · {stage.worst.length} 色</div>
+                <div className="h">{t('suggest.gaps', { n: stage.worst.length })}</div>
                 {stage.worst.length > 0 && (
                   <div className="chips">
                     {stage.worst.slice(0, 8).map((w) => (
@@ -166,8 +168,8 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
                 )}
                 {isSuggestion && (
                   <div className="note" data-testid="suggest-note">
-                    單捲直印覆蓋 {stage.cov.singlePct}% 的面積；計入兩捲顏料混色後 {stage.cov.mixPct}%。
-                    {sel === 'ideal' ? ' 建議為理想色碼，採購時請對照線材色卡選最近色。' : ' 從線材庫挑選，裝上即可印。'}
+                    {t('suggest.note', { single: stage.cov.singlePct, mix: stage.cov.mixPct })}
+                    {sel === 'ideal' ? t('suggest.noteIdeal') : t('suggest.noteInv')}
                   </div>
                 )}
               </div>
@@ -175,10 +177,10 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
                 <div className="callout warn small" data-testid="suggest-buy">
                   <i className="mdi mdi-cart-plus" />
                   <span className="grow">
-                    線材庫蓋不到的顏色，建議採購：
+                    {t('suggest.buy')}
                     {inv.buy.spools.map((s) => (
                       <span key={s.hex} style={{ marginLeft: 8 }}>
-                        <span className="swatch" style={{ background: s.hex }} /> <span className="mono">{s.hex}</span>（{s.pct}%）
+                        <span className="swatch" style={{ background: s.hex }} /> <span className="mono">{s.hex}</span>{t('suggest.buyPct', { pct: s.pct })}
                       </span>
                     ))}
                   </span>
@@ -188,14 +190,14 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
           )}
           <div className="sg-foot">
             <span className="spacer" />
-            <button data-testid="suggest-close" onClick={onClose}>關閉</button>
+            <button data-testid="suggest-close" onClick={onClose}>{t('common.close')}</button>
             {preset ? (
               <button className="primary" data-testid={`preset-apply-${preset.id}`} disabled={applied === stage.key} onClick={() => apply(stage.key, preset.hexes)}>
-                {applied === stage.key ? '已套用 ✓' : '套用到捲色設定'}
+                {applied === stage.key ? t('suggest.applied') : t('suggest.apply')}
               </button>
             ) : (
               <button className="primary" data-testid="suggest-apply" disabled={!stage || applied === stage.key} onClick={() => apply(stage.key, stage.hexes)}>
-                {stage && applied === stage.key ? '已套用 ✓' : '套用到捲色設定'}
+                {stage && applied === stage.key ? t('suggest.applied') : t('suggest.apply')}
               </button>
             )}
           </div>

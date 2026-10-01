@@ -20,7 +20,7 @@ export async function runThumbQueue(onThumb) {
         try {
           const payload = await window.api.preview(id);
           if (payload.missing) {
-            failed.add(id); // missing file (遺失): nothing to render this session
+            failed.add(id); // missing file: nothing to render this session
             continue;
           }
           const png = await renderThumbnail(payload);

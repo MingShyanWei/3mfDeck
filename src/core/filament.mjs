@@ -1,13 +1,14 @@
 // Filament mapping (SPEC 3.4 mode 2): quantize paint colours to the nearest
 // filament slot colour. Shared by main (tests) and renderer, so no Node APIs.
 import { mixFilamentHex } from './filamentMixer.mjs';
+import { t } from './i18n/index.mjs';
 
 // Snapmaker U1 default slots: CMYK
 export const U1_SLOTS = [
-  { slot: 1, name: 'C', label: '青', hex: '#00FFFF' },
-  { slot: 2, name: 'M', label: '洋紅', hex: '#FF00FF' },
-  { slot: 3, name: 'Y', label: '黃', hex: '#FFFF00' },
-  { slot: 4, name: 'K', label: '黑', hex: '#000000' },
+  { slot: 1, name: 'C', get label() { return t('ink.C'); }, hex: '#00FFFF' },
+  { slot: 2, name: 'M', get label() { return t('ink.M'); }, hex: '#FF00FF' },
+  { slot: 3, name: 'Y', get label() { return t('ink.Y'); }, hex: '#FFFF00' },
+  { slot: 4, name: 'K', get label() { return t('ink.K'); }, hex: '#000000' },
 ];
 
 /** Default spool colours for the settings page (ideal CMYK). */
@@ -27,7 +28,7 @@ export function slotsFromColours(hexes) {
 }
 
 /** Display name of a slot: "C" / "槽2". */
-export const slotName = (s) => s.name || `槽${s.slot}`;
+export const slotName = (s) => s.name || t('slot.n', { n: s.slot });
 
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1, 7), 16);

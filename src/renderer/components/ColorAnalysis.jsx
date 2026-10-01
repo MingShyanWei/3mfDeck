@@ -6,18 +6,19 @@ import { useSlots } from '../slots.js';
 import { FULL_SPECTRUM } from '../../core/fullSpectrum.mjs';
 import SpoolSuggestDialog from './SpoolSuggestDialog.jsx';
 import { useState } from 'react';
+import { t, getLang, locale } from '../../core/i18n/index.mjs';
 
 const ICONS = { dither: 'mdi-select-compare', 'few-colors': 'mdi-check-circle-outline', 'needs-mixing': 'mdi-palette-swatch-variant' };
 
 function PrintCell({ plan }) {
-  if (plan.mode === 'single') return <td className="small" data-testid="print-cell" data-mode="single">{plan.nearest.name ? `槽${plan.nearest.slot} ${plan.nearest.name}` : slotName(plan.nearest)} 單捲</td>;
+  if (plan.mode === 'single') return <td className="small" data-testid="print-cell" data-mode="single">{t('analysis.single', { slot: plan.nearest.name ? `${t('slot.n', { n: plan.nearest.slot })} ${plan.nearest.name}` : slotName(plan.nearest) })}</td>;
   return (
     <td className="small" data-testid="print-cell" data-mode={plan.mixable ? 'mix' : 'buy'}>
       <span className="swatch" style={{ background: plan.recipe.mixHex }} /> {recipeText(plan.recipe)}
       {plan.mixable ? (
         <span className="muted">（ΔE {plan.recipe.deltaE}）</span>
       ) : (
-        <span className="badge badge-warn" title={`最佳混色仍差 ΔE ${plan.recipe.deltaE}`}>需買線材</span>
+        <span className="badge badge-warn" title={t('analysis.buyTitle', { dE: plan.recipe.deltaE })}>{t('analysis.buy')}</span>
       )}
     </td>
   );
@@ -29,7 +30,8 @@ function PrintCell({ plan }) {
 export default function ColorAnalysis({ colors, totals = null, title = '', mixing = null }) {
   const slots = useSlots();
   const [suggestOpen, setSuggestOpen] = useState(false);
-  const warnings = useMemo(() => (colors.length ? analyzeColors(colors) : []), [colors]);
+  const lang = getLang(); // warning texts are written in the current language
+  const warnings = useMemo(() => (colors.length ? analyzeColors(colors) : []), [colors, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   const ditherColors = new Set(warnings.filter((w) => w.type === 'dither').flatMap((w) => w.colors));
   const max = Math.max(...colors.map((c) => c.pct), 0);
   const totalPct = new Map((totals || []).map((c) => [c.color, c.pct]));
@@ -38,46 +40,45 @@ export default function ColorAnalysis({ colors, totals = null, title = '', mixin
   const needMix = plans ? colors.filter((c) => plans.get(c.color).mode === 'mix') : [];
   const unmixable = needMix.filter((c) => !plans.get(c.color).mixable);
   // Plate rows first, then colours used only on other plates (0 faces here)
-  const rows = totals ? [...colors, ...totals.filter((t) => !colors.some((c) => c.color === t.color)).map((t) => ({ color: t.color, faces: 0, pct: 0 }))] : colors;
+  const rows = totals ? [...colors, ...totals.filter((x) => !colors.some((c) => c.color === x.color)).map((x) => ({ color: x.color, faces: 0, pct: 0 }))] : colors;
 
   return (
     <section className="color-analysis" data-testid="color-analysis">
       <h3 data-testid="color-analysis-title">
-        顏色分析 · {title ? `${title}：` : ''}
-        {colors.length} 色{totals ? ` ／ 全檔 ${totals.length} 色` : ''}
+        {t('analysis.title', { plate: title ? t('analysis.titlePlate', { plate: title }) : '', n: colors.length, total: totals ? t('analysis.titleTotal', { n: totals.length }) : '' })}
         {!mixing && colors.length >= 1 && (
           <button className="small right" data-testid="suggest-open" onClick={() => setSuggestOpen(true)}>
-            <i className="mdi mdi-palette" /> 建議捲色…
+            <i className="mdi mdi-palette" /> {t('analysis.suggest')}
           </button>
         )}
       </h3>
       {colors.length > 0 && (
         <>
-          <div className="spectrum" title="各色面積比例">
+          <div className="spectrum" title={t('analysis.spectrumTitle')}>
             {colors.map((c) => <i key={c.color} style={{ width: `${c.pct}%`, background: c.color }} title={`${c.color} ${c.pct}%`} />)}
           </div>
-          <div className="spectrum-cap"><span>面積比例</span><span>{colors.reduce((n, c) => n + c.faces, 0).toLocaleString('zh-TW')} 面</span></div>
+          <div className="spectrum-cap"><span>{t('analysis.spectrum')}</span><span>{t('detail.faces', { n: colors.reduce((n, c) => n + c.faces, 0).toLocaleString(locale()) })}</span></div>
         </>
       )}
       {mixing && colors.length > 0 && (
         <div className="mixing" data-testid="mixing-stats">
           <div className="mixing-head">
-            <i className="mdi mdi-blur" /> Full Spectrum 混色統計
+            <i className="mdi mdi-blur" /> {t('fs.title')}
           </div>
           <dl className="info">
-            <dt>判定</dt>
+            <dt>{t('fs.verdict')}</dt>
             <dd data-testid="mixing-detect">
-              抖色檔（頂點混色率 {mixing.vertexMixedPct}%，門檻 {FULL_SPECTRUM.minVertexMixedPct}%）
+              {t('fs.dithered', { pct: mixing.vertexMixedPct, min: FULL_SPECTRUM.minVertexMixedPct })}
             </dd>
-            <dt>參與捲</dt>
+            <dt>{t('fs.spools')}</dt>
             <dd data-testid="mixing-spools">
-              {colors.length} 捲
-              {colors.length > slots.length ? `（超過 U1 的 ${slots.length} 個耗材槽）` : `（U1 ${slots.length} 槽可容納）`}
+              {t('fs.spoolCount', { n: colors.length })}
+              {colors.length > slots.length ? t('fs.overSlots', { n: slots.length }) : t('fs.fits', { n: slots.length })}
             </dd>
-            <dt>估計整體色</dt>
+            <dt>{t('fs.average')}</dt>
             <dd data-testid="mixing-average">
               <span className="swatch" style={{ background: mixedAverage(colors) }} /> {mixedAverage(colors)}
-              <span className="muted small">（估計值，實際以 Orca 渲染為準）</span>
+              <span className="muted small">{t('fs.estimateNote')}</span>
             </dd>
           </dl>
         </div>
@@ -86,12 +87,11 @@ export default function ColorAnalysis({ colors, totals = null, title = '', mixin
         <div className="callout warn" data-testid="needs-mix-summary">
           <i className="mdi mdi-palette-swatch-variant" />
           <span className="grow">
-            {needMix.length} 色單捲印不出（與最近耗材槽 ΔE &gt; {MIX_DELTA_E}），需 CMYK 混色
-            {unmixable.length > 0 ? `；其中 ${unmixable.length} 色 CMYK 也混不出，建議直接買該色線材` : ''}。配方見「列印方式」欄（估計值）。
+            {t('analysis.needMix', { n: needMix.length, dE: MIX_DELTA_E, unmixable: unmixable.length > 0 ? t('analysis.unmixable', { n: unmixable.length }) : '' })}
           </span>
         </div>
       )}
-      {totals && !colors.length && <div className="callout note"><i className="mdi mdi-information-outline" /><span className="grow">這個盤面沒有物件。</span></div>}
+      {totals && !colors.length && <div className="callout note"><i className="mdi mdi-information-outline" /><span className="grow">{t('analysis.emptyPlate')}</span></div>}
       {warnings.map((w, i) => (
         <div key={i} className={`callout ${w.type === 'few-colors' ? 'note' : 'warn'}`} data-testid={`warning-${w.type}`}>
           <i className={`mdi ${ICONS[w.type]}`} />
@@ -101,12 +101,12 @@ export default function ColorAnalysis({ colors, totals = null, title = '', mixin
       <table className="dist" data-testid="color-table">
         <thead>
           <tr>
-            <th>顏色</th>
-            <th className="num">面數</th>
-            <th className="num">佔比</th>
+            <th>{t('analysis.colColor')}</th>
+            <th className="num">{t('csv.faces')}</th>
+            <th className="num">{t('csv.share')}</th>
             <th className="bar-col" />
-            {plans && <th>列印方式</th>}
-            {totals && <th className="num">全檔合計</th>}
+            {plans && <th>{t('analysis.colPrint')}</th>}
+            {totals && <th className="num">{t('analysis.colTotal')}</th>}
           </tr>
         </thead>
         <tbody>
@@ -114,9 +114,9 @@ export default function ColorAnalysis({ colors, totals = null, title = '', mixin
             <tr key={c.color} data-testid="color-row" className={`${ditherColors.has(c.color) ? 'dither' : ''}${c.faces === 0 ? ' other-plate' : ''}`}>
               <td className="mono">
                 <span className="swatch" style={{ background: c.color }} /> {c.color}
-                {ditherColors.has(c.color) && <span className="badge badge-warn" title="疑似抖色配對">抖色？</span>}
+                {ditherColors.has(c.color) && <span className="badge badge-warn" title={t('analysis.ditherTitle')}>{t('analysis.ditherBadge')}</span>}
               </td>
-              <td className="num">{c.faces ? c.faces.toLocaleString('zh-TW') : '—'}</td>
+              <td className="num">{c.faces ? c.faces.toLocaleString(locale()) : '—'}</td>
               <td className="num">{c.faces ? `${c.pct}%` : '—'}</td>
               <td className="bar-col">
                 {c.faces > 0 && <div className="bar" style={{ width: `${(c.pct / max) * 100}%`, background: c.color }} />}

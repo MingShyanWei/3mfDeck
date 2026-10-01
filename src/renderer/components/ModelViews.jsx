@@ -2,12 +2,13 @@
 import { ProvenanceBadge, ColorBadge, MissingBadge, PlateBadge, ColorLabels, U1Badge } from './Badges.jsx';
 import { isUnlabeled, formatBytes, formatInt, formatDate } from '../format.js';
 import { thumbOf } from '../thumbSource.js';
+import { t } from '../../core/i18n/index.mjs';
 
 // `picked` (a Set of ids, or null): multi-select checkboxes, used by the 遺失 view
 function Pick({ id, picked, onPick }) {
   if (!picked) return null;
   return (
-    <label className="pick" title="選取">
+    <label className="pick" title={t('list.pick')}>
       <input type="checkbox" data-testid="pick" checked={picked.has(id)} onChange={() => onPick(id)} />
     </label>
   );
@@ -27,7 +28,7 @@ export function ModelGrid({ models, selectedId, onSelect, picked = null, onPick 
           <div className="thumb">
             {m.missing && (
               <div className="missing-overlay" data-testid="missing-overlay">
-                <i className="mdi mdi-file-alert-outline" /> 檔案遺失
+                <i className="mdi mdi-file-alert-outline" /> {t('card.missing')}
               </div>
             )}
             {thumbOf(m) ? (
@@ -68,14 +69,14 @@ export function ModelList({ models, selectedId, onSelect, picked = null, onPick 
         <tr>
           {picked && <th />}
           <th className="thumb-col" />
-          <th>名稱</th>
-          <th>格式</th>
-          <th>來源</th>
-          <th>色數</th>
-          <th className="num">三角數</th>
-          <th className="num">大小</th>
-          <th>標籤</th>
-          <th>匯入日期</th>
+          <th>{t('col.name')}</th>
+          <th>{t('col.format')}</th>
+          <th>{t('col.source')}</th>
+          <th>{t('col.colors')}</th>
+          <th className="num">{t('col.triangles')}</th>
+          <th className="num">{t('col.size')}</th>
+          <th>{t('col.tags')}</th>
+          <th>{t('col.imported')}</th>
         </tr>
       </thead>
       <tbody>

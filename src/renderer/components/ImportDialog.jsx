@@ -2,6 +2,7 @@
 // Every step can be skipped; skipped files stay in the library as 未標.
 import { useEffect, useState } from 'react';
 import MetadataForm, { toDraft, saveDraft } from './MetadataForm.jsx';
+import { t } from '../../core/i18n/index.mjs';
 
 export default function ImportDialog({ ids, platforms, onDone }) {
   const [index, setIndex] = useState(0);
@@ -26,20 +27,20 @@ export default function ImportDialog({ ids, platforms, onDone }) {
   if (!model || model.id !== ids[index]) return <div className="modal-backdrop" />;
   return (
     <div className="modal-backdrop">
-      <div className="modal" role="dialog" aria-label="匯入對話框" data-testid="import-dialog">
+      <div className="modal" role="dialog" aria-label={t('import.aria')} data-testid="import-dialog">
         <header>
           <h2>
-            <i className="mdi mdi-tray-arrow-down" /> 匯入 {index + 1} / {ids.length}
+            <i className="mdi mdi-tray-arrow-down" /> {t('import.title', { i: index + 1, n: ids.length })}
           </h2>
           <div className="muted mono">{model.rel_path}</div>
         </header>
         <MetadataForm draft={draft} onChange={setDraft} platforms={platforms} />
         <footer>
-          <button className="ghost" data-testid="import-skip-all" onClick={onDone}>全部略過</button>
+          <button className="ghost" data-testid="import-skip-all" onClick={onDone}>{t('import.skipAll')}</button>
           <span className="spacer" />
-          <button className="ghost" data-testid="import-skip" onClick={next}>略過此檔</button>
+          <button className="ghost" data-testid="import-skip" onClick={next}>{t('import.skip')}</button>
           <button className="primary" data-testid="import-save" onClick={saveAndNext}>
-            {index + 1 < ids.length ? '儲存並下一個' : '儲存'}
+            {index + 1 < ids.length ? t('import.saveNext') : t('common.save')}
           </button>
         </footer>
       </div>

@@ -1,11 +1,12 @@
 import { PROVENANCE, isUnlabeled } from '../format.js';
-import { swatchOf } from '../../core/colorNames.mjs';
+import { swatchOf, labelName } from '../../core/colorNames.mjs';
+import { t } from '../../core/i18n/index.mjs';
 
 export function ProvenanceBadge({ model }) {
   if (isUnlabeled(model)) {
     return (
-      <span className="badge badge-warn" title="來源未標，請補上">
-        <i className="mdi mdi-help-circle-outline" /> 未標
+      <span className="badge badge-warn" title={t('badge.unlabeledTitle')}>
+        <i className="mdi mdi-help-circle-outline" /> {t('prov.unknown')}
       </span>
     );
   }
@@ -20,8 +21,8 @@ export function ProvenanceBadge({ model }) {
 export function MissingBadge({ model }) {
   if (!model.missing) return null;
   return (
-    <span className="badge badge-missing" data-testid="missing-badge" title="檔案不在目前的檔案櫃根目錄下">
-      <i className="mdi mdi-file-alert-outline" /> 遺失
+    <span className="badge badge-missing" data-testid="missing-badge" title={t('badge.missingTitle')}>
+      <i className="mdi mdi-file-alert-outline" /> {t('badge.missing')}
     </span>
   );
 }
@@ -29,8 +30,8 @@ export function MissingBadge({ model }) {
 export function PlateBadge({ model }) {
   if (!(model.plate_count > 1)) return null;
   return (
-    <span className="badge badge-plates" data-testid="plate-badge" title="多盤 3MF">
-      <i className="mdi mdi-layers-triple-outline" /> {model.plate_count} 盤
+    <span className="badge badge-plates" data-testid="plate-badge" title={t('badge.platesTitle')}>
+      <i className="mdi mdi-layers-triple-outline" /> {t('badge.plates', { n: model.plate_count })}
     </span>
   );
 }
@@ -38,8 +39,8 @@ export function PlateBadge({ model }) {
 export function ColorBadge({ model }) {
   if (model.color_count == null) return null;
   return (
-    <span className="badge badge-colors" title="paint_color 色數">
-      <i className="mdi mdi-palette-outline" /> {model.color_count} 色
+    <span className="badge badge-colors" title={t('badge.colorsTitle')}>
+      <i className="mdi mdi-palette-outline" /> {t('badge.colors', { n: model.color_count })}
     </span>
   );
 }
@@ -50,9 +51,9 @@ export function ColorLabels({ labels, pct = false, testid = 'color-tags' }) {
   return (
     <span className="color-tags" data-testid={testid}>
       {labels.map((l) => (
-        <span key={l.label} className="ctag" data-label={l.label} title={`${l.label} ${l.pct}%`}>
+        <span key={l.label} className="ctag" data-label={l.label} title={`${labelName(l.label)} ${l.pct}%`}>
           <i className="dot" style={{ background: swatchOf(l.label) || 'conic-gradient(#e33, #3c3, #39f, #e33)' }} />
-          {l.label}
+          {labelName(l.label)}
           {pct && <small>{l.pct}%</small>}
         </span>
       ))}
@@ -65,8 +66,8 @@ export const isNonU1 = (m) => Boolean(m.source_printer) && m.source_printer !== 
 export function U1Badge({ model }) {
   if (!isNonU1(model)) return null;
   return (
-    <span className="badge badge-warn" data-testid="u1-badge" title={`專案機型：${model.source_printer}（不是 Snapmaker U1）`}>
-      <i className="mdi mdi-printer-3d-off" /> 非 U1
+    <span className="badge badge-warn" data-testid="u1-badge" title={t('badge.nonU1Title', { printer: model.source_printer })}>
+      <i className="mdi mdi-printer-3d-off" /> {t('badge.nonU1')}
     </span>
   );
 }

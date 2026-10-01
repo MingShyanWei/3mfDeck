@@ -9,11 +9,12 @@ import { slotsFromColours, DEFAULT_SPOOLS } from '../core/filament.mjs';
 import RecoverDialog from './components/RecoverDialog.jsx';
 import PurchaseDialog from './components/PurchaseDialog.jsx';
 import { runThumbQueue } from './thumbQueue.js';
+import { t, setLang } from '../core/i18n/index.mjs';
 
 const SORTS = [
-  ['imported', '匯入日期'],
-  ['name', '名稱'],
-  ['colors', '色數'],
+  ['imported', 'col.imported'],
+  ['name', 'col.name'],
+  ['colors', 'col.colors'],
 ];
 
 export default function App() {
@@ -30,10 +31,23 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   // User spool colours (settings page) -> slots for mapping, recipes and export
   const [spools, setSpools] = useState(DEFAULT_SPOOLS);
+  // M24 (SPEC 3.12): UI language, decided in main (saved choice / system locale). Nothing renders
+  // until it is known, so the first paint is already in the right language.
+  const [lang, setLangState] = useState(null);
   useEffect(() => {
-    window.api.getSettings().then((s) => setSpools(s.spools));
+    window.api.getSettings().then((s) => {
+      setSpools(s.spools);
+      setLang(s.language);
+      setLangState(s.language);
+    });
   }, []);
-  const slots = useMemo(() => slotsFromColours(spools), [spools]);
+  const changeLanguage = async (l) => {
+    await window.api.setLanguage(l);
+    setLang(l); // core messages (warnings, report rows) in this process too
+    setLangState(l);
+  };
+  // slot labels (C 青 / C Cyan) are taken in the current language
+  const slots = useMemo(() => slotsFromColours(spools), [spools, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   const [dragging, setDragging] = useState(false);
   const [notice, setNotice] = useState(null);
   const [consistency, setConsistency] = useState(null);
@@ -110,7 +124,7 @@ export default function App() {
         if (res.ids.length) setImportIds(res.ids);
         const problems = [
           ...res.errors.map((e) => `${e.file.split('/').pop()}：${e.error}`),
-          ...(res.skipped.length ? [`略過 ${res.skipped.length} 個不支援的檔案`] : []),
+          ...(res.skipped.length ? [t('app.skippedFiles', { n: res.skipped.length })] : []),
         ];
         setNotice(problems.length ? problems.join('\n') : null);
       }),
@@ -127,6 +141,7 @@ export default function App() {
 
   const platforms = counts?.platforms.map((p) => p.name) || [];
 
+  if (!lang) return null; // language not known yet (one IPC round trip)
   return (
     <SetSpoolsContext.Provider value={setSpools}>
     <SlotsContext.Provider value={slots}>
@@ -154,23 +169,23 @@ export default function App() {
         <div className="toolbar">
           <div className="search">
             <i className="mdi mdi-magnify" />
-            <input data-testid="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋名稱、標籤、備註、色名（如：紅）" />
-            {q && <button className="icon" onClick={() => setQ('')} title="清除"><i className="mdi mdi-close-circle" /></button>}
+            <input data-testid="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('app.searchPlaceholder')} />
+            {q && <button className="icon" onClick={() => setQ('')} title={t('side.clear')}><i className="mdi mdi-close-circle" /></button>}
           </div>
           <label className="sort">
-            排序
+            {t('app.sort')}
             <select data-testid="sort" value={sort} onChange={(e) => setSort(e.target.value)}>
-              {SORTS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+              {SORTS.map(([k, label]) => <option key={k} value={k}>{t(label)}</option>)}
             </select>
           </label>
           <div className="seg-group">
-            <button className={view === 'grid' ? 'seg on' : 'seg'} data-testid="view-grid" onClick={() => setView('grid')} title="卡片牆"><i className="mdi mdi-view-grid-outline" /></button>
-            <button className={view === 'list' ? 'seg on' : 'seg'} data-testid="view-list" onClick={() => setView('list')} title="清單"><i className="mdi mdi-view-list-outline" /></button>
+            <button className={view === 'grid' ? 'seg on' : 'seg'} data-testid="view-grid" onClick={() => setView('grid')} title={t('app.viewGrid')}><i className="mdi mdi-view-grid-outline" /></button>
+            <button className={view === 'list' ? 'seg on' : 'seg'} data-testid="view-list" onClick={() => setView('list')} title={t('app.viewList')}><i className="mdi mdi-view-list-outline" /></button>
           </div>
           <button className="primary" data-testid="import-button" onClick={() => window.api.importDialog()}>
-            <i className="mdi mdi-tray-arrow-down" /> 匯入…
+            <i className="mdi mdi-tray-arrow-down" /> {t('menu.import')}
           </button>
-          <button className="icon" data-testid="settings-button" onClick={() => setSettingsOpen(true)} title="設定"><i className="mdi mdi-cog-outline" /></button>
+          <button className="icon" data-testid="settings-button" onClick={() => setSettingsOpen(true)} title={t('app.settings')}><i className="mdi mdi-cog-outline" /></button>
         </div>
         {notice && (
           <div className="callout warn notice">
@@ -181,14 +196,14 @@ export default function App() {
         {consistency?.untracked.length > 0 && (
           <div className="callout warn" data-testid="consistency-banner">
             <i className="mdi mdi-database-alert-outline" />
-            <span className="grow">發現 {consistency.untracked.length} 個檔案在檔案櫃中但不在索引裡（索引可能遺失或檔案是手動放入的）。</span>
-            <button className="primary" data-testid="rebuild-index" onClick={rebuildIndex}>重建索引</button>
+            <span className="grow">{t('app.untracked', { n: consistency.untracked.length })}</span>
+            <button className="primary" data-testid="rebuild-index" onClick={rebuildIndex}>{t('app.rebuild')}</button>
           </div>
         )}
         {consistency?.newlyMissing > 0 && !missingToastClosed && (
           <div className="callout danger" data-testid="missing-toast">
             <i className="mdi mdi-file-alert-outline" />
-            <span className="grow">{consistency.newlyMissing} 筆記錄新出現遺失（檔案不在目前的根目錄）。</span>
+            <span className="grow">{t('app.newlyMissing', { n: consistency.newlyMissing })}</span>
             <button
               data-testid="missing-toast-view"
               onClick={() => {
@@ -196,9 +211,9 @@ export default function App() {
                 setMissingToastClosed(true);
               }}
             >
-              檢視遺失
+              {t('app.viewMissing')}
             </button>
-            <button className="icon" data-testid="missing-toast-close" onClick={() => setMissingToastClosed(true)} title="關閉">
+            <button className="icon" data-testid="missing-toast-close" onClick={() => setMissingToastClosed(true)} title={t('common.close')}>
               <i className="mdi mdi-close" />
             </button>
           </div>
@@ -206,39 +221,39 @@ export default function App() {
         {filter === 'missing' && (
           <div className="callout note" data-testid="missing-note">
             <i className="mdi mdi-file-alert-outline" />
-            <span className="grow">遺失：記錄還在，但檔案不在目前的根目錄。點選檔案可「重新定位」、「移除記錄」（不刪檔），檔案在回收桶時可「還原」。</span>
+            <span className="grow">{t('app.missingNote')}</span>
             <button data-testid="recover-open" disabled={!models.length} onClick={() => setRecoverOpen(true)}>
-              <i className="mdi mdi-file-find-outline" /> 依檔名找回…
+              <i className="mdi mdi-file-find-outline" /> {t('app.recover')}
             </button>
             <button
               data-testid="missing-select-all"
               disabled={!models.length}
               onClick={() => setPicked(picked.size === models.length ? new Set() : new Set(models.map((m) => m.id)))}
             >
-              {picked.size === models.length && models.length ? '取消全選' : '全選'}
+              {picked.size === models.length && models.length ? t('app.unselectAll') : t('app.selectAll')}
             </button>
             <button data-testid="missing-remove-selected" disabled={!picked.size} onClick={removePicked}>
-              移除所選（{picked.size}）…
+              {t('app.removeSelected', { n: picked.size })}
             </button>
           </div>
         )}
         {filter === 'trash' && (
           <div className="callout note">
             <i className="mdi mdi-delete-outline" />
-            <span className="grow">回收桶：{counts?.trash ?? 0} 個檔案，可逐一還原。</span>
-            <button data-testid="empty-trash" disabled={!counts?.trash} onClick={emptyTrash}>清空回收桶…</button>
+            <span className="grow">{t('app.trashNote', { n: counts?.trash ?? 0 })}</span>
+            <button data-testid="empty-trash" disabled={!counts?.trash} onClick={emptyTrash}>{t('app.emptyTrash')}</button>
           </div>
         )}
         {counts && counts.unlabeled > 0 && filter !== 'unlabeled' && (
           <button className="callout warn link" onClick={() => setFilter('unlabeled')}>
-            <i className="mdi mdi-help-circle-outline" /> 有 {counts.unlabeled} 個檔案來源未標，點此檢視
+            <i className="mdi mdi-help-circle-outline" /> {t('app.unlabeledHint', { n: counts.unlabeled })}
           </button>
         )}
         <div className="content">
           {models.length === 0 ? (
             <div className="empty">
               <i className="mdi mdi-tray-arrow-down" />
-              <p>{counts?.all ? '沒有符合條件的檔案' : '把 3MF / STL / OBJ / GLB… 拖進來，或按「匯入…」'}</p>
+              <p>{counts?.all ? t('app.noMatch') : t('app.emptyLibrary')}</p>
             </div>
           ) : view === 'grid' ? (
             <ModelGrid models={models} selectedId={selectedId} onSelect={setSelectedId} picked={filter === 'missing' ? picked : null} onPick={togglePick} />
@@ -270,7 +285,7 @@ export default function App() {
       {dragging && (
         <div className="drop-overlay">
           <i className="mdi mdi-tray-arrow-down" />
-          <p>放開以匯入（檔案會搬進檔案櫃）</p>
+          <p>{t('app.dropHint')}</p>
         </div>
       )}
       {importIds && (
@@ -296,6 +311,8 @@ export default function App() {
       )}
       {settingsOpen && (
         <SettingsDialog
+          language={lang}
+          onLanguage={changeLanguage}
           onSpoolsChanged={setSpools}
           onClose={() => setSettingsOpen(false)}
           onRootChanged={() => {
