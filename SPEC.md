@@ -118,6 +118,15 @@
   結合線材庫算出「建議優先購買哪些顏色」；面板放在顏色過濾區下方或彈窗，
   並可直接把建議色加入線材庫草稿。
 
+### 3.4b 原檔內嵌預覽圖（M19）
+- 中間預覽區新增切換：**「3D」／「原檔圖」**（沒有內嵌圖的檔案不顯示這個切換）。
+- 「原檔圖」模式顯示 3MF 內嵌的產品截圖：
+  1. 優先 `Auxiliaries/.thumbnails/thumbnail_middle.png`（創作者封面，最大），否則 `thumbnail_3mf.png`
+  2. `Auxiliaries/Model Pictures/*.webp`（創作者實拍照，可切換瀏覽）
+  3. `Metadata/plate_N.png`（Orca 盤面渲染）；多盤檔隨盤面切換器連動，顯示對應那盤
+- 下方縮圖列可切換所有可用內嵌圖；無內嵌圖（如 Meshy 產出）時整組 UI 隱藏。
+- 匯入時把封面存成 DB 欄位（顯示用），其餘圖按需從檔案讀取（單一 zip entry，成本低）。
+
 ### 3.9 Snapmaker U1 相容性檢查與轉換（M18）
 - **偵測**：匯入時與詳情面板顯示用 `project_settings.printer_model` / `printer_settings_id` 判定；
   非 Snapmaker U1（例如 `Bambu Lab P1S/H2S`）→ 卡片與詳情面板顯示警示（含來源機型與 process 名稱），
