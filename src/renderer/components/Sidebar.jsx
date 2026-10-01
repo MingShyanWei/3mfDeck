@@ -17,7 +17,7 @@ export default function Sidebar({ counts, filter, onFilter, colors = [], onToggl
   if (!counts) return <aside className="sidebar" />;
   return (
     <aside className="sidebar">
-      <div className="brand"><span className="logo" />3MF 櫃</div>
+      <div className="brand"><span className="logo" />3mfDeck</div>
       <ul>
         <Item id="all" filter={filter} onFilter={onFilter} icon="mdi-cube-outline" label="全部" count={counts.all} />
         <Item id="unlabeled" filter={filter} onFilter={onFilter} icon="mdi-help-circle-outline" label="未標" count={counts.unlabeled} warn />

@@ -3,7 +3,7 @@
 // drag & drop (CDP Input.dispatchDragEvent), check the library UI, and fail
 // on any console error.
 // Run: npm run smoke   (builds the renderer first)
-// Packaged app: MF_APP_PATH="/Applications/3MF 櫃.app/Contents/MacOS/3MF 櫃" node tests/smoke/smoke.mjs
+// Packaged app: MF_APP_PATH="/Applications/3mfDeck.app/Contents/MacOS/3mfDeck" node tests/smoke/smoke.mjs
 import { _electron as electron } from 'playwright-core';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -58,8 +58,8 @@ const step = (msg) => console.log(`• ${msg}`);
 
 const consoleProblems = [];
 const APP_PATH = process.env.MF_APP_PATH;
-async function launch() {
-  const env = { ...process.env, MF_USER_DATA: path.join(base, 'userData'), MF_LIBRARY_ROOT: lib };
+async function launch(extraEnv = {}) {
+  const env = { ...process.env, MF_USER_DATA: path.join(base, 'userData'), MF_LIBRARY_ROOT: lib, ...extraEnv };
   const a = await electron.launch(APP_PATH ? { executablePath: APP_PATH, args: [], env } : { args: [ROOT], env });
   a.process().stderr.on('data', (d) => {
     const s = d.toString();
@@ -1105,6 +1105,32 @@ try {
 
   await page.screenshot({ path: path.join(base, 'smoke.png') });
   step('screenshot: ' + path.join(base, 'smoke.png'));
+
+  // 16) M20: renamed 3mfDeck — first launch copies the old 「3MF 櫃」 userData, never touching it
+  {
+    const before = await page.evaluate(async () => ({ list: (await window.api.list({})).length, sidebar: await window.api.sidebar(), settings: await window.api.getSettings() }));
+    assert.equal(await page.title(), '3mfDeck');
+    assert.match(await page.textContent('.sidebar .brand'), /3mfDeck/);
+    await app.close();
+    const legacy = path.join(base, '3MF 櫃'); // the old app's userData, as this run left it
+    await fs.mkdir(legacy);
+    for (const f of await fs.readdir(path.join(base, 'userData'))) {
+      if (/^(library\.db(-wal|-shm)?|config\.json)$/.test(f)) await fs.copyFile(path.join(base, 'userData', f), path.join(legacy, f));
+    }
+    const crypto = await import('node:crypto');
+    const snapshot = async () => Object.fromEntries(await Promise.all((await fs.readdir(legacy)).sort().map(async (f) => [f, crypto.createHash('sha256').update(await fs.readFile(path.join(legacy, f))).digest('hex')])));
+    const legacyBefore = await snapshot();
+    const fresh = path.join(base, '3mfDeck');
+    [app, page] = await launch({ MF_USER_DATA: fresh, MF_LEGACY_USER_DATA: legacy });
+    await page.waitForSelector('.toolbar');
+    const after = await page.evaluate(async () => ({ list: (await window.api.list({})).length, sidebar: await window.api.sidebar(), settings: await window.api.getSettings() }));
+    assert.equal(after.list, before.list);
+    assert.deepEqual([after.sidebar.all, after.sidebar.nonU1, after.sidebar.colors], [before.sidebar.all, before.sidebar.nonU1, before.sidebar.colors]);
+    assert.equal(after.settings.libraryRoot, before.settings.libraryRoot);
+    assert.match(await fs.readFile(path.join(fresh, 'migrated-from.json'), 'utf8'), /3MF 櫃/);
+    assert.deepEqual(await snapshot(), legacyBefore, 'old userData untouched');
+    step(`M20 3mfDeck: 視窗標題/側欄已改名；遷移 ${Object.keys(legacyBefore).join(', ')} -> 新資料夾，${after.list} 筆、非 U1 ${after.sidebar.nonU1}、色名 ${after.sidebar.colors.length} 種與遷移前相同；舊資料夾 sha256 不變`);
+  }
 } finally {
   await app.close();
 }

@@ -1,6 +1,6 @@
 {
   "name": "mf-cabinet",
-  "productName": "3MF 櫃",
+  "productName": "3mfDeck",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -20,8 +20,8 @@
     "orcacompare": "vite build && node tests/smoke/orcacompare.mjs"
   },
   "build": {
-    "appId": "tw.aktzin.mf-cabinet",
-    "productName": "3MF 櫃",
+    "appId": "app.foobox.3mfdeck",
+    "productName": "3mfDeck",
     "directories": {
       "output": "release"
     },
@@ -38,6 +38,7 @@
     ],
     "npmRebuild": false,
     "mac": {
+      "icon": "build/icon.icns",
       "target": [
         {
           "target": "dmg",

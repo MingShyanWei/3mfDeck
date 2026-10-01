@@ -7,6 +7,7 @@ import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getT
 import JSZip from 'jszip';
 import { listEmbeddedImages, mimeOf } from '../src/core/embeddedImages.mjs';
 import { convertToU1, readSourcePrinter } from '../src/core/u1Convert.mjs';
+import { migrateUserData, OLD_APP_NAME } from '../src/core/userDataMigration.mjs';
 import { loadU1Profiles, DEFAULT_PROFILES_DIR } from '../src/core/orcaProfiles.mjs';
 import { cabinetColors } from '../src/core/purchase.mjs';
 import { loadPreviewData, storeThumb, previewPlate } from '../src/core/preview.mjs';
@@ -324,6 +325,17 @@ app.whenReady().then(() => {
       return new Response(null, { status: 404 });
     }
   });
+  // M20: renamed from 「3MF 櫃」 — copy the old userData (index + settings) on first launch.
+  // Tests point MF_USER_DATA at a temp folder; they opt in with MF_LEGACY_USER_DATA.
+  if (!process.env.MF_USER_DATA || process.env.MF_LEGACY_USER_DATA) {
+    const legacy = process.env.MF_LEGACY_USER_DATA || path.join(app.getPath('appData'), OLD_APP_NAME);
+    try {
+      const r = migrateUserData(legacy, app.getPath('userData'));
+      if (r.migrated) console.log(`userData migrated from ${legacy}: ${r.copied.join(', ')}`);
+    } catch (err) {
+      console.error('userData migration failed:', err.message); // start with a fresh index rather than not at all
+    }
+  }
   root = loadSettings(app.getPath('userData'), DEFAULT_ROOT).libraryRoot;
   fs.mkdirSync(root, { recursive: true });
   db = openDb(path.join(app.getPath('userData'), 'library.db'));
@@ -334,7 +346,7 @@ app.whenReady().then(() => {
     height: 820,
     minWidth: 900,
     minHeight: 560,
-    title: '3MF 櫃',
+    title: '3mfDeck',
     webPreferences: {
       preload: path.join(import.meta.dirname, 'preload.cjs'),
       contextIsolation: true,

@@ -1,5 +1,5 @@
 /*
- * FilamentMixer — JS (ESM) port for 3MF 櫃 (converted from the TS port) of Justin Hayes's header-only C++ pigment
+ * FilamentMixer — JS (ESM) port for 3mfDeck (converted from the TS port) of Justin Hayes's header-only C++ pigment
  * color mixer (filament_mixer_model.h). Degree-4 polynomial regression trained
  * to approximate Mixbox behavior (Mean Delta-E ~2.07): blue + yellow -> green,
  * the way real pigment/filament mixing looks, not a naive RGB average.
