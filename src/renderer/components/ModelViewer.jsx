@@ -51,16 +51,24 @@ export default function ModelViewer({ model }) {
     setMode('original');
     (async () => {
       try {
+        // performance.measure entries let tests break down where load time goes
+        performance.mark('preview:start');
         const payload = await window.api.preview(model.id);
+        performance.measure('preview:ipc', 'preview:start');
         if (cancelled) return;
         if (payload.unsupported) return setStatus('unsupported');
+        performance.mark('preview:build');
         const built = await buildModel(payload);
+        performance.measure('preview:buildModel', 'preview:build');
         if (cancelled) return;
+        performance.mark('preview:render');
         viewer.setModel(built);
         viewer.controls.target.copy(viewer.target);
         viewer.controls.update();
         viewer.setMode('original');
-        viewer.render();
+        await viewer.reveal();
+        if (cancelled) return;
+        performance.measure('preview:reveal', 'preview:render');
         setHasPaint(Boolean(built.paint));
         setStatus('ready');
       } catch (err) {

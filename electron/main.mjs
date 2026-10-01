@@ -66,8 +66,16 @@ function registerIpc() {
   ipcMain.handle('lib:update', (_e, id, fields) => updateModel(db, id, fields));
   ipcMain.handle('lib:setTags', (_e, id, names) => setTags(db, id, names));
   ipcMain.handle('lib:importPaths', (_e, paths) => importAndNotify(paths));
-  ipcMain.handle('lib:preview', (_e, id) => {
-    return loadPreviewData(modelPath(db, root, id), getModel(db, id).format);
+  // Keep the last preview payload: right after an import the thumbnail and
+  // the preview ask for the same model, and a 5M-face 3MF takes ~9 s to parse.
+  let lastPreview = null;
+  ipcMain.handle('lib:preview', async (_e, id) => {
+    const file = modelPath(db, root, id);
+    const { mtimeMs } = await fs.promises.stat(file);
+    if (lastPreview?.file === file && lastPreview.mtimeMs === mtimeMs) return lastPreview.payload;
+    const payload = await loadPreviewData(file, getModel(db, id).format);
+    lastPreview = { file, mtimeMs, payload };
+    return payload;
   });
   ipcMain.handle('lib:trash', (_e, id) => trashModel(db, root, id));
   ipcMain.handle('lib:restore', (_e, id) => restoreModel(db, root, id));

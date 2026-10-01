@@ -78,9 +78,31 @@ export class Viewer {
     });
     const paint = this.built.paint;
     if (paint && mode !== 'wireframe') {
-      const attr = paint.geometry.getAttribute('color');
-      attr.copyArray(mode === 'filament' ? paint.filament : paint.original);
-      attr.needsUpdate = true;
+      // Swap the backing array (same length) instead of copying 50 MB+ on big models
+      for (const c of paint.chunks) {
+        const attr = c.geometry.getAttribute('color');
+        attr.array = mode === 'filament' ? c.filament : c.original;
+        attr.needsUpdate = true;
+      }
+    }
+  }
+
+  /**
+   * Show the model's meshes one per frame: each render uploads one chunk to
+   * the GPU, so a multi-million-face model never blocks the UI for long.
+   * Resolves when everything is visible (or the model was replaced).
+   */
+  async reveal() {
+    const root = this.root;
+    const meshes = [];
+    root.traverse((o) => o.isMesh && meshes.push(o));
+    if (meshes.length < 2) return this.render();
+    for (const m of meshes) m.visible = false;
+    for (const m of meshes) {
+      if (this.root !== root) return;
+      m.visible = true;
+      this.render();
+      await new Promise((r) => requestAnimationFrame(r));
     }
   }
 

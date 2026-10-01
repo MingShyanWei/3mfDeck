@@ -4,9 +4,35 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { AMFLoader } from 'three/addons/loaders/AMFLoader.js';
-import { nearestSlot } from '../../core/filament.mjs';
+import MeshWorker from './meshWorker.js?worker';
 
 export const GRAY = 0xb4b4b0;
+
+// Faces per mesh chunk. Big models are split so the GPU upload can be
+// spread over several frames instead of freezing the UI in one go.
+export const CHUNK_FACES = 262144;
+
+// One worker for all painted-3MF preparation (preview and thumbnails)
+let worker = null;
+let seq = 0;
+const pending = new Map();
+function prepareInWorker(payload) {
+  if (!worker) {
+    worker = new MeshWorker();
+    worker.onmessage = ({ data }) => {
+      const { resolve, reject } = pending.get(data.id);
+      pending.delete(data.id);
+      if (data.error) reject(new Error(data.error));
+      else resolve(data.result);
+    };
+  }
+  const id = ++seq;
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    // Transfer the input buffers: the worker owns them from here on
+    worker.postMessage({ id, payload }, [payload.positions.buffer, payload.indices.buffer, payload.faceColor.buffer]);
+  });
+}
 
 const exactBuffer = (u8) => u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
 
@@ -14,45 +40,40 @@ const exactBuffer = (u8) => u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.by
 // not glossy grey.
 const grayMaterial = () => new THREE.MeshLambertMaterial({ color: GRAY, flatShading: true, side: THREE.DoubleSide });
 
-// #RRGGBB -> linear RGB bytes (three treats vertex colours as linear)
-function linearBytes(hex) {
-  const c = new THREE.Color(hex);
-  return [c.r, c.g, c.b].map((v) => Math.round(v * 255));
-}
-
-function faceColours(faceColor, palette) {
-  const out = new Uint8Array(faceColor.length * 9);
-  const gray = linearBytes('#' + GRAY.toString(16));
-  for (let f = 0; f < faceColor.length; f++) {
-    const rgb = palette[faceColor[f] - 1] || gray;
-    for (let k = 0; k < 3; k++) out.set(rgb, f * 9 + k * 3);
-  }
-  return out;
-}
-
 /**
- * 3MF with per-face colours (paint_color or material colour). Geometry is
- * de-indexed so every face can carry its own colour. `paint` holds the two
- * colour arrays the viewer swaps between: original colours and their
- * nearest U1 slot colours. Faces without a colour (index 0) stay grey.
+ * 3MF with per-face colours (paint_color or material colour). The worker
+ * de-indexes (so every face can carry its own colour) and quantizes
+ * positions to Int16; the group's scale/position undo the quantization.
+ * The faces are split into CHUNK_FACES meshes (views into the same buffers,
+ * no copies). `paint` lists, per chunk, the geometry and the two colour
+ * arrays the viewer swaps between: original colours and their nearest U1
+ * slot colours. Uncoloured faces stay grey.
  */
-function buildPainted({ positions, indices, faceColor, palette }) {
-  const pos = new Float32Array(indices.length * 3);
-  for (let i = 0; i < indices.length; i++) {
-    const v = indices[i] * 3;
-    pos[i * 3] = positions[v];
-    pos[i * 3 + 1] = positions[v + 1];
-    pos[i * 3 + 2] = positions[v + 2];
+async function buildPainted(payload) {
+  const { positions, center, half, original, filament } = await prepareInWorker(payload);
+  const group = new THREE.Group();
+  group.scale.set(...half);
+  group.position.set(...center);
+  const material = original
+    ? new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide })
+    : grayMaterial();
+  const faces = positions.length / 9;
+  const chunks = [];
+  for (let f = 0; f < faces; f += CHUNK_FACES) {
+    const [a, b] = [f * 9, Math.min(faces, f + CHUNK_FACES) * 9];
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions.subarray(a, b), 3, true));
+    // Quantized positions lie in [-1, 1]^3: give three the bounds up front
+    // instead of letting it scan millions of vertices (framing, culling).
+    geometry.boundingBox = new THREE.Box3(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1));
+    geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), Math.sqrt(3));
+    if (original) {
+      geometry.setAttribute('color', new THREE.BufferAttribute(original.subarray(a, b), 3, true));
+      chunks.push({ geometry, original: original.subarray(a, b), filament: filament.subarray(a, b) });
+    }
+    group.add(new THREE.Mesh(geometry, material));
   }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  if (!palette.length) return { object: new THREE.Mesh(geometry, grayMaterial()), zUp: true, paint: null };
-
-  const original = faceColours(faceColor, palette.map(linearBytes));
-  const filament = faceColours(faceColor, palette.map((c) => linearBytes(nearestSlot(c).hex)));
-  geometry.setAttribute('color', new THREE.BufferAttribute(original.slice(), 3, true));
-  const material = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
-  return { object: new THREE.Mesh(geometry, material), zUp: true, paint: { geometry, original, filament } };
+  return { object: group, zUp: true, paint: original ? { chunks } : null };
 }
 
 function withGray(object) {

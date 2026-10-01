@@ -13,6 +13,7 @@ export async function renderThumbnail(payload) {
   }
   viewer.setModel(await buildModel(payload));
   viewer.setMode('original');
+  await viewer.reveal(); // spread the GPU upload of big models over frames
   viewer.render();
   const blob = await new Promise((resolve) => viewer.renderer.domElement.toBlob(resolve, 'image/png'));
   viewer.clear();
