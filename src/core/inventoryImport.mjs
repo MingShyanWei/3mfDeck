@@ -5,6 +5,9 @@ import { t as tr } from './i18n/index.mjs';
 // The same columns also ship as CSV (Export dropdown), so both are accepted.
 // Name is built as "Brand Material Type Color" (e.g. "Bambu Lab PLA Basic Cyan (10603)").
 
+/** Where the export comes from; opened in the system browser from Settings (the app itself stays offline). */
+export const FILAMENT_PROFILES_URL = 'https://3dfilamentprofiles.com';
+
 const HEX = /^#[0-9A-F]{6}$/;
 const nameOf = (s) => [s.brand, s.material, s.material_type, s.color].map((v) => String(v ?? '').trim()).filter(Boolean).join(' ').trim().slice(0, 60);
 

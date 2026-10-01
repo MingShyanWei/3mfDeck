@@ -18,7 +18,7 @@ import { trashModel, restoreModel, emptyTrash } from '../src/core/trash.mjs';
 import { consistencyReport, relocateModel, removeRecord, findInTrash, restoreMissingFromTrash, isInside, removeMissingRecords, findByFilename, applyRelocations } from '../src/core/missing.mjs';
 import { loadSettings, saveSettings, validateSpools, validateInventory, switchRoot, markMissing, modelPath } from '../src/core/settings.mjs';
 import { mappingCsv, exportQuantized3mf } from '../src/core/exportMapping.mjs';
-import { import3dfpInventory } from '../src/core/inventoryImport.mjs';
+import { import3dfpInventory, FILAMENT_PROFILES_URL } from '../src/core/inventoryImport.mjs';
 import { slotsFromColours } from '../src/core/filament.mjs';
 import { SUPPORTED_EXTS } from '../src/core/parse/index.mjs';
 import { t, setLang, getLang, pickLang, LANGS } from '../src/core/i18n/index.mjs';
@@ -105,6 +105,8 @@ function registerIpc() {
   // Opens the project page in the system browser; the app itself never makes a
   // network request (SPEC: fully offline). Only this fixed URL can be opened.
   ipcMain.handle('app:openRepo', () => shell.openExternal(REPO_URL));
+  // M26: the inventory export source, same rule: one fixed URL in the system browser
+  ipcMain.handle('app:openFilamentProfiles', () => shell.openExternal(FILAMENT_PROFILES_URL));
   ipcMain.handle('lib:list', (_e, opts) => {
     // 遺失 filter: records whose file is not under the current root
     if (opts?.filter === 'missing') return markMissing(listModels(db, { ...opts, filter: 'all' }), root).filter((m) => m.missing);

@@ -42,6 +42,7 @@
 - 颜色分析：逐面 `paint_color`／`basematerials` 解析，面积加权占比、抖色检测
 - 颜色标签：自动对应固定色名（黑／白／灰／红／橙／黄／绿／青／蓝／紫／粉／棕／肤／金），可按颜色搜索与过滤；用任一界面语言的色名都能搜到（“蓝”“藍”“blue”皆可）
 - 耗材库：登记自己的料卷（品牌、材质、RGB、剩余量），支持导入 3dfilamentprofiles 的 JSON/CSV
+  - 从 [3dfilamentprofiles.com](https://3dfilamentprofiles.com) 导出：登录 → **My Spools** → **Export**（JSON 或 CSV），再到“设置 › 耗材库”点击 **从 3dfilamentprofiles 导入…** 选择下载的文件（设置页也列出相同步骤与网站链接）
 - 建议料卷颜色：从现有耗材挑，或给理想色码；CMYK／CMYW 标准配置比较；单色作品也给建议
 - 采购建议：统计整个模型库的面积占比，对照耗材库算出该优先买哪些颜色
 
@@ -54,7 +55,7 @@
 - English／繁體中文／简体中文，默认跟随系统语言，可在设置页切换并记住；日期与数字按语言格式化
 
 **离线保证**
-- App 本身**不发任何网络请求**（无账号、无云端、不连打印机）。唯一的外部调用是点击侧栏作者链接时交给系统浏览器打开。
+- App 本身**不发任何网络请求**（无账号、无云端、不连打印机）。唯一的外部调用是两个固定链接交给系统浏览器打开：侧栏作者链接、设置页的 3dfilamentprofiles.com。
 - 侧栏左下显示版本号 `1.<YYMMDDHHMM>`（构建时间），悬停可看完整时间与 commit。
 
 ---
@@ -83,7 +84,7 @@ git clone git@github.com:MingShyanWei/3mfDeck.git
 cd 3mfDeck
 npm install
 npm run dev        # vite build + 启动 Electron
-npm test           # Vitest 单元测试（249 项）
+npm test           # Vitest 单元测试（251 项）
 npm run smoke      # Electron 端到端 smoke（使用隔离的文件夹与数据库）
 npm run dist       # 打包 macOS dmg
 ```
@@ -107,7 +108,7 @@ src/core/          纯逻辑，可单独测试：解析、颜色、混色、导�
   orcaProfiles.mjs 读取本机 Snapmaker Orca 的机型 profile（仅取几何数据，不联网）
 src/core/i18n/     界面词典（en／zh-TW／zh-CN）
 src/renderer/      React UI（three.js 预览、详情面板、弹窗）
-tests/unit/        Vitest（30 个文件、249 项）
+tests/unit/        Vitest（30 个文件、251 项）
 tests/smoke/       真实 Electron 端到端测试
 reports/           各里程碑验收证据（截图、Orca GUI 验证记录）
 SPEC.md            完整功能规格（已定稿）

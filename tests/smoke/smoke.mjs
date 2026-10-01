@@ -514,6 +514,20 @@ try {
   // 9d) M12: filament inventory — register two filaments, suggest FROM them
   await page.click('[data-testid=settings-button]');
   await page.waitForSelector('[data-testid=inventory-editor]');
+  // M26: how to get the export — steps, a named import button, the site opened in the system browser
+  {
+    const help = await page.textContent('[data-testid=inventory-help]');
+    for (const s of ['登入 3dfilamentprofiles.com', '「My Spools」', '「Export」', 'JSON 或 CSV', '「從 3dfilamentprofiles 匯入…」']) assert.ok(help.includes(s), `help mentions ${s}: ${help}`);
+    assert.equal((await page.textContent('[data-testid=inventory-import]')).trim(), '從 3dfilamentprofiles 匯入…');
+    await app.evaluate(({ shell }) => {
+      shell.openExternal = async (url) => {
+        globalThis.__openedExternal = url; // no browser in tests
+      };
+    });
+    await page.click('[data-testid=inventory-3dfp-link]');
+    assert.equal(await app.evaluate(() => globalThis.__openedExternal), 'https://3dfilamentprofiles.com');
+    step('M26 線材庫說明: 登入 → My Spools → Export（JSON/CSV）→ 「從 3dfilamentprofiles 匯入…」；連結交給系統瀏覽器開 https://3dfilamentprofiles.com');
+  }
   // M12b: import a real-format 3dfilamentprofiles export through the (mocked) file dialog
   {
     const invFile = path.join(base, 'my-spools.json');
@@ -1225,6 +1239,10 @@ try {
     assert.equal(await page.getAttribute('[data-testid=search]', 'placeholder'), 'Search names, tags, notes, colours (e.g. red)');
     assert.ok(!/[\u4e00-\u9fff]/.test((await sidebarText()).replace('3mfDeck', '')), 'no Chinese left in the English sidebar: ' + (await sidebarText()));
     assert.ok((await menuLabels()).includes('File'), 'menu rebuilt in English: ' + (await menuLabels()));
+    await page.click('[data-testid=settings-button]');
+    assert.equal((await page.textContent('[data-testid=inventory-import]')).trim(), 'Import from 3dfilamentprofiles…');
+    assert.match(await page.textContent('[data-testid=inventory-help]'), /Log in to 3dfilamentprofiles\.com.*“My Spools”.*“Export”.*JSON or CSV/s);
+    await page.click('[data-testid=settings-done]');
     await search('white', 'm17-materials');
     await search('白', 'm17-materials'); // a Chinese name still works in the English UI
     await openModel('m17-painted');

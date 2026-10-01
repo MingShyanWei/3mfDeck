@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { DEFAULT_SPOOLS } from '../../core/filament.mjs';
 import { t, LANGS, LANG_NAMES } from '../../core/i18n/index.mjs';
+import { FILAMENT_PROFILES_URL } from '../../core/inventoryImport.mjs';
 
 export default function SettingsDialog({ onClose, onRootChanged, onSpoolsChanged, language, onLanguage }) {
   const [settings, setSettings] = useState(null);
@@ -84,6 +85,18 @@ export default function SettingsDialog({ onClose, onRootChanged, onSpoolsChanged
           {inventory && (
             <fieldset className="spool-editor" data-testid="inventory-editor">
               <legend>{t('settings.inventory')}</legend>
+              <div className="inventory-help small muted" data-testid="inventory-help">
+                <p>{t('settings.inv3dfpIntro')}</p>
+                <ol>
+                  <li>{t('settings.inv3dfpStep1')}</li>
+                  <li>{t('settings.inv3dfpStep2')}</li>
+                  <li>{t('settings.inv3dfpStep3')}</li>
+                  <li>{t('settings.inv3dfpStep4')}</li>
+                </ol>
+                <button className="link-btn" data-testid="inventory-3dfp-link" title={t('footer.openRepo', { url: FILAMENT_PROFILES_URL })} onClick={() => window.api.openFilamentProfiles()}>
+                  <i className="mdi mdi-open-in-new" /> {t('settings.inv3dfpOpen')}
+                </button>
+              </div>
               <div className="inventory-list" data-testid="inventory-list">
                 {inventory.map((f, i) => (
                   <div className="row" key={i} data-testid={`inventory-item-${i}`}>
@@ -94,7 +107,7 @@ export default function SettingsDialog({ onClose, onRootChanged, onSpoolsChanged
                   </div>
                 ))}
               </div>
-              <div className="row">
+              <div className="row inventory-actions">
                 <button data-testid="inventory-import" onClick={async () => {
                   const r = await window.api.importInventory();
                   if (!r) return;
@@ -103,7 +116,7 @@ export default function SettingsDialog({ onClose, onRootChanged, onSpoolsChanged
                   const add = r.items.filter((f) => !existing.has(f.hex));
                   setInventory([...inventory, ...add]);
                   setInvMsg(t('settings.imported', { n: add.length, dup: add.length < r.items.length ? t('settings.importedDup', { n: r.items.length - add.length }) : '', skipped: r.skipped.length ? t('settings.importedSkipped', { n: r.skipped.length }) : '' }));
-                }}><i className="mdi mdi-file-import-outline" /> {t('settings.importFile')}</button>
+                }}><i className="mdi mdi-file-import-outline" /> {t('settings.import3dfp')}</button>
                 <button data-testid="inventory-add" onClick={() => setInventory([...inventory, { name: '', hex: '#FFFFFF' }])}><i className="mdi mdi-plus" /> {t('settings.addFilament')}</button>
                 <button className="primary" data-testid="inventory-save" onClick={async () => {
                   const r = await window.api.setInventory(inventory);

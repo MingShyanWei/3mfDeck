@@ -285,6 +285,11 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
 .spool-editor .swatch { width: 22px; height: 22px; }
 .spool-editor button:not(.primary) { background: var(--panel); }
 .inventory-list { display: flex; flex-direction: column; gap: 6px; }
+.inventory-help p { margin: 0; }
+.inventory-help ol { margin: 4px 0; padding-left: 20px; line-height: 1.6; }
+.spool-editor .inventory-help .link-btn { background: none; padding: 0; font-size: inherit; } /* beats .spool-editor button */
+.inventory-actions { flex-wrap: wrap; }
+.inventory-actions button { white-space: nowrap; }
 .radio { display: flex; align-items: center; gap: 4px; font-size: 12px; }
 
 /* Spool suggestion modal: alternatives rail + hero (M14) */

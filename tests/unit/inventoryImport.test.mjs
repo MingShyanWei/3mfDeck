@@ -1,7 +1,8 @@
 // M12b: import a 3dfilamentprofiles "My Spools" export.
 // The JSON below is the user's real export (trimmed to the fields we read).
 import { describe, it, expect } from 'vitest';
-import { import3dfpInventory } from '../../src/core/inventoryImport.mjs';
+import { import3dfpInventory, FILAMENT_PROFILES_URL } from '../../src/core/inventoryImport.mjs';
+import { DICTS, LANGS } from '../../src/core/i18n/index.mjs';
 
 const realExport = JSON.stringify([
   { brand: 'Bambu Lab', material: 'PLA', material_type: 'Basic', color: 'Blue (10601)', rgb: '#0A2989', remaining_grams: 1000, filament_id: 14920 },
@@ -43,5 +44,23 @@ describe('import3dfpInventory', () => {
 
   it('throws on unrecognised content', () => {
     expect(() => import3dfpInventory(JSON.stringify({ nope: 1 }))).toThrow();
+  });
+});
+
+describe('M26: export instructions in Settings', () => {
+  it('the site is one fixed https URL', () => {
+    expect(FILAMENT_PROFILES_URL).toBe('https://3dfilamentprofiles.com');
+  });
+
+  it('every language explains login → My Spools → Export (JSON or CSV) and names the import button by its source', () => {
+    for (const lang of LANGS) {
+      const d = DICTS[lang];
+      expect([lang, d['settings.import3dfp']]).toEqual([lang, expect.stringContaining('3dfilamentprofiles')]);
+      expect([lang, d['settings.inv3dfpStep1']]).toEqual([lang, expect.stringContaining('3dfilamentprofiles.com')]);
+      expect([lang, d['settings.inv3dfpStep2']]).toEqual([lang, expect.stringContaining('My Spools')]);
+      expect([lang, d['settings.inv3dfpStep3']]).toEqual([lang, expect.stringMatching(/Export.*JSON.*CSV/)]);
+      // the last step quotes the import button exactly as it is labelled
+      expect([lang, d['settings.inv3dfpStep4']]).toEqual([lang, expect.stringContaining(d['settings.import3dfp'])]);
+    }
   });
 });

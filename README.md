@@ -42,6 +42,7 @@ Downloading models is easy; the trouble starts afterwards:
 - Colour analysis: per-face `paint_color` / `basematerials` parsing, area-weighted shares, dither detection
 - Colour labels: every colour is mapped to a fixed name (black / white / gray / red / orange / yellow / green / cyan / blue / purple / pink / brown / skin / gold) for searching and filtering; search accepts the name in any UI language (“blue”, 「藍」 and 「蓝」 all work)
 - Filament inventory: register your own spools (brand, material, RGB, remaining amount); imports 3dfilamentprofiles JSON/CSV exports
+  - From [3dfilamentprofiles.com](https://3dfilamentprofiles.com): log in → **My Spools** → **Export** (JSON or CSV), then in Settings › Filament inventory press **Import from 3dfilamentprofiles…** and pick the downloaded file (Settings shows the same steps and a link to the site)
 - Spool suggestions: pick from what you own, or get ideal colour codes; compare with the CMYK / CMYW standard sets; single-colour models get suggestions too
 - Purchase suggestions: area shares across the whole library, checked against your inventory, tell you which colours to buy first
 
@@ -54,7 +55,7 @@ Downloading models is easy; the trouble starts afterwards:
 - English / 繁體中文 / 简体中文; follows the system language by default, can be switched in Settings and is remembered; dates and numbers are formatted for the language
 
 **Offline guarantee**
-- The app itself **makes no network requests** (no account, no cloud, no printer connection). The only outside call is handing the author link in the sidebar to the system browser.
+- The app itself **makes no network requests** (no account, no cloud, no printer connection). The only outside calls are two fixed links handed to the system browser: the author link in the sidebar and 3dfilamentprofiles.com in Settings.
 - The bottom of the sidebar shows the version `1.<YYMMDDHHMM>` (build time); hover for the full time and commit.
 
 ---
@@ -83,7 +84,7 @@ git clone git@github.com:MingShyanWei/3mfDeck.git
 cd 3mfDeck
 npm install
 npm run dev        # vite build + start Electron
-npm test           # Vitest unit tests (249)
+npm test           # Vitest unit tests (251)
 npm run smoke      # Electron end-to-end smoke test (isolated folders and database)
 npm run dist       # package the macOS dmg
 ```
@@ -107,7 +108,7 @@ src/core/          Pure logic, testable on its own: parsing, colours, mixing, ex
   orcaProfiles.mjs Reads the local Snapmaker Orca printer profiles (geometry only, no network)
 src/core/i18n/     UI dictionaries (en / zh-TW / zh-CN)
 src/renderer/      React UI (three.js preview, detail panel, dialogs)
-tests/unit/        Vitest (30 files, 249 tests)
+tests/unit/        Vitest (30 files, 251 tests)
 tests/smoke/       Real Electron end-to-end test
 reports/           Acceptance evidence per milestone (screenshots, Orca GUI verification notes)
 SPEC.md            Full functional specification (final)
