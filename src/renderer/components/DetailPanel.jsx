@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import MetadataForm, { toDraft, saveDraft } from './MetadataForm.jsx';
 import ModelViewer from './ModelViewer.jsx';
 import ColorAnalysis from './ColorAnalysis.jsx';
+import ExportMapping from './ExportMapping.jsx';
 import { isUnlabeled, formatBytes, formatInt, formatBbox, formatDate } from '../format.js';
 
 export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose }) {
@@ -149,6 +150,7 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
         ) : (
           <ColorAnalysis colors={model.colors} mixing={mixing} />
         ))}
+      {model.format === '3mf' && model.colors.length > 0 && !model.missing && <ExportMapping model={model} />}
       {isUnlabeled(model) && (
         <div className="callout warn"><i className="mdi mdi-alert-outline" /> 來源未標，請補上來源類型。</div>
       )}

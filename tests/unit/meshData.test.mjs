@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { quantizeFaces, faceColours, prepareMesh, linearBytes } from '../../src/renderer/viewer/meshData.js';
 import { parse3mf } from '../../src/core/parse/threemf.mjs';
-import { printPlan } from '../../src/core/filament.mjs';
+import { printPlan, slotsFromColours } from '../../src/core/filament.mjs';
 import { FIXTURES } from './helpers.mjs';
 
 describe('quantizeFaces', () => {
@@ -56,6 +56,12 @@ describe('prepareMesh', () => {
     expect(plan.mode).toBe('mix');
     expect(first(r.filament)).toEqual(linearBytes(plan.previewHex));
     expect(first(r.filament)).not.toEqual(linearBytes('#00FFFF'));
+  });
+
+  it('filament colours follow the user spools (settings page)', async () => {
+    const { geometry } = await parse3mf(await fs.readFile(path.join(FIXTURES, 'offpalette.3mf')), { geometry: true });
+    const r = prepareMesh(geometry, { slots: slotsFromColours(['#1E90FF', '#333333']) });
+    expect([...r.filament.subarray(0, 3)]).toEqual(linearBytes('#1E90FF')); // now a single spool, exact
   });
 
   it('no palette: geometry only', async () => {

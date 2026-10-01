@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { indexNewFiles } from './importer.mjs';
 import { listModels, getModel } from './db.mjs';
+import { DEFAULT_SPOOLS } from './filament.mjs';
 
 const file = (userDataDir) => path.join(userDataDir, 'config.json');
 
@@ -16,7 +17,23 @@ function readConfig(userDataDir) {
 
 export function loadSettings(userDataDir, defaultRoot) {
   const saved = readConfig(userDataDir);
-  return { libraryRoot: saved.libraryRoot || defaultRoot, notifiedMissing: saved.notifiedMissing || [] };
+  return {
+    libraryRoot: saved.libraryRoot || defaultRoot,
+    notifiedMissing: saved.notifiedMissing || [],
+    spools: saved.spools || DEFAULT_SPOOLS,
+  };
+}
+
+/**
+ * Spool colours of the user's printer (SPEC 3.5b): 1-4 "#RRGGBB" values, the
+ * actual filaments loaded. Throws on invalid input; returns the normalized list.
+ */
+export function validateSpools(spools) {
+  if (!Array.isArray(spools) || spools.length < 1 || spools.length > 4) throw new Error('捲數必須是 1–4');
+  return spools.map((h) => {
+    if (!/^#[0-9a-fA-F]{6}$/.test(h)) throw new Error(`色碼格式錯誤：${h}（需為 #RRGGBB）`);
+    return h.toUpperCase();
+  });
 }
 
 /** Merge `settings` into config.json (other keys are kept). */

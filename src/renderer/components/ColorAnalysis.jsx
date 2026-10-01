@@ -1,13 +1,14 @@
 // Colour analysis panel (SPEC 3.5): distribution table + warnings.
 import { useMemo } from 'react';
 import { analyzeColors, mixedAverage } from '../../core/colorAnalysis.mjs';
-import { U1_SLOTS, printPlan, recipeText, MIX_DELTA_E } from '../../core/filament.mjs';
+import { printPlan, recipeText, MIX_DELTA_E, slotName } from '../../core/filament.mjs';
+import { useSlots } from '../slots.js';
 import { FULL_SPECTRUM } from '../../core/fullSpectrum.mjs';
 
 const ICONS = { dither: 'mdi-select-compare', 'few-colors': 'mdi-check-circle-outline', 'needs-mixing': 'mdi-palette-swatch-variant' };
 
 function PrintCell({ plan }) {
-  if (plan.mode === 'single') return <td className="small" data-testid="print-cell" data-mode="single">槽{plan.nearest.slot} {plan.nearest.name} 單捲</td>;
+  if (plan.mode === 'single') return <td className="small" data-testid="print-cell" data-mode="single">{plan.nearest.name ? `槽${plan.nearest.slot} ${plan.nearest.name}` : slotName(plan.nearest)} 單捲</td>;
   return (
     <td className="small" data-testid="print-cell" data-mode={plan.mixable ? 'mix' : 'buy'}>
       <span className="swatch" style={{ background: plan.recipe.mixHex }} /> {recipeText(plan.recipe)}
@@ -24,12 +25,13 @@ function PrintCell({ plan }) {
 // the whole file's (shown as an extra column), `title` names the plate.
 // `mixing`: { vertexMixedPct } for Full Spectrum (dithered) files, else null.
 export default function ColorAnalysis({ colors, totals = null, title = '', mixing = null }) {
+  const slots = useSlots();
   const warnings = useMemo(() => (colors.length ? analyzeColors(colors) : []), [colors]);
   const ditherColors = new Set(warnings.filter((w) => w.type === 'dither').flatMap((w) => w.colors));
   const max = Math.max(...colors.map((c) => c.pct), 0);
   const totalPct = new Map((totals || []).map((c) => [c.color, c.pct]));
   // How each colour prints on the U1 slots (not for Full Spectrum files: their colours ARE the spools)
-  const plans = useMemo(() => (mixing ? null : new Map([...colors, ...(totals || [])].map((c) => [c.color, printPlan(c.color)]))), [colors, totals, mixing]);
+  const plans = useMemo(() => (mixing ? null : new Map([...colors, ...(totals || [])].map((c) => [c.color, printPlan(c.color, slots)]))), [colors, totals, mixing, slots]);
   const needMix = plans ? colors.filter((c) => plans.get(c.color).mode === 'mix') : [];
   const unmixable = needMix.filter((c) => !plans.get(c.color).mixable);
   // Plate rows first, then colours used only on other plates (0 faces here)
@@ -54,7 +56,7 @@ export default function ColorAnalysis({ colors, totals = null, title = '', mixin
             <dt>參與捲</dt>
             <dd data-testid="mixing-spools">
               {colors.length} 捲
-              {colors.length > U1_SLOTS.length ? `（超過 U1 的 ${U1_SLOTS.length} 個耗材槽）` : `（U1 ${U1_SLOTS.length} 槽可容納）`}
+              {colors.length > slots.length ? `（超過 U1 的 ${slots.length} 個耗材槽）` : `（U1 ${slots.length} 槽可容納）`}
             </dd>
             <dt>估計整體色</dt>
             <dd data-testid="mixing-average">

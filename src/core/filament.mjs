@@ -9,6 +9,25 @@ export const U1_SLOTS = [
   { slot: 4, name: 'K', label: '黑', hex: '#000000' },
 ];
 
+/** Default spool colours for the settings page (ideal CMYK). */
+export const DEFAULT_SPOOLS = U1_SLOTS.map((s) => s.hex);
+
+/**
+ * Slots from the user's spool colours (1-4, SPEC 3.5b). A slot whose colour is
+ * the ideal default keeps its C/M/Y/K name; a custom colour is just "槽N"
+ * (naming a red spool "C" would mislead).
+ */
+export function slotsFromColours(hexes) {
+  return hexes.map((hex, i) => {
+    const h = hex.toUpperCase();
+    const ideal = U1_SLOTS[i];
+    return ideal && ideal.hex === h ? { ...ideal } : { slot: i + 1, name: '', label: '', hex: h };
+  });
+}
+
+/** Display name of a slot: "C" / "槽2". */
+export const slotName = (s) => s.name || `槽${s.slot}`;
+
 export function hexToRgb(hex) {
   const n = parseInt(hex.slice(1, 7), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
@@ -163,7 +182,7 @@ export function mixRecipe(hex, slots = U1_SLOTS) {
 }
 
 /** "C 50%＋Y 50%" */
-export const recipeText = (recipe) => recipe.weights.map((w) => `${w.name} ${w.pct}%`).join('＋');
+export const recipeText = (recipe) => recipe.weights.map((w) => `${slotName(w)} ${w.pct}%`).join('＋');
 
 /**
  * How a colour gets printed on the slots:

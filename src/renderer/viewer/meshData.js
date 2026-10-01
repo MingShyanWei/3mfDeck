@@ -129,14 +129,14 @@ export function estimateColours(indices, faceColor, palette, vertexCount, passes
  * positions, original colours, nearest-U1-slot colours (null without a
  * palette) and, for Full Spectrum files (`estimate`), the mixed-colour estimate.
  */
-export function prepareMesh({ positions, indices, faceColor, palette }, { estimate = false } = {}) {
+export function prepareMesh({ positions, indices, faceColor, palette }, { estimate = false, slots } = {}) {
   const q = quantizeFaces(positions, indices);
   if (!palette.length) return { ...q, original: null, filament: null, estimate: null };
   return {
     ...q,
     original: faceColours(faceColor, palette),
     // single slot within MIX_DELTA_E, else the CMYK mixing recipe's colour (M8)
-    filament: faceColours(faceColor, palette.map((c) => printPlan(c).previewHex)),
+    filament: faceColours(faceColor, palette.map((c) => printPlan(c, slots).previewHex)),
     estimate: estimate ? estimateColours(indices, faceColor, palette, positions.length / 3) : null,
   };
 }

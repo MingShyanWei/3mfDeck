@@ -59,7 +59,7 @@ describe('switching root makes old records missing', () => {
   it('switchRoot keeps the notified list (settings are merged, not overwritten)', async () => {
     await consistencyReport(db, rootB, userData);
     await switchRoot(db, userData, rootB);
-    expect(loadSettings(userData, '/x')).toEqual({ libraryRoot: rootB, notifiedMissing: ids });
+    expect(loadSettings(userData, '/x')).toMatchObject({ libraryRoot: rootB, notifiedMissing: ids });
   });
 
   it('relocate to a file inside the new root: uses it in place, keeps user metadata, refreshes file data', async () => {

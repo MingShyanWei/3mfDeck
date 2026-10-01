@@ -818,6 +818,70 @@ try {
   step('批次移除: 2 selected (cancel at 2nd confirm kept them, then removed), then 全選 removed the rest -> 遺失 0; old files untouched');
   await page.click('[data-testid=filter-all]');
 
+  // 15) M9: mapping report CSV, quantized 3MF export, custom spool colours
+  const exportsDir = path.join(base, 'exports');
+  await fs.mkdir(exportsDir);
+  const saveTo = (file) =>
+    app.evaluate(({ dialog }, p) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath: p });
+    }, path.join(exportsDir, file));
+  const offSrc = path.join(rootB, year, 'offpalette.3mf');
+  const offBefore = await fs.readFile(offSrc);
+  await openModel('offpalette');
+  await page.waitForSelector('[data-testid=export-mapping]');
+  await saveTo('report.csv');
+  await page.click('[data-testid=export-csv]');
+  await page.waitForSelector('[data-testid=export-result]');
+  const csv = await fs.readFile(path.join(exportsDir, 'report.csv'), 'utf8');
+  const csvRows = csv.replace(/^\uFEFF/, '').trim().split('\r\n');
+  assert.equal(csvRows[0], '原始色,面數,佔比,指定捲槽,ΔE 或配方,備註');
+  assert.match(csvRows.find((r) => r.startsWith('#1E90FF')), /^#1E90FF,6,50%,槽1 C #00FFFF,配方 .*,需混色；量化匯出：量化到最近捲（ΔE 39\.3）$/);
+  assert.match(csvRows.find((r) => r.startsWith('#FFD700')), /槽3 Y #FFFF00,ΔE 11\.6,單捲$/);
+
+  const { parse3mf } = await import('../../src/core/parse/threemf.mjs');
+  const statsOfFile = async (p) => Object.fromEntries((await parse3mf(await fs.readFile(p))).colorStats.map((c) => [c.color, c.faces]));
+  await saveTo('q-nearest.3mf');
+  await page.click('[data-testid=export-quantized]');
+  await page.waitForFunction(() => /q-nearest\.3mf/.test(document.querySelector('[data-testid=export-result]')?.textContent || ''));
+  assert.deepEqual(await statsOfFile(path.join(exportsDir, 'q-nearest.3mf')), { '#00FFFF': 6, '#FF00FF': 3, '#FFFF00': 2, '#000000': 1 });
+  await page.click('[data-testid=over-skip]');
+  await saveTo('q-skip.3mf');
+  await page.click('[data-testid=export-quantized]');
+  await page.waitForFunction(() => /q-skip\.3mf/.test(document.querySelector('[data-testid=export-result]')?.textContent || ''));
+  assert.match(await page.textContent('[data-testid=export-result]'), /跳過 2 色/);
+  assert.deepEqual(await fs.readFile(offSrc), offBefore, 'source 3MF never modified');
+  step('M9 export: CSV report rows ok; quantized 3MF -> C6 M3 Y2 K1; skip option leaves 2 colours unassigned; source untouched');
+
+  // Custom spools: 2 spools equal to two of the file colours
+  await page.click('[data-testid=settings-button]');
+  await page.waitForSelector('[data-testid=spool-editor]');
+  await page.selectOption('[data-testid=spool-count]', '2');
+  await page.fill('[data-testid=spool-1]', '#1E90FF');
+  await page.fill('[data-testid=spool-2]', '#333333');
+  await page.click('[data-testid=spool-save]');
+  await page.waitForSelector('[data-testid=spool-message]');
+  await page.click('[data-testid=settings-done]');
+  await page.waitForSelector('[data-testid=viewer][data-status=ready]');
+  await setMode('filament');
+  assert.match(await page.textContent('[data-testid=slots-title]'), /自訂耗材槽（2 捲/);
+  const customCells = await page.$$eval('[data-testid=color-row]', (rows) => rows.map((r) => [r.cells[0].textContent.trim().slice(0, 7), r.querySelector('[data-testid=print-cell]').dataset.mode]));
+  assert.deepEqual(Object.fromEntries(customCells)['#1E90FF'], 'single');
+  await page.click('[data-testid=over-nearest]');
+  await saveTo('q-custom.3mf');
+  await page.click('[data-testid=export-quantized]');
+  await page.waitForFunction(() => /q-custom\.3mf/.test(document.querySelector('[data-testid=export-result]')?.textContent || ''));
+  const JSZipMod = (await import('jszip')).default;
+  const customZip = await JSZipMod.loadAsync(await fs.readFile(path.join(exportsDir, 'q-custom.3mf')));
+  assert.deepEqual(JSON.parse(await customZip.file('Metadata/project_settings.config').async('string')).filament_colour, ['#1E90FFFF', '#333333FF']);
+  assert.deepEqual(Object.keys(await statsOfFile(path.join(exportsDir, 'q-custom.3mf'))).sort(), ['#1E90FF', '#333333']);
+  step('custom spools (#1E90FF, #333333): mapping title/cells follow, quantized export uses 2 filaments with those colours');
+  await page.click('[data-testid=settings-button]');
+  await page.waitForSelector('[data-testid=spool-editor]');
+  await page.click('[data-testid=spool-reset]');
+  await page.waitForSelector('[data-testid=spool-message]');
+  await page.click('[data-testid=settings-done]');
+  await page.fill('[data-testid=search]', '');
+
   await page.screenshot({ path: path.join(base, 'smoke.png') });
   step('screenshot: ' + path.join(base, 'smoke.png'));
 } finally {

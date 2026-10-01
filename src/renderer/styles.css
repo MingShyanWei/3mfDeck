@@ -237,3 +237,12 @@ button.icon:hover { color: var(--text); }
 
 .mapping .badge { margin-left: 6px; }
 .dist td[data-testid=print-cell] { white-space: normal; }
+
+/* M9 */
+.spool-editor { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.spool-editor legend { font-size: 11px; color: var(--muted); padding: 0 4px; }
+.spool-editor input[type=color] { width: 32px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 4px; }
+.spool-editor .mono { width: 110px; }
+.export-mapping .row { margin-top: 6px; }
+.row.wrap { flex-wrap: wrap; }
+.radio { display: flex; align-items: center; gap: 4px; font-size: 12px; }

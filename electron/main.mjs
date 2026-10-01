@@ -8,7 +8,9 @@ import { loadPreviewData, storeThumb, previewPlate } from '../src/core/preview.m
 import { importPaths, indexNewFiles } from '../src/core/importer.mjs';
 import { trashModel, restoreModel, emptyTrash, exportModel } from '../src/core/trash.mjs';
 import { consistencyReport, relocateModel, removeRecord, findInTrash, restoreMissingFromTrash, isInside, removeMissingRecords, findByFilename, applyRelocations } from '../src/core/missing.mjs';
-import { loadSettings, switchRoot, markMissing, modelPath } from '../src/core/settings.mjs';
+import { loadSettings, saveSettings, validateSpools, switchRoot, markMissing, modelPath } from '../src/core/settings.mjs';
+import { mappingCsv, exportQuantized3mf } from '../src/core/exportMapping.mjs';
+import { slotsFromColours } from '../src/core/filament.mjs';
 import { SUPPORTED_EXTS } from '../src/core/parse/index.mjs';
 
 // Test hooks: isolate userData / library root (used by the smoke test)
@@ -198,7 +200,42 @@ function registerIpc() {
   ipcMain.handle('lib:idsNeedingThumb', () => idsNeedingThumb(db));
   ipcMain.handle('lib:setThumb', (_e, id, bytes) => storeThumb(db, id, bytes));
   ipcMain.handle('lib:importDialog', () => importViaDialog());
-  ipcMain.handle('settings:get', () => ({ libraryRoot: root }));
+  ipcMain.handle('settings:get', () => ({ libraryRoot: root, spools: loadSettings(app.getPath('userData'), root).spools }));
+  ipcMain.handle('settings:setSpools', (_e, spools) => {
+    try {
+      const clean = validateSpools(spools);
+      saveSettings(app.getPath('userData'), { spools: clean });
+      return { spools: clean };
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+  // M9 exports. Both go to a file the user picks (the save dialog confirms a replace);
+  // the source 3MF is only read.
+  const userSlots = () => slotsFromColours(loadSettings(app.getPath('userData'), root).spools);
+  const askSavePath = async (title, defaultName, ext) => {
+    const r = await dialog.showSaveDialog(win, { title, defaultPath: path.join(app.getPath('downloads'), defaultName), filters: [{ name: ext.toUpperCase(), extensions: [ext] }] });
+    return r.canceled || !r.filePath ? null : r.filePath;
+  };
+  ipcMain.handle('lib:exportCsv', async (_e, id, opts) => {
+    const m = getModel(db, id);
+    const dest = await askSavePath('匯出映射報告', `${m.name}-映射報告.csv`, 'csv');
+    if (!dest) return null;
+    await fs.promises.writeFile(dest, mappingCsv(m.colors, userSlots(), opts));
+    return { path: dest };
+  });
+  ipcMain.handle('lib:exportQuantized', async (_e, id, opts) => {
+    const m = getModel(db, id);
+    const slots = userSlots();
+    const dest = await askSavePath('匯出量化 3MF', `${m.name}-量化${slots.length}捲.3mf`, '3mf');
+    if (!dest) return null;
+    try {
+      const r = await exportQuantized3mf(modelPath(db, root, id), dest, slots, { ...opts, overwrite: true });
+      return { path: dest, summary: r.summary };
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
   ipcMain.handle('settings:chooseRoot', async () => {
     const r = await dialog.showOpenDialog(win, {
       title: '選擇檔案櫃根目錄',

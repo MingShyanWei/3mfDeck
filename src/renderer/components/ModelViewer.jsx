@@ -5,7 +5,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Viewer } from '../viewer/Viewer.js';
 import { buildModel } from '../viewer/buildModel.js';
-import { mapToSlots, U1_SLOTS, MIX_DELTA_E, recipeText } from '../../core/filament.mjs';
+import { mapToSlots, MIX_DELTA_E, recipeText } from '../../core/filament.mjs';
+import { useSlots, isDefaultSlots } from '../slots.js';
 
 const MODE_LABELS = [
   ['original', '原始', 'mdi-palette-outline'],
@@ -25,6 +26,8 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
   const [hasPaint, setHasPaint] = useState(false);
   const [mode, setMode] = useState('original');
   const [loaded, setLoaded] = useState(''); // "<id>:<plate>" the viewer currently shows
+  const slots = useSlots();
+  const slotsKey = slots.map((s) => s.hex).join();
 
   // One viewer (WebGL context) for the lifetime of the panel
   useEffect(() => {
@@ -70,7 +73,7 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
         if (payload.unsupported) return setStatus('unsupported');
         if (payload.format === '3mf' && !payload.indices.length) return setStatus('empty');
         performance.mark('preview:build');
-        const built = await buildModel(payload, { estimate: model.full_spectrum });
+        const built = await buildModel(payload, { estimate: model.full_spectrum, slots });
         performance.measure('preview:buildModel', 'preview:build');
         if (cancelled) return;
         performance.mark('preview:render');
@@ -93,7 +96,9 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
       cancelled = true;
     };
     // rel_path: a relocated / restored record points at a new file under the same id
-  }, [model.id, model.rel_path, plate]);
+    // slotsKey: the filament-mapping colours depend on the user's spools
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model.id, model.rel_path, plate, slotsKey]);
 
   const fs = model.full_spectrum;
   useEffect(() => {
@@ -104,7 +109,7 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
     viewer.render();
   }, [mode, status, fs]);
 
-  const spools = useMemo(() => (colors?.length && !fs ? mapToSlots(colors) : null), [colors, fs]);
+  const spools = useMemo(() => (colors?.length && !fs ? mapToSlots(colors, slots) : null), [colors, fs, slots]);
   const modes = MODE_LABELS.filter(([k]) => k !== 'estimate' || fs);
 
   return (
@@ -149,16 +154,18 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
               </span>
             ))}
           </div>
-          {colors.length > U1_SLOTS.length && (
+          {colors.length > slots.length && (
             <div className="small warn-text" data-testid="fs-slots-warning">
-              需要 {colors.length} 捲，超過 U1 的 {U1_SLOTS.length} 個耗材槽
+              需要 {colors.length} 捲，超過 U1 的 {slots.length} 個耗材槽
             </div>
           )}
         </div>
       )}
       {mode === 'filament' && spools && (
         <div className="spools" data-testid="spools">
-          <div className="small muted">U1 預設 CMYK 耗材槽 · 這檔案會用到 {spools.used.length} 捲</div>
+          <div className="small muted" data-testid="slots-title">
+            {isDefaultSlots(slots) ? 'U1 預設 CMYK 耗材槽' : `自訂耗材槽（${slots.length} 捲，設定頁）`} · 這檔案會用到 {spools.used.length} 捲
+          </div>
           <div className="spool-row">
             {spools.used.map((u) => (
               <span key={u.slot} className="spool" data-testid="spool">

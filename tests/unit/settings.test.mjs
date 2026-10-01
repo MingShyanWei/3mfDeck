@@ -3,27 +3,27 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { openDb, listModels, getModel, updateModel, setTags } from '../../src/core/db.mjs';
 import { importPaths } from '../../src/core/importer.mjs';
-import { loadSettings, saveSettings, switchRoot, markMissing, modelPath } from '../../src/core/settings.mjs';
+import { loadSettings, saveSettings, switchRoot, markMissing, modelPath, validateSpools } from '../../src/core/settings.mjs';
 import { tmpDir, stage, exists } from './helpers.mjs';
 
 describe('settings storage (SPEC 3.8)', () => {
   it('defaults to the given root when no config exists', async () => {
     const userData = await tmpDir();
-    expect(loadSettings(userData, '/Users/x/3mf-library')).toEqual({ libraryRoot: '/Users/x/3mf-library', notifiedMissing: [] });
+    expect(loadSettings(userData, '/Users/x/3mf-library')).toEqual({ libraryRoot: '/Users/x/3mf-library', notifiedMissing: [], spools: ['#00FFFF', '#FF00FF', '#FFFF00', '#000000'] });
   });
 
   it('persists the root in userData/config.json', async () => {
     const userData = await tmpDir();
     saveSettings(userData, { libraryRoot: '/Volumes/ext/models' });
     expect(JSON.parse(await fs.readFile(path.join(userData, 'config.json'), 'utf8'))).toEqual({ libraryRoot: '/Volumes/ext/models' });
-    expect(loadSettings(userData, '/default')).toEqual({ libraryRoot: '/Volumes/ext/models', notifiedMissing: [] });
+    expect(loadSettings(userData, '/default')).toMatchObject({ libraryRoot: '/Volumes/ext/models', notifiedMissing: [] });
   });
 
   it('saving merges: switching root keeps other settings (e.g. already-notified missing ids)', async () => {
     const userData = await tmpDir();
     saveSettings(userData, { libraryRoot: '/a', notifiedMissing: [3, 4] });
     saveSettings(userData, { libraryRoot: '/b' });
-    expect(loadSettings(userData, '/default')).toEqual({ libraryRoot: '/b', notifiedMissing: [3, 4] });
+    expect(loadSettings(userData, '/default')).toMatchObject({ libraryRoot: '/b', notifiedMissing: [3, 4] });
   });
 });
 
@@ -83,5 +83,23 @@ describe('modelPath (Finder reveal / preview)', () => {
     expect(modelPath(db, path.join(base, 'A'), ids[0])).toBe(path.join(base, 'A', '2026', 'cube.stl'));
     expect(modelPath(db, '/Volumes/other', ids[0])).toBe(path.join('/Volumes/other', '2026', 'cube.stl'));
     expect(() => modelPath(db, base, 999)).toThrow(/no model 999/);
+  });
+});
+
+describe('spool colours (SPEC 3.5b)', () => {
+  it('default to ideal CMYK; saved custom colours survive other saves', async () => {
+    const userData = await tmpDir();
+    expect(loadSettings(userData, '/r').spools).toEqual(['#00FFFF', '#FF00FF', '#FFFF00', '#000000']);
+    saveSettings(userData, { spools: ['#0A9ED8', '#000000'] });
+    saveSettings(userData, { libraryRoot: '/r2' });
+    expect(loadSettings(userData, '/r').spools).toEqual(['#0A9ED8', '#000000']);
+  });
+
+  it('validateSpools: 1-4 colours, #RRGGBB, normalized to upper case', () => {
+    expect(validateSpools(['#0a9ed8'])).toEqual(['#0A9ED8']);
+    expect(() => validateSpools([])).toThrow(/1–4/);
+    expect(() => validateSpools(['#000000', '#111111', '#222222', '#333333', '#444444'])).toThrow(/1–4/);
+    expect(() => validateSpools(['red'])).toThrow(/#RRGGBB/);
+    expect(() => validateSpools(['#12345'])).toThrow(/#RRGGBB/);
   });
 });

@@ -49,8 +49,8 @@ const grayMaterial = () => new THREE.MeshLambertMaterial({ color: GRAY, flatShad
  * arrays the viewer swaps between: original colours and their nearest U1
  * slot colours. Uncoloured faces stay grey.
  */
-async function buildPainted(payload, { estimate = false } = {}) {
-  const { positions, center, half, original, filament, estimate: est } = await prepareInWorker(payload, { estimate });
+async function buildPainted(payload, { estimate = false, slots } = {}) {
+  const { positions, center, half, original, filament, estimate: est } = await prepareInWorker(payload, { estimate, slots });
   const group = new THREE.Group();
   group.scale.set(...half);
   group.position.set(...center);
@@ -87,10 +87,10 @@ function withGray(object) {
  * Returns { object, zUp, paint } — paint is null unless the model has paint
  * colours. `estimate`: also compute the Full Spectrum mixed-colour estimate.
  */
-export async function buildModel(payload, { estimate = false } = {}) {
+export async function buildModel(payload, { estimate = false, slots } = {}) {
   switch (payload.format) {
     case '3mf':
-      return buildPainted(payload, { estimate });
+      return buildPainted(payload, { estimate, slots });
     case 'stl':
       return { object: new THREE.Mesh(new STLLoader().parse(exactBuffer(payload.bytes)), grayMaterial()), zUp: true, paint: null };
     case 'amf':

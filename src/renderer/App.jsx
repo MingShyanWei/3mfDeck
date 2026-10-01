@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Sidebar from './components/Sidebar.jsx';
 import { ModelGrid, ModelList } from './components/ModelViews.jsx';
 import DetailPanel from './components/DetailPanel.jsx';
 import ImportDialog from './components/ImportDialog.jsx';
 import SettingsDialog from './components/SettingsDialog.jsx';
+import { SlotsContext } from './slots.js';
+import { slotsFromColours, DEFAULT_SPOOLS } from '../core/filament.mjs';
 import RecoverDialog from './components/RecoverDialog.jsx';
 import { runThumbQueue } from './thumbQueue.js';
 
@@ -23,6 +25,12 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [importIds, setImportIds] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // User spool colours (settings page) -> slots for mapping, recipes and export
+  const [spools, setSpools] = useState(DEFAULT_SPOOLS);
+  useEffect(() => {
+    window.api.getSettings().then((s) => setSpools(s.spools));
+  }, []);
+  const slots = useMemo(() => slotsFromColours(spools), [spools]);
   const [dragging, setDragging] = useState(false);
   const [notice, setNotice] = useState(null);
   const [consistency, setConsistency] = useState(null);
@@ -117,6 +125,7 @@ export default function App() {
   const platforms = counts?.platforms.map((p) => p.name) || [];
 
   return (
+    <SlotsContext.Provider value={slots}>
     <div
       className="app"
       onDragOver={(e) => {
@@ -266,6 +275,7 @@ export default function App() {
       )}
       {settingsOpen && (
         <SettingsDialog
+          onSpoolsChanged={setSpools}
           onClose={() => setSettingsOpen(false)}
           onRootChanged={() => {
             setSelectedId(null);
@@ -276,5 +286,6 @@ export default function App() {
         />
       )}
     </div>
+    </SlotsContext.Provider>
   );
 }
