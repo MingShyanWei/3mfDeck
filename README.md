@@ -127,4 +127,4 @@ SPEC.md            完整功能規格（已定稿）
 
 ## 作者
 
-**MingShyanWei** — [github.com/MingShyanWei/3mfDeck](https://github.com/MingShyanWei/3mfDeck)
+**Caspar Wei** ([@MingShyanWei](https://github.com/MingShyanWei)) — [github.com/MingShyanWei/3mfDeck](https://github.com/MingShyanWei/3mfDeck)
