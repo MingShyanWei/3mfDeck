@@ -121,6 +121,7 @@ export function setTags(db, modelId, names) {
 
 const LIST_COLUMNS = `m.id, m.name, m.rel_path, m.format, m.size_bytes, m.tri_count, m.bbox_mm, m.color_count,
   m.provenance_type, m.platform, m.url, m.prompt, m.retrieved_at, m.notes, m.imported_at, m.updated_at,
+  m.thumb IS NOT NULL AS has_thumb,
   (SELECT json_group_array(t.name) FROM model_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.model_id = m.id) AS tags`;
 
 const SORTS = {
@@ -129,7 +130,7 @@ const SORTS = {
   colors: 'm.color_count IS NULL, m.color_count DESC, m.name COLLATE NOCASE',
 };
 
-const rowOut = (r) => ({ ...r, tags: JSON.parse(r.tags), bbox_mm: r.bbox_mm ? JSON.parse(r.bbox_mm) : null });
+const rowOut = (r) => ({ ...r, has_thumb: Boolean(r.has_thumb), tags: JSON.parse(r.tags), bbox_mm: r.bbox_mm ? JSON.parse(r.bbox_mm) : null });
 
 /**
  * List models.
@@ -188,4 +189,18 @@ export function sidebarCounts(db) {
 
 export function knownRelPaths(db) {
   return new Set(db.prepare('SELECT rel_path FROM models').pluck().all());
+}
+
+// Thumbnails (512px PNG, SPEC 3.4). Not part of updated_at: they are derived data.
+export function setThumb(db, id, png) {
+  db.prepare('UPDATE models SET thumb = ? WHERE id = ?').run(png, id);
+}
+
+export function getThumb(db, id) {
+  return db.prepare('SELECT thumb FROM models WHERE id = ?').pluck().get(id) ?? null;
+}
+
+/** Models still lacking a thumbnail (STEP cannot be rendered). */
+export function idsNeedingThumb(db) {
+  return db.prepare(`SELECT id FROM models WHERE thumb IS NULL AND format != 'step' ORDER BY id`).pluck().all();
 }

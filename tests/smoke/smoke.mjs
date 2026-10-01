@@ -24,6 +24,35 @@ const stage = async (f, as = f, dir = inbox) => {
   return p;
 };
 const exists = (p) => fs.access(p).then(() => true, () => false);
+
+// Classify an sRGB pixel into the colours the M2 checks care about
+function classify(r, g, b, a) {
+  if (a < 200) return 'transparent';
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  if (max < 45) return 'black';
+  if (max - min < 20) return 'gray';
+  const near = (x, y) => Math.abs(x - y) < 0.2 * max;
+  if (r < 0.6 * Math.min(g, b) && near(g, b)) return 'cyan';
+  if (g < 0.6 * Math.min(r, b) && near(r, b)) return 'magenta';
+  if (b < 0.6 * Math.min(r, g) && near(r, g)) return 'yellow';
+  if (r > 2 * g && r > 2 * b) return 'red';
+  if (g > 2 * r && g > 2 * b) return 'green';
+  if (b > 1.25 * g && g > 1.4 * r) return 'blue';
+  return 'other';
+}
+
+// Counts of classified pixels; `order` is 'rgba' (canvas) or 'bgra' (nativeImage bitmap)
+function colourCounts(buf, order = 'rgba') {
+  const counts = {};
+  for (let i = 0; i < buf.length; i += 4) {
+    const [r, b] = order === 'rgba' ? [buf[i], buf[i + 2]] : [buf[i + 2], buf[i]];
+    const k = classify(r, buf[i + 1], b, buf[i + 3]);
+    counts[k] = (counts[k] || 0) + 1;
+  }
+  return counts;
+}
+const present = (counts, min = 150) => Object.keys(counts).filter((k) => counts[k] >= min && k !== 'transparent' && k !== 'other').sort();
 const step = (msg) => console.log(`• ${msg}`);
 
 const consoleProblems = [];
@@ -173,11 +202,115 @@ try {
   assert.match(await page.textContent('[data-testid=filter-unlabeled]'), /未標\s*2/);
   step('detail panel: set 下載/Printables, 未標 count 3 -> 2');
 
+  // 7) M2: 3D preview, shading modes, thumbnails
+  await importViaMenu([await stage('offpalette.3mf'), await stage('textured.glb')]);
+  await page.click('[data-testid=import-skip-all]');
+  await page.click('[data-testid=filter-all]');
+  await page.waitForFunction((n) => document.querySelectorAll('[data-testid=model-card]').length === n, total + 3);
+
+  const viewerPixels = async () => {
+    const { b64 } = await page.evaluate(() => {
+      const src = document.querySelector('[data-testid=viewer-canvas]');
+      const c = document.createElement('canvas');
+      c.width = src.width;
+      c.height = src.height;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(src, 0, 0);
+      const data = ctx.getImageData(0, 0, c.width, c.height).data;
+      let bin = '';
+      for (let i = 0; i < data.length; i += 0x8000) bin += String.fromCharCode(...data.subarray(i, i + 0x8000));
+      return { b64: btoa(bin) };
+    });
+    return colourCounts(Buffer.from(b64, 'base64'));
+  };
+  const openModel = async (name, query = name) => {
+    await page.fill('[data-testid=search]', query);
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 1);
+    await page.click('[data-testid=model-card]');
+    await page.waitForFunction((n) => document.querySelector('[data-testid=detail-panel] h2')?.textContent === n, name);
+    await page.waitForSelector('[data-testid=viewer][data-status=ready]');
+  };
+  const setMode = async (mode) => {
+    await page.click(`[data-testid=mode-${mode}]`);
+    await page.waitForSelector(`[data-testid=viewer][data-mode=${mode}]`);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  };
+
+  // painted.3mf (ground truth): four CMYK paint colours in 原始 mode
+  await openModel('painted');
+  let px = await viewerPixels();
+  assert.deepEqual(present(px).filter((k) => k !== 'gray'), ['black', 'cyan', 'magenta', 'yellow'], JSON.stringify(px));
+  step('preview painted.3mf 原始: ' + JSON.stringify(px));
+  await setMode('filament');
+  const spools = await page.$$eval('[data-testid=spool]', (els) => els.map((e) => e.textContent.trim()));
+  assert.deepEqual(spools, ['槽1 C 青 · 50%', '槽2 M 洋紅 · 25%', '槽3 Y 黃 · 16.67%', '槽4 K 黑 · 8.33%']);
+  px = await viewerPixels();
+  assert.deepEqual(present(px).filter((k) => k !== 'gray'), ['black', 'cyan', 'magenta', 'yellow']);
+  step('耗材映射: spools ' + spools.join(' | '));
+  await setMode('wireframe');
+  px = await viewerPixels();
+  assert.ok(!present(px).includes('cyan') && !present(px).includes('magenta'), 'wireframe hides paint colours ' + JSON.stringify(px));
+  assert.ok((px.blue || 0) + (px.other || 0) > 150, 'wire lines drawn ' + JSON.stringify(px));
+  step('線框: ' + JSON.stringify(px));
+  await setMode('original');
+  assert.ok(present(await viewerPixels()).includes('cyan'));
+
+  // offpalette.3mf: filament mapping visibly re-colours to the nearest CMYK slots
+  await openModel('offpalette');
+  const before = await viewerPixels();
+  await setMode('filament');
+  const after = await viewerPixels();
+  assert.ok(!present(before).includes('cyan') && present(before).includes('blue'), 'original: dodger blue ' + JSON.stringify(before));
+  assert.ok(present(after).includes('cyan') && !present(after).includes('blue'), 'mapped: cyan ' + JSON.stringify(after));
+  const mapping = await page.$$eval('[data-testid=spools] .mapping li', (els) => els.map((e) => e.textContent.trim()));
+  assert.equal(mapping.length, 4);
+  assert.match(mapping[0], /^#1E90FF → 槽1/);
+  await page.$eval('[data-testid=detail-panel]', (el) => el.scrollTo(0, 0));
+  await page.screenshot({ path: path.join(base, 'preview-filament.png') });
+  step(`offpalette.3mf 原始 ${JSON.stringify(present(before))} -> 耗材映射 ${JSON.stringify(present(after))}; ${mapping.join(' | ')}`);
+
+  // textured.glb: baseColorTexture (red | green halves)
+  await openModel('textured');
+  px = await viewerPixels();
+  assert.ok(present(px).includes('red') && present(px).includes('green'), 'GLB texture ' + JSON.stringify(px));
+  assert.equal(await page.isDisabled('[data-testid=mode-filament]'), true);
+  await setMode('wireframe');
+  assert.ok(!present(await viewerPixels()).includes('red'));
+  step('preview textured.glb: ' + JSON.stringify(px) + '; 耗材映射 disabled; 線框 hides texture');
+
+  // STL: grey (cube.stl is the one tagged 鴨子; "cube" alone also matches cube.glb / cube-2.stl)
+  await openModel('cube', '鴨子');
+  assert.match(await page.textContent('[data-testid=detail-panel]'), /2026\/cube\.stl/);
+  px = await viewerPixels();
+  assert.deepEqual(present(px), ['gray'], 'STL grey ' + JSON.stringify(px));
+  step('preview STL: ' + JSON.stringify(px));
+  await page.fill('[data-testid=search]', '');
+
+  // Thumbnails: every renderable model got a 512px PNG in the DB
+  await page.waitForFunction((n) => document.querySelectorAll('[data-testid=card-thumb]').length === n, total + 3);
+  const Database = (await import('better-sqlite3')).default;
+  const rodb = new Database(path.join(base, 'userData', 'library.db'), { readonly: true });
+  const thumbs = Object.fromEntries(rodb.prepare(`SELECT rel_path, thumb FROM models WHERE thumb IS NOT NULL`).all().map((r) => [r.rel_path, r.thumb]));
+  rodb.close();
+  const decode = (png) =>
+    app.evaluate(({ nativeImage }, b64) => {
+      const img = nativeImage.createFromBuffer(Buffer.from(b64, 'base64'));
+      return { ...img.getSize(), bgra: img.toBitmap().toString('base64') };
+    }, png.toString('base64'));
+  for (const [rel, want] of [[`${year}/painted.3mf`, ['black', 'cyan', 'magenta', 'yellow']], [`${year}/textured.glb`, ['green', 'red']], [`${year}/cube.stl`, ['gray']]]) {
+    const img = await decode(thumbs[rel]);
+    assert.deepEqual([img.width, img.height], [512, 512]);
+    const counts = colourCounts(Buffer.from(img.bgra, 'base64'), 'bgra');
+    const got = present(counts).filter((k) => want.includes('gray') || k !== 'gray');
+    assert.deepEqual(got, want, `${rel} thumbnail ${JSON.stringify(counts)}`);
+  }
+  step(`thumbnails: ${Object.keys(thumbs).length} stored (512×512 PNG); painted=CMYK, textured=red+green, STL=grey`);
+
   // 6) Settings page: switch library root (SPEC 3.7)
   const rootB = path.join(base, 'libraryB');
   await fs.mkdir(path.join(rootB, '2025'), { recursive: true });
   await fs.copyFile(path.join(FIX, 'fixture.step'), path.join(rootB, '2025', 'part.step'));
-  const allCount = total + 1;
+  const allCount = total + 3;
   await page.click('[data-testid=filter-all]');
   await page.click('[data-testid=settings-button]');
   await page.waitForFunction((v) => document.querySelector('[data-testid=settings-root]')?.textContent === v, lib);

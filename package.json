@@ -29,7 +29,8 @@
     "fast-xml-parser": "^5.11.2",
     "jszip": "^3.10.2",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.1",

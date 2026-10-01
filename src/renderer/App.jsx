@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Sidebar from './components/Sidebar.jsx';
 import { ModelGrid, ModelList } from './components/ModelViews.jsx';
 import DetailPanel from './components/DetailPanel.jsx';
 import ImportDialog from './components/ImportDialog.jsx';
 import SettingsDialog from './components/SettingsDialog.jsx';
+import { runThumbQueue } from './thumbQueue.js';
 
 const SORTS = [
   ['imported', '匯入日期'],
@@ -34,11 +35,20 @@ export default function App() {
     refresh();
   }, [refresh]);
 
+  // Thumbnails are rendered in the background; refresh as each one lands
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+  const thumbs = useCallback(() => runThumbQueue(() => refreshRef.current()), []);
+  useEffect(() => {
+    thumbs();
+  }, [thumbs]);
+
   // Import results arrive from main for both menu and drag & drop imports
   useEffect(
     () =>
       window.api.onImported((res) => {
         refresh();
+        thumbs();
         if (res.ids.length) setImportIds(res.ids);
         const problems = [
           ...res.errors.map((e) => `${e.file.split('/').pop()}：${e.error}`),
@@ -46,7 +56,7 @@ export default function App() {
         ];
         setNotice(problems.length ? problems.join('\n') : null);
       }),
-    [refresh],
+    [refresh, thumbs],
   );
   useEffect(() => window.api.onOpenSettings(() => setSettingsOpen(true)), []);
 
@@ -141,6 +151,7 @@ export default function App() {
           onRootChanged={() => {
             setSelectedId(null);
             refresh();
+            thumbs();
           }}
         />
       )}

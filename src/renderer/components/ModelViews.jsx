@@ -12,10 +12,15 @@ export function ModelGrid({ models, selectedId, onSelect }) {
           data-testid="model-card"
           onClick={() => onSelect(m.id)}
         >
-          {/* 512px thumbnails arrive in M2; until then a format placeholder */}
           <div className="thumb">
-            <i className="mdi mdi-cube-outline" />
-            <span className="fmt">{m.format.toUpperCase()}</span>
+            {m.has_thumb ? (
+              <img src={`mfthumb://thumb/${m.id}`} alt="" data-testid="card-thumb" draggable={false} />
+            ) : (
+              <>
+                <i className="mdi mdi-cube-outline" />
+                <span className="fmt">{m.format.toUpperCase()}</span>
+              </>
+            )}
           </div>
           <div className="card-body">
             <div className="name" title={m.name}>{m.name}</div>

@@ -16,6 +16,9 @@ contextBridge.exposeInMainWorld('api', {
   importDialog: () => ipcRenderer.invoke('lib:importDialog'),
   // Dropped File objects -> absolute paths (File.path is gone in recent Electron)
   importFiles: (files) => ipcRenderer.invoke('lib:importPaths', files.map((f) => webUtils.getPathForFile(f))),
+  preview: (id) => ipcRenderer.invoke('lib:preview', id),
+  idsNeedingThumb: () => ipcRenderer.invoke('lib:idsNeedingThumb'),
+  setThumb: (id, bytes) => ipcRenderer.invoke('lib:setThumb', id, bytes),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   chooseRoot: () => ipcRenderer.invoke('settings:chooseRoot'),
   onImported: on('lib:imported'),

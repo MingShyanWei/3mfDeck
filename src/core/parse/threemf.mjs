@@ -7,7 +7,7 @@ import { StringDecoder } from 'node:string_decoder';
 import { Readable } from 'node:stream';
 import { XMLParser } from 'fast-xml-parser';
 import { decodePaintColor } from '../paintColor.mjs';
-import { emptyBox, growBox, transformBox, mulAffine, boxSize, IDENTITY } from './geom.mjs';
+import { emptyBox, growBox, transformBox, mulAffine, applyAffine, boxSize, IDENTITY } from './geom.mjs';
 
 const UNIT_MM = { micron: 0.001, millimeter: 1, centimeter: 10, inch: 25.4, foot: 304.8, meter: 1000 };
 
@@ -24,12 +24,36 @@ function parseTransform(s) {
   return [m[0], m[3], m[6], m[9], m[1], m[4], m[7], m[10], m[2], m[5], m[8], m[11]];
 }
 
+// Growable typed array (geometry collection for previews)
+class Grow {
+  constructor(Type, size = 1024) {
+    this.Type = Type;
+    this.a = new Type(size);
+    this.n = 0;
+  }
+  push(v) {
+    if (this.n === this.a.length) {
+      const b = new this.Type(this.a.length * 2);
+      b.set(this.a);
+      this.a = b;
+    }
+    this.a[this.n++] = v;
+  }
+  get array() {
+    return this.a.subarray(0, this.n);
+  }
+}
+
 const attr = (attrs, name) => {
   const m = new RegExp(`(?:^|\\s)${name}="([^"]*)"`).exec(attrs);
   return m ? m[1] : undefined;
 };
 
-/** Stream one .model part and collect objects, build items and model metadata. */
+/**
+ * Stream one .model part and collect objects, build items and model metadata.
+ * With model.geometry set, also keep vertices, triangle indices and each
+ * face's dominant paint state (for previews).
+ */
 async function scanModel(zipFile, partPath, model) {
   const decoder = new StringDecoder('utf8');
   const tagRe = /<(\/?)([A-Za-z_][\w:.-]*)((?:[^>"]|"[^"]*")*?)(\/?)>|([^<]+)/g;
@@ -49,15 +73,26 @@ async function scanModel(zipFile, partPath, model) {
       const [, close, rawName, attrs] = m;
       const name = rawName.includes(':') ? rawName.slice(rawName.indexOf(':') + 1) : rawName;
       if (name === 'vertex' && obj) {
-        growBox(obj.mesh.box, +attr(attrs, 'x'), +attr(attrs, 'y'), +attr(attrs, 'z'));
+        const x = +attr(attrs, 'x'), y = +attr(attrs, 'y'), z = +attr(attrs, 'z');
+        growBox(obj.mesh.box, x, y, z);
+        if (obj.mesh.verts) obj.mesh.verts.push(x), obj.mesh.verts.push(y), obj.mesh.verts.push(z);
       } else if (name === 'triangle' && obj) {
         obj.mesh.tris++;
         const pc = attr(attrs, 'paint_color');
+        let dominant = 0;
         if (pc) {
+          let best = 0;
           for (const [state, w] of Object.entries(decodePaintColor(pc))) {
             obj.mesh.paint[state] = (obj.mesh.paint[state] || 0) + w;
+            if (w > best) (best = w), (dominant = Number(state));
           }
           obj.mesh.painted++;
+        }
+        if (obj.mesh.indices) {
+          obj.mesh.indices.push(+attr(attrs, 'v1'));
+          obj.mesh.indices.push(+attr(attrs, 'v2'));
+          obj.mesh.indices.push(+attr(attrs, 'v3'));
+          obj.mesh.faceState.push(dominant);
         }
       } else if (close) {
         if (name === 'object') obj = null;
@@ -70,6 +105,7 @@ async function scanModel(zipFile, partPath, model) {
         model.objects.set(`${partPath}#${obj.id}`, obj);
       } else if (name === 'mesh' && obj) {
         obj.mesh = { box: emptyBox(), tris: 0, painted: 0, paint: {} };
+        if (model.geometry) Object.assign(obj.mesh, { verts: new Grow(Float32Array), indices: new Grow(Uint32Array), faceState: new Grow(Uint8Array) });
       } else if (name === 'component' && obj) {
         const p = attr(attrs, 'p:path');
         obj.components.push({
@@ -158,12 +194,18 @@ export function provenanceHint(md) {
   return { provenance_type: 'downloaded', platform: makerWorld ? 'MakerWorld' : null, notes: lines.join('\n') };
 }
 
-export async function parse3mf(buffer) {
+/**
+ * Parse a 3MF. With { geometry: true } the result also has `geometry`:
+ * world-space (mm) positions, triangle indices and per-face filament state
+ * (1-based extruder; split triangles take their dominant state) for every
+ * placed build instance, plus the filament colour list (or null).
+ */
+export async function parse3mf(buffer, { geometry = false } = {}) {
   const zip = await JSZip.loadAsync(buffer);
   const text = async (p) => (zip.file(p) ? zip.file(p).async('string') : null);
 
   const rootPath = rootModelPath(await text('_rels/.rels'));
-  const model = { rootPath, unitScale: 1, metadata: {}, objects: new Map(), build: [] };
+  const model = { rootPath, unitScale: 1, metadata: {}, objects: new Map(), build: [], geometry };
   await scanModel(zip.file(rootPath), rootPath, model);
   // Sub-models referenced via p:path (Production extension, used by Bambu/Orca)
   const subPaths = new Set();
@@ -179,6 +221,7 @@ export async function parse3mf(buffer) {
   const box = emptyBox();
   const byState = {};
   let triCount = 0;
+  const geo = geometry && { positions: new Grow(Float32Array), indices: new Grow(Uint32Array), faceState: new Grow(Uint8Array) };
   const place = (key, m, rootId, depth) => {
     const o = model.objects.get(key);
     if (!o) return;
@@ -193,6 +236,16 @@ export async function parse3mf(buffer) {
       }
       const unpainted = o.mesh.tris - o.mesh.painted;
       if (unpainted) byState[defExt] = (byState[defExt] || 0) + unpainted;
+      if (geo) {
+        const base = geo.positions.n / 3;
+        const v = o.mesh.verts.array;
+        const k = model.unitScale;
+        for (let i = 0; i < v.length; i += 3) {
+          for (const c of applyAffine(m, v[i], v[i + 1], v[i + 2])) geo.positions.push(c * k);
+        }
+        for (const idx of o.mesh.indices.array) geo.indices.push(base + idx);
+        for (const st of o.mesh.faceState.array) geo.faceState.push(st || defExt);
+      }
     }
     for (const c of o.components) place(c.key, mulAffine(m, c.transform), rootId, depth + 1);
   };
@@ -218,5 +271,8 @@ export async function parse3mf(buffer) {
     colorStats,
     metadata: model.metadata,
     provenanceHint: provenanceHint(model.metadata),
+    ...(geo && {
+      geometry: { positions: geo.positions.array, indices: geo.indices.array, faceState: geo.faceState.array, colours },
+    }),
   };
 }

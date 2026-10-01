@@ -1,9 +1,10 @@
 // Electron main process: window, menu, IPC to the core library.
-import { app, BrowserWindow, Menu, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, dialog, protocol } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts } from '../src/core/db.mjs';
+import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb } from '../src/core/db.mjs';
+import { loadPreviewData, storeThumb } from '../src/core/preview.mjs';
 import { importPaths } from '../src/core/importer.mjs';
 import { loadSettings, switchRoot, markMissing } from '../src/core/settings.mjs';
 import { SUPPORTED_EXTS } from '../src/core/parse/index.mjs';
@@ -11,6 +12,10 @@ import { SUPPORTED_EXTS } from '../src/core/parse/index.mjs';
 // Test hooks: isolate userData / library root (used by the smoke test)
 if (process.env.MF_USER_DATA) app.setPath('userData', process.env.MF_USER_DATA);
 const DEFAULT_ROOT = process.env.MF_LIBRARY_ROOT || path.join(os.homedir(), '3mf-library');
+
+// Thumbnails are served to <img> as mfthumb://thumb/<id> straight from the DB,
+// so the library list never ships PNG blobs over IPC.
+protocol.registerSchemesAsPrivileged([{ scheme: 'mfthumb', privileges: { standard: true, secure: true } }]);
 
 let win = null;
 let db = null;
@@ -60,6 +65,12 @@ function registerIpc() {
   ipcMain.handle('lib:update', (_e, id, fields) => updateModel(db, id, fields));
   ipcMain.handle('lib:setTags', (_e, id, names) => setTags(db, id, names));
   ipcMain.handle('lib:importPaths', (_e, paths) => importAndNotify(paths));
+  ipcMain.handle('lib:preview', (_e, id) => {
+    const m = getModel(db, id);
+    return loadPreviewData(path.join(root, m.rel_path), m.format);
+  });
+  ipcMain.handle('lib:idsNeedingThumb', () => idsNeedingThumb(db));
+  ipcMain.handle('lib:setThumb', (_e, id, bytes) => storeThumb(db, id, bytes));
   ipcMain.handle('lib:importDialog', () => importViaDialog());
   ipcMain.handle('settings:get', () => ({ libraryRoot: root }));
   ipcMain.handle('settings:chooseRoot', async () => {
@@ -77,6 +88,10 @@ function registerIpc() {
 }
 
 app.whenReady().then(() => {
+  protocol.handle('mfthumb', (req) => {
+    const png = getThumb(db, Number(new URL(req.url).pathname.slice(1)));
+    return png ? new Response(png, { headers: { 'content-type': 'image/png' } }) : new Response(null, { status: 404 });
+  });
   root = loadSettings(app.getPath('userData'), DEFAULT_ROOT).libraryRoot;
   fs.mkdirSync(root, { recursive: true });
   db = openDb(path.join(app.getPath('userData'), 'library.db'));

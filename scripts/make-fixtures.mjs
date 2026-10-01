@@ -2,9 +2,18 @@
 // Run: npm run fixtures
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import JSZip from 'jszip';
 
 const OUT = path.join(import.meta.dirname, '..', 'tests', 'fixtures');
+
+// Fixed zip entry dates keep the generated 3MFs byte-identical across runs
+function newZip() {
+  const zip = new JSZip();
+  const file = zip.file.bind(zip);
+  zip.file = (name, data) => file(name, data, { date: new Date(Date.UTC(2026, 0, 1)), createFolders: false });
+  return zip;
+}
 
 // Axis-aligned box: 8 vertices, 12 triangles (outward winding)
 function box(sx, sy, sz) {
@@ -45,13 +54,18 @@ function obj({ v, quads }) {
 
 // BambuStudio/Orca-style 3MF: root model with a component pointing to
 // 3D/Objects/object_1.model, model_settings.config, project_settings.config.
-async function painted3mf() {
+// Faces in box() order: bottom(2), top(2), front y=0 (2), right x=max (2), back(2), left(2).
+// 5x state1 ("4"), 2x state2 ("8"), 2x state3 ("0C"),
+// 2x split into 2 children state1/state2 ("841" read backwards: 1=split in 2, 4, 8),
+// 1x unpainted -> part extruder 4 from model_settings.config.
+// Expected per state: s1 = 5 + 1 = 6, s2 = 2 + 1 = 3, s3 = 2, s4 = 1.
+// From the default preview angle (top, front, right visible) all four
+// colours show: top = s1, front = s2, right = s3 + s4.
+const PAINTS = ['4', '4', '4', '4', '8', '8', '0C', null, '0C', '4', '841', '841'];
+
+async function painted3mf(colours) {
   const { v, tris } = box(10, 10, 10);
-  // 12 faces: 5x state1 ("4"), 2x state2 ("8"), 2x state3 ("0C"),
-  // 2x split into 2 children state1/state2 ("841" read backwards: 1=split in 2, 4, 8),
-  // 1x unpainted -> part extruder 4 from model_settings.config.
-  // Expected per state: s1 = 5 + 1 = 6, s2 = 2 + 1 = 3, s3 = 2, s4 = 1.
-  const paints = ['4', '4', '4', '4', '4', '8', '8', '0C', '0C', '841', '841', null];
+  const paints = PAINTS;
   const mesh = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
  <resources>
@@ -100,8 +114,8 @@ ${tris.map((t, i) => `     <triangle v1="${t[0]}" v2="${t[1]}" v3="${t[2]}"${pai
   </object>
 </config>
 `;
-  const projectSettings = JSON.stringify({ filament_colour: ['#00FFFF', '#FF00FF', '#FFFF00', '#000000'] }, null, 4);
-  const zip = new JSZip();
+  const projectSettings = JSON.stringify({ filament_colour: colours }, null, 4);
+  const zip = newZip();
   zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>');
   zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>');
   zip.file('3D/3dmodel.model', root);
@@ -126,7 +140,7 @@ async function plain3mf() {
  <build><item objectid="2"/></build>
 </model>
 `;
-  const zip = new JSZip();
+  const zip = newZip();
   zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>');
   zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>');
   zip.file('3D/3dmodel.model', model);
@@ -157,6 +171,10 @@ function glb() {
       { bufferView: 1, componentType: 5123, count: tris.length * 3, type: 'SCALAR' },
     ],
   };
+  return glbContainer(json, bin);
+}
+
+function glbContainer(json, bin) {
   const pad = (b, ch) => Buffer.concat([b, Buffer.alloc((4 - (b.length % 4)) % 4, ch)]);
   const jsonBuf = pad(Buffer.from(JSON.stringify(json)), 0x20);
   const binBuf = pad(bin, 0);
@@ -171,6 +189,76 @@ function glb() {
     return Buffer.concat([h, b]);
   };
   return Buffer.concat([header, chunk(jsonBuf, 0x4e4f534a), chunk(binBuf, 0x004e4942)]);
+}
+
+// Minimal RGBA PNG encoder (for the GLB texture fixture)
+function png(w, h, pixel) {
+  const raw = Buffer.alloc(h * (1 + w * 4));
+  for (let y = 0; y < h; y++) {
+    raw[y * (1 + w * 4)] = 0; // filter: none
+    for (let x = 0; x < w; x++) Buffer.from(pixel(x, y)).copy(raw, y * (1 + w * 4) + 1 + x * 4);
+  }
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const td = Buffer.concat([Buffer.from(type), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(zlib.crc32(td));
+    return Buffer.concat([len, td, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr.set([8, 6, 0, 0, 0], 8); // 8-bit RGBA
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
+
+// Textured GLB: unit cube, 24 vertices with per-face UVs, embedded PNG
+// baseColorTexture whose left half is red and right half green.
+function texturedGlb() {
+  const { v, quads } = box(1, 1, 1);
+  const pos = [];
+  const uv = [];
+  const idx = [];
+  quads.forEach((q, f) => {
+    q.forEach((i, k) => {
+      pos.push(...v[i]);
+      uv.push(...[[0, 1], [1, 1], [1, 0], [0, 0]][k]);
+    });
+    idx.push(f * 4, f * 4 + 1, f * 4 + 2, f * 4, f * 4 + 2, f * 4 + 3);
+  });
+  const f32 = (a) => Buffer.from(new Float32Array(a).buffer);
+  const posBuf = f32(pos);
+  const uvBuf = f32(uv);
+  const idxBuf = Buffer.from(new Uint16Array(idx).buffer);
+  const img = png(8, 8, (x) => (x < 4 ? [255, 0, 0, 255] : [0, 200, 0, 255]));
+  const pad4 = (b) => Buffer.concat([b, Buffer.alloc((4 - (b.length % 4)) % 4)]);
+  const parts = [posBuf, uvBuf, idxBuf, img].map(pad4);
+  let off = 0;
+  const views = parts.map((b, i) => {
+    const view = { buffer: 0, byteOffset: off, byteLength: [posBuf, uvBuf, idxBuf, img][i].length };
+    off += b.length;
+    return view;
+  });
+  const json = {
+    asset: { version: '2.0', generator: '3mf-cabinet fixtures' },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ mesh: 0 }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0, TEXCOORD_0: 1 }, indices: 2, material: 0 }] }],
+    materials: [{ pbrMetallicRoughness: { baseColorTexture: { index: 0 }, metallicFactor: 0, roughnessFactor: 1 } }],
+    textures: [{ source: 0, sampler: 0 }],
+    samplers: [{ magFilter: 9728, minFilter: 9728 }],
+    images: [{ bufferView: 3, mimeType: 'image/png' }],
+    buffers: [{ byteLength: off }],
+    bufferViews: views,
+    accessors: [
+      { bufferView: 0, componentType: 5126, count: pos.length / 3, type: 'VEC3', min: [0, 0, 0], max: [1, 1, 1] },
+      { bufferView: 1, componentType: 5126, count: uv.length / 2, type: 'VEC2' },
+      { bufferView: 2, componentType: 5123, count: idx.length, type: 'SCALAR' },
+    ],
+  };
+  return glbContainer(json, Buffer.concat(parts));
 }
 
 function amf() {
@@ -213,7 +301,10 @@ await fs.mkdir(OUT, { recursive: true });
 await fs.writeFile(path.join(OUT, 'cube.stl'), stlBinary(box(10, 10, 10)));
 await fs.writeFile(path.join(OUT, 'pyramid_ascii.stl'), stlAscii(pyramid));
 await fs.writeFile(path.join(OUT, 'box.obj'), obj(box(20, 10, 5)));
-await fs.writeFile(path.join(OUT, 'painted.3mf'), await painted3mf());
+await fs.writeFile(path.join(OUT, 'painted.3mf'), await painted3mf(['#00FFFF', '#FF00FF', '#FFFF00', '#000000']));
+// Same cube with non-CMYK filament colours, to exercise filament mapping
+await fs.writeFile(path.join(OUT, 'offpalette.3mf'), await painted3mf(['#1E90FF', '#E0457B', '#FFD700', '#333333']));
+await fs.writeFile(path.join(OUT, 'textured.glb'), texturedGlb());
 await fs.writeFile(path.join(OUT, 'plain.3mf'), await plain3mf());
 await fs.writeFile(path.join(OUT, 'cube.glb'), glb());
 await fs.writeFile(path.join(OUT, 'box.amf'), amf());
