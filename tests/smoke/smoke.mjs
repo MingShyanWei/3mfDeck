@@ -490,6 +490,11 @@ try {
   // 9c) M11: spool suggestion in its own modal, then apply
   await page.click('[data-testid=suggest-open]');
   await page.waitForSelector('[data-testid=spool-suggest]');
+  // M13b: standard-preset coverage comparison (CMYK / CMYW)
+  const cmyw = await page.textContent('[data-testid=preset-cmyw]');
+  assert.match(cmyw, /CMYW.*單捲 \d+(\.\d+)?%／含混色 \d+(\.\d+)?%/, `preset row: ${cmyw}`);
+  const covText = async (id) => ((await page.textContent(`[data-testid=preset-${id}]`)).replace(/\s+/g, ' ').match(/：單捲.*$/)?.[0] || '').trim();
+  step(`標準配置: CMYK${await covText('cmyk')}；CMYW${await covText('cmyw')}`);
   await page.click('[data-testid=suggest-spools]');
   await page.waitForSelector('[data-testid=suggest-spools-list]');
   await page.waitForSelector('[data-testid=suggest-results]');

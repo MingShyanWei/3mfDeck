@@ -1,8 +1,8 @@
 // M13: spool-colour suggestion in its own modal (SPEC 3.5d) — the colour
 // analysis panel stays clean; this window holds the inventory/ideal pickers.
 import { useMemo, useState } from 'react';
-import { suggestSpools } from '../../core/spoolSuggest.mjs';
-import { suggestFromInventory } from '../../core/inventorySuggest.mjs';
+import { suggestSpools, STANDARD_PRESETS } from '../../core/spoolSuggest.mjs';
+import { suggestFromInventory, coverageOf } from '../../core/inventorySuggest.mjs';
 import { useSetSpools } from '../slots.js';
 
 export default function SpoolSuggestDialog({ colors, onClose }) {
@@ -43,6 +43,14 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
 
   if (!colors.length) return null; // single-colour models still get a 1-spool suggestion
 
+  const [appliedPreset, setAppliedPreset] = useState(null);
+  const presetCov = STANDARD_PRESETS.map((p) => ({ ...p, cov: coverageOf(colors, p.hexes, { maxColours: 60 }) }));
+  const applyPreset = async (p) => {
+    await window.api.setSpools(p.hexes);
+    setSpools(p.hexes);
+    setAppliedPreset(p.id);
+  };
+
   return (
     <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose?.()}>
       <div className="modal spool-suggest" role="dialog" aria-label="建議捲色" data-testid="spool-suggest">
@@ -53,6 +61,20 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
         <button data-testid="suggest-spools" onClick={() => runIdeal(ideal?.recommended?.k || 4)}>
           <i className="mdi mdi-palette" /> 建議捲色（理想色碼）
         </button>
+      </div>
+      <div className="presets" data-testid="standard-presets">
+        <span className="small muted">標準配置覆蓋率：</span>
+        {presetCov.map((p) => (
+          <span key={p.id} className="preset small" data-testid={`preset-${p.id}`}>
+            {p.hexes.map((h) => (
+              <span key={h} className="swatch" style={{ background: h }} title={h} />
+            ))}
+            <span className="small muted">{p.name}：單捲 {p.cov.singlePct}%／含混色 {p.cov.mixPct}%</span>
+            <button className="small" data-testid={`preset-apply-${p.id}`} onClick={() => applyPreset(p)}>
+              {appliedPreset === p.id ? '已套用 ✓' : '套用'}
+            </button>
+          </span>
+        ))}
       </div>
       {mode && rec && (
         <span className="small muted" data-testid="suggest-recommended">

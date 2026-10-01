@@ -10,30 +10,43 @@ import { suggestSpools } from './spoolSuggest.mjs';
 
 /**
  * Coverage of `colorStats` by a set of spool hexes: { singlePct, mixPct,
- * worst: [{color, deltaE, mode}] } (faces-then-percent rounded to 2 dp).
+ * worst: [{color, faces, deltaE, mode}] } (faces-then-percent rounded to 2 dp).
+ * `maxColours`: mix search (expensive) runs only for the top colours by
+ * face count; the remainder is judged by nearest single spool only — exact
+ * for the dominant colours, approximate for dithered noise.
  */
-export function coverageOf(colorStats, hexes, threshold = MIX_DELTA_E) {
+export function coverageOf(colorStats, hexes, { threshold = MIX_DELTA_E, maxColours = Infinity } = {}) {
   const total = colorStats.reduce((t, c) => t + c.faces, 0) || 1;
   const slots = slotsFromColours(hexes);
+  let deep = colorStats;
+  let shallow = [];
+  if (colorStats.length > maxColours) {
+    const sorted = [...colorStats].sort((a, b) => b.faces - a.faces);
+    deep = sorted.slice(0, maxColours);
+    shallow = sorted.slice(maxColours);
+  }
   let single = 0;
   let mix = 0;
   const worst = [];
-  for (const c of colorStats) {
+  const evalColour = (c, canMix) => {
     const near = nearestSlot(c.color, slots);
     if (near.deltaE <= threshold) {
       single += c.faces;
       mix += c.faces;
-      continue;
+      return;
     }
-    const plan = slots.length >= 2 ? mixPrintPlan(c.color, slots, threshold) : null;
+    const plan = canMix && slots.length >= 2 ? mixPrintPlan(c.color, slots, threshold) : null;
     if (plan?.mode === 'mix' && plan.mixable) {
       mix += c.faces;
     } else {
       worst.push({ color: c.color, faces: c.faces, deltaE: Math.round(near.deltaE * 10) / 10 });
     }
-  }
+  };
+  for (const c of deep) evalColour(c, true);
+  for (const c of shallow) evalColour(c, false);
   const pct = (v) => Math.round((v / total) * 10000) / 100;
   worst.sort((a, b) => b.faces - a.faces);
+  worst.length = Math.min(worst.length, 20);
   return { singlePct: pct(single), mixPct: pct(mix), worst };
 }
 
@@ -48,7 +61,7 @@ function bestSubset(colorStats, inventory, k, threshold) {
   const cache = new Map();
   const evalSubset = (hexes) => {
     const key = [...hexes].sort().join();
-    if (!cache.has(key)) cache.set(key, coverageOf(colorStats, hexes, threshold));
+    if (!cache.has(key)) cache.set(key, coverageOf(colorStats, hexes, { threshold }));
     return cache.get(key);
   };
   for (let step = 0; step < k && step < inventory.length; step++) {

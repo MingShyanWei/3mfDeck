@@ -25,6 +25,15 @@ export function labToHex([L, a, b]) {
 const dist2 = (p, q) => (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
 
 /**
+ * Standard 4-spool sets worth comparing against the custom suggestion (SPEC 3.5d):
+ * CMYK for dark palettes, CMYW (white instead of black) for light ones.
+ */
+export const STANDARD_PRESETS = [
+  { id: 'cmyk', name: 'CMYK 標準四色', hexes: ['#00FFFF', '#FF00FF', '#FFFF00', '#000000'] },
+  { id: 'cmyw', name: 'CMYW 淡色用（白代黑）', hexes: ['#00FFFF', '#FF00FF', '#FFFF00', '#FFFFFF'] },
+];
+
+/**
  * Weighted k-means in Lab space. `points` = [{ lab, w }]. Deterministic:
  * k-means++ seeding driven by a fixed PRNG so tests are stable.
  */
