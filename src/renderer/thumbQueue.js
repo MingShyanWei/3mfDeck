@@ -18,13 +18,17 @@ export async function runThumbQueue(onThumb) {
       for (const id of await window.api.idsNeedingThumb()) {
         if (failed.has(id)) continue;
         try {
-          const png = await renderThumbnail(await window.api.preview(id));
+          const payload = await window.api.preview(id);
+          if (payload.missing) {
+            failed.add(id); // missing file (遺失): nothing to render this session
+            continue;
+          }
+          const png = await renderThumbnail(payload);
           await window.api.setThumb(id, png);
           onThumb(id);
         } catch (err) {
           failed.add(id);
-          // A file missing from the current root is expected (shown as 遺失)
-          if (!/ENOENT/.test(err.message)) console.warn(`thumbnail failed for model ${id}: ${err.message}`);
+          console.warn(`thumbnail failed for model ${id}: ${err.message}`);
         }
       }
     } while (again);

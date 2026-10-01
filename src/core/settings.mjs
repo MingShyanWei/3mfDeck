@@ -6,19 +6,23 @@ import { listModels, getModel } from './db.mjs';
 
 const file = (userDataDir) => path.join(userDataDir, 'config.json');
 
-export function loadSettings(userDataDir, defaultRoot) {
-  let saved = {};
+function readConfig(userDataDir) {
   try {
-    saved = JSON.parse(fs.readFileSync(file(userDataDir), 'utf8'));
+    return JSON.parse(fs.readFileSync(file(userDataDir), 'utf8'));
   } catch {
-    // first run: no config yet
+    return {}; // first run: no config yet
   }
-  return { libraryRoot: saved.libraryRoot || defaultRoot };
 }
 
+export function loadSettings(userDataDir, defaultRoot) {
+  const saved = readConfig(userDataDir);
+  return { libraryRoot: saved.libraryRoot || defaultRoot, notifiedMissing: saved.notifiedMissing || [] };
+}
+
+/** Merge `settings` into config.json (other keys are kept). */
 export function saveSettings(userDataDir, settings) {
   fs.mkdirSync(userDataDir, { recursive: true });
-  fs.writeFileSync(file(userDataDir), JSON.stringify(settings, null, 2));
+  fs.writeFileSync(file(userDataDir), JSON.stringify({ ...readConfig(userDataDir), ...settings }, null, 2));
 }
 
 /** Absolute path of a model's file under the current root (Finder reveal, preview). */

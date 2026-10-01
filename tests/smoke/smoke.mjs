@@ -482,7 +482,12 @@ try {
   const cfg = JSON.parse(await fs.readFile(path.join(base, 'userData', 'config.json'), 'utf8'));
   assert.equal(cfg.libraryRoot, rootB);
   assert.equal(await exists(path.join(lib, year, 'cube.stl')), true, 'old root files must not move');
-  step(`settings: root -> ${rootB}; 1 file indexed, ${allCount} old records shown as 遺失; config.json in userData`);
+  // M7: the root switch raises a one-time "newly missing" notice
+  await page.waitForSelector('[data-testid=missing-toast]');
+  assert.match(await page.textContent('[data-testid=missing-toast]'), new RegExp(`${allCount} 筆記錄新出現遺失`));
+  await page.click('[data-testid=missing-toast-close]');
+  await page.waitForSelector('[data-testid=missing-toast]', { state: 'detached' });
+  step(`settings: root -> ${rootB}; 1 file indexed, ${allCount} old records shown as 遺失 + one-time notice; config.json in userData`);
 
   // 11) M5: multi-plate 3MF — one entry, plate badge, plate switcher, per-plate analysis
   const REAL = path.dirname(WINE);
@@ -612,6 +617,106 @@ try {
   assert.ok(regionSpools.every((t) => /^槽\d [CMYK] /.test(t)), 'non-dithered: nearest single U1 slot ' + regionSpools.join(' | '));
   step('regions.3mf (not dithered): no estimate mode, nearest-slot mapping ' + regionSpools.join(' | '));
   await page.fill('[data-testid=search]', '');
+
+  // 13) M7: missing records after the root switch (the user's iCloud scenario)
+  // a) Restart with a file dropped into the root while the app was closed
+  await app.close();
+  await fs.copyFile(path.join(FIX, 'cube.glb'), path.join(rootB, year, 'dropped-in.glb'));
+  [app, page] = await launch();
+  await page.waitForSelector('[data-testid=consistency-banner]');
+  assert.match(await page.textContent('[data-testid=consistency-banner]'), /發現 1 個檔案/);
+  await page.waitForTimeout(500);
+  assert.equal(await page.$('[data-testid=missing-toast]'), null, 'already-notified missing records do not raise the notice again');
+  await page.click('[data-testid=rebuild-index]');
+  await page.waitForSelector('[data-testid=consistency-banner]', { state: 'detached' });
+  await cardFor('dropped-in');
+  step('restart: no repeated 遺失 notice; file added while closed -> 「發現 1 個檔案」 banner -> 重建索引 indexed it');
+
+  // b) 遺失 filter + card marking
+  await page.fill('[data-testid=search]', '');
+  const missingCount = allCount;
+  assert.match(await page.textContent('[data-testid=filter-missing]'), new RegExp(`遺失\\s*${missingCount}`));
+  await page.click('[data-testid=filter-missing]');
+  await page.waitForFunction((n) => document.querySelectorAll('[data-testid=model-card]').length === n, missingCount);
+  assert.equal(await page.$$eval('[data-testid=missing-overlay]', (e) => e.length), missingCount);
+  assert.equal(await page.$$eval('[data-testid=model-card].missing', (e) => e.length), missingCount);
+  await page.waitForSelector('[data-testid=missing-note]');
+  step(`遺失 filter: ${missingCount} cards, each with red border + 「檔案遺失」 overlay`);
+
+  const openMissing = async (name, query = name) => {
+    await page.click('[data-testid=filter-missing]');
+    await page.fill('[data-testid=search]', query);
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 1);
+    await page.click('[data-testid=model-card]');
+    await page.waitForFunction((n) => document.querySelector('[data-testid=detail-panel] h2')?.textContent === n, name);
+    await page.waitForSelector('[data-testid=missing-actions]');
+  };
+  const missingNow = async (n) => page.waitForFunction((k) => new RegExp(`遺失\\s*${k}$`).test(document.querySelector('[data-testid=filter-missing]').textContent.trim()), n);
+  const stubDialogs = (open, confirm) =>
+    app.evaluate(({ dialog }, [o, c]) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [o] });
+      dialog.showMessageBox = async () => ({ response: c });
+    }, [open, confirm]);
+
+  // c) Relocate to a copy inside the new root: used in place, metadata kept
+  const winCopy = path.join(rootB, 'relocated', 'Wine copy.3mf');
+  if (haveWine) {
+    await fs.mkdir(path.dirname(winCopy), { recursive: true });
+    await fs.copyFile(WINE, winCopy);
+    await openMissing('Wine-U1', 'Wine');
+    await stubDialogs(winCopy, 1);
+    await page.click('[data-testid=relocate]');
+    await page.waitForSelector('[data-testid=missing-actions]', { state: 'detached' });
+    await page.waitForSelector('[data-testid=viewer][data-status=ready]');
+    assert.match(await page.textContent('[data-testid=detail-panel]'), /relocated\/Wine copy\.3mf/);
+    assert.equal(await page.inputValue('[data-testid=f-platform]'), 'MakerWorld');
+    await missingNow(missingCount - 1);
+    step('重新定位 (inside root): Wine-U1 -> relocated/Wine copy.3mf, preview ready, MakerWorld provenance kept');
+  }
+  let left = haveWine ? missingCount - 1 : missingCount;
+
+  // d) Remove record: index entry gone, the old file untouched
+  await openMissing('painted');
+  await stubDialogs('', 1);
+  await page.click('[data-testid=remove-record]');
+  await page.waitForSelector('[data-testid=detail-panel]', { state: 'detached' });
+  await missingNow(--left);
+  assert.equal(await exists(path.join(lib, year, 'painted.3mf')), true, 'remove record never deletes files');
+  step('移除記錄: painted record removed, its file in the old root still exists');
+
+  // e) Restore when the file is in the new root's .trash
+  await fs.mkdir(path.join(rootB, '.trash', '77', year), { recursive: true });
+  await fs.copyFile(path.join(FIX, 'offpalette.3mf'), path.join(rootB, '.trash', '77', year, 'offpalette.3mf'));
+  await openMissing('offpalette');
+  await page.waitForSelector('[data-testid=restore-missing]');
+  await page.click('[data-testid=restore-missing]');
+  await page.waitForSelector('[data-testid=missing-actions]', { state: 'detached' });
+  assert.equal(await exists(path.join(rootB, year, 'offpalette.3mf')), true);
+  await missingNow(--left);
+  step('從回收桶還原: offpalette .trash/77/2026/offpalette.3mf -> 2026/offpalette.3mf');
+
+  // f) Relocate to a file outside the root: confirmed, moved in like an import
+  const outside = await stage('dither.3mf', 'dither.3mf', path.join(inbox, 'dup'));
+  await openMissing('dither', 'dither');
+  await stubDialogs(outside, 1);
+  await page.click('[data-testid=relocate]');
+  await page.waitForSelector('[data-testid=missing-actions]', { state: 'detached' });
+  assert.equal(await exists(outside), false);
+  assert.equal(await exists(path.join(rootB, year, 'dither.3mf')), true);
+  await missingNow(--left);
+  step(`重新定位 (outside root, confirmed): dither.3mf moved into ${path.join('libraryB', year)}; 遺失 ${missingCount} -> ${left}`);
+
+  // g) Next launch: still no notice for the remaining (already known) missing records
+  await app.close();
+  [app, page] = await launch();
+  await page.waitForTimeout(800);
+  assert.equal(await page.$('[data-testid=missing-toast]'), null);
+  assert.match(await page.textContent('[data-testid=filter-missing]'), new RegExp(`遺失\\s*${left}`));
+  step(`relaunch: no 遺失 notice, filter still lists ${left}`);
+  await page.click('[data-testid=filter-missing]');
+  await page.waitForFunction((n) => document.querySelectorAll('[data-testid=model-card]').length === n, left);
+  await page.screenshot({ path: path.join(base, 'missing.png') });
+  await page.click('[data-testid=filter-all]');
 
   await page.screenshot({ path: path.join(base, 'smoke.png') });
   step('screenshot: ' + path.join(base, 'smoke.png'));

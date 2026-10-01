@@ -9,14 +9,21 @@ import { tmpDir, stage, exists } from './helpers.mjs';
 describe('settings storage (SPEC 3.8)', () => {
   it('defaults to the given root when no config exists', async () => {
     const userData = await tmpDir();
-    expect(loadSettings(userData, '/Users/x/3mf-library')).toEqual({ libraryRoot: '/Users/x/3mf-library' });
+    expect(loadSettings(userData, '/Users/x/3mf-library')).toEqual({ libraryRoot: '/Users/x/3mf-library', notifiedMissing: [] });
   });
 
   it('persists the root in userData/config.json', async () => {
     const userData = await tmpDir();
     saveSettings(userData, { libraryRoot: '/Volumes/ext/models' });
     expect(JSON.parse(await fs.readFile(path.join(userData, 'config.json'), 'utf8'))).toEqual({ libraryRoot: '/Volumes/ext/models' });
-    expect(loadSettings(userData, '/default')).toEqual({ libraryRoot: '/Volumes/ext/models' });
+    expect(loadSettings(userData, '/default')).toEqual({ libraryRoot: '/Volumes/ext/models', notifiedMissing: [] });
+  });
+
+  it('saving merges: switching root keeps other settings (e.g. already-notified missing ids)', async () => {
+    const userData = await tmpDir();
+    saveSettings(userData, { libraryRoot: '/a', notifiedMissing: [3, 4] });
+    saveSettings(userData, { libraryRoot: '/b' });
+    expect(loadSettings(userData, '/default')).toEqual({ libraryRoot: '/b', notifiedMissing: [3, 4] });
   });
 });
 

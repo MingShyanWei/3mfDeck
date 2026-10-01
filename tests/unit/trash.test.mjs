@@ -1,10 +1,12 @@
 // SPEC 3.7 (trash, export) and §4 consistency check / index rebuild.
+// consistencyReport(db, root, userData) -> { untracked, missing, newlyMissing }
 import { describe, it, expect, beforeEach } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { openDb, getModel, listModels, setTags, updateModel, sidebarCounts } from '../../src/core/db.mjs';
 import { importPaths, indexNewFiles } from '../../src/core/importer.mjs';
-import { trashModel, restoreModel, emptyTrash, exportModel, checkConsistency, isTrashed } from '../../src/core/trash.mjs';
+import { trashModel, restoreModel, emptyTrash, exportModel, isTrashed } from '../../src/core/trash.mjs';
+import { consistencyReport } from '../../src/core/missing.mjs';
 import { FIXTURES, tmpDir, stage, exists } from './helpers.mjs';
 
 const NOW = new Date(2026, 9, 1);
@@ -86,17 +88,21 @@ describe('exportModel', () => {
 });
 
 describe('consistency check and index rebuild', () => {
+  const check = async (d) => {
+    const { untracked, missing } = await consistencyReport(d, root, path.join(base, 'userData'));
+    return { untracked, missing };
+  };
   it('a consistent library reports nothing', async () => {
-    expect(await checkConsistency(db, root)).toEqual({ untracked: [], missing: 0 });
+    expect(await check(db)).toEqual({ untracked: [], missing: 0 });
   });
 
   it('DB lost: every file (incl. trash) is untracked, and a rebuild restores the index', async () => {
     await trashModel(db, root, ids[0]);
     const fresh = openDb(':memory:'); // "pull the DB"
-    const check = await checkConsistency(fresh, root);
-    expect(check).toEqual({ untracked: ['2026/painted.3mf', `.trash/${ids[0]}/2026/cube.stl`], missing: 0 });
+    const report = await check(fresh);
+    expect(report).toEqual({ untracked: ['2026/painted.3mf', `.trash/${ids[0]}/2026/cube.stl`], missing: 0 });
     expect(await indexNewFiles(fresh, root)).toHaveLength(2);
-    expect(await checkConsistency(fresh, root)).toEqual({ untracked: [], missing: 0 });
+    expect(await check(fresh)).toEqual({ untracked: [], missing: 0 });
     const painted = listModels(fresh)[0];
     expect([painted.name, painted.color_count, painted.platform]).toEqual(['painted', 4, 'MakerWorld']);
     // the trashed file is still restorable after the rebuild
@@ -106,6 +112,6 @@ describe('consistency check and index rebuild', () => {
 
   it('files deleted behind the app’s back are reported missing', async () => {
     await fs.unlink(path.join(root, '2026', 'cube.stl'));
-    expect(await checkConsistency(db, root)).toEqual({ untracked: [], missing: 1 });
+    expect(await check(db)).toEqual({ untracked: [], missing: 1 });
   });
 });

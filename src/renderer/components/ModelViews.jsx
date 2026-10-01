@@ -13,6 +13,11 @@ export function ModelGrid({ models, selectedId, onSelect }) {
           onClick={() => onSelect(m.id)}
         >
           <div className="thumb">
+            {m.missing && (
+              <div className="missing-overlay" data-testid="missing-overlay">
+                <i className="mdi mdi-file-alert-outline" /> 檔案遺失
+              </div>
+            )}
             {m.has_thumb ? (
               <img src={`mfthumb://thumb/${m.id}`} alt="" data-testid="card-thumb" draggable={false} />
             ) : (

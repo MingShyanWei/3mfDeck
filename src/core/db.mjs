@@ -107,20 +107,49 @@ export function insertModel(db, { name, relPath, parsed }) {
         notes: hint.notes || null,
         ts,
       });
-    const ins = db.prepare('INSERT INTO color_stats (model_id, color, faces, pct) VALUES (?, ?, ?, ?)');
-    for (const c of parsed.colorStats || []) ins.run(id, c.color, c.faces, c.pct);
-    const insPlate = db.prepare('INSERT INTO plates (model_id, plate, name, tri_count) VALUES (?, ?, ?, ?)');
-    const insPlateColor = db.prepare('INSERT INTO plate_color_stats (model_id, plate, color, faces, pct) VALUES (?, ?, ?, ?, ?)');
-    if (parsed.mixing) {
-      db.prepare('INSERT INTO color_mixing (model_id, vertex_mixed_pct, full_spectrum) VALUES (?, ?, ?)').run(id, parsed.mixing.vertexMixedPct, parsed.mixing.fullSpectrum ? 1 : 0);
-    }
-    for (const p of parsed.plates || []) {
-      insPlate.run(id, p.plate, p.name, p.tri_count);
-      for (const c of p.colorStats || []) insPlateColor.run(id, p.plate, c.color, c.faces, c.pct);
-    }
+    insertDerivedRows(db, Number(id), parsed);
     return Number(id);
   });
   return run();
+}
+
+// Per-model rows derived from the file: colour stats, plates, mixing
+function insertDerivedRows(db, id, parsed) {
+  const ins = db.prepare('INSERT INTO color_stats (model_id, color, faces, pct) VALUES (?, ?, ?, ?)');
+  for (const c of parsed.colorStats || []) ins.run(id, c.color, c.faces, c.pct);
+  const insPlate = db.prepare('INSERT INTO plates (model_id, plate, name, tri_count) VALUES (?, ?, ?, ?)');
+  const insPlateColor = db.prepare('INSERT INTO plate_color_stats (model_id, plate, color, faces, pct) VALUES (?, ?, ?, ?, ?)');
+  if (parsed.mixing) {
+    db.prepare('INSERT INTO color_mixing (model_id, vertex_mixed_pct, full_spectrum) VALUES (?, ?, ?)').run(id, parsed.mixing.vertexMixedPct, parsed.mixing.fullSpectrum ? 1 : 0);
+  }
+  for (const p of parsed.plates || []) {
+    insPlate.run(id, p.plate, p.name, p.tri_count);
+    for (const c of p.colorStats || []) insPlateColor.run(id, p.plate, c.color, c.faces, c.pct);
+  }
+}
+
+/**
+ * Re-read file-derived data after a record was pointed at another file
+ * (relocation). User metadata (name, provenance, tags, notes) is kept; the
+ * thumbnail is cleared so it gets rendered again.
+ */
+export function replaceDerived(db, id, parsed) {
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE models SET format = @format, size_bytes = @size_bytes, tri_count = @tri_count, bbox_mm = @bbox_mm,
+         color_count = @color_count, thumb = NULL, updated_at = @ts WHERE id = @id`,
+    ).run({
+      id,
+      format: parsed.format,
+      size_bytes: parsed.size_bytes,
+      tri_count: parsed.tri_count,
+      bbox_mm: parsed.bbox_mm ? JSON.stringify(parsed.bbox_mm) : null,
+      color_count: parsed.color_count,
+      ts: nowIso(),
+    });
+    for (const t of ['color_stats', 'plate_color_stats', 'plates', 'color_mixing']) db.prepare(`DELETE FROM ${t} WHERE model_id = ?`).run(id);
+    insertDerivedRows(db, id, parsed);
+  })();
 }
 
 export function updateModel(db, id, fields) {

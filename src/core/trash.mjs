@@ -1,10 +1,8 @@
-// Recycle bin, export and startup consistency check (SPEC 3.7, §4).
+// Recycle bin and export (SPEC 3.7).
 import fs from 'node:fs/promises';
-import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { TRASH_DIR, moveWithinRoot, copyInto } from './library.mjs';
 import { getModel, listModels, setRelPath, deleteModels } from './db.mjs';
-import { untrackedFiles } from './importer.mjs';
 import { modelPath } from './settings.mjs';
 
 export const isTrashed = (rel) => rel.startsWith(`${TRASH_DIR}/`);
@@ -60,17 +58,4 @@ export async function emptyTrash(db, root) {
 /** Copy (never move) a model's file into `destDir`. Returns the copy's path. */
 export function exportModel(db, root, id, destDir) {
   return copyInto(modelPath(db, root, id), destDir);
-}
-
-/**
- * Startup consistency check (file system is the truth):
- * - untracked: files under root the DB does not know -> offer to rebuild the index
- * - missing: DB records whose file is gone -> shown as 遺失
- */
-export async function checkConsistency(db, root) {
-  const all = [...listModels(db), ...listModels(db, { filter: 'trash' })];
-  return {
-    untracked: await untrackedFiles(db, root),
-    missing: all.filter((m) => !existsSync(path.join(root, m.rel_path))).length,
-  };
 }

@@ -63,6 +63,10 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
         performance.measure('preview:ipc', 'preview:start');
         if (cancelled) return;
         setLoaded(`${model.id}:${plate ?? ''}`);
+        if (payload.missing) {
+          setError('檔案遺失，無法預覽');
+          return setStatus('error');
+        }
         if (payload.unsupported) return setStatus('unsupported');
         if (payload.format === '3mf' && !payload.indices.length) return setStatus('empty');
         performance.mark('preview:build');
@@ -81,14 +85,15 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
         setStatus('ready');
       } catch (err) {
         if (cancelled) return;
-        setError(/ENOENT/.test(err.message) ? '檔案遺失，無法預覽' : err.message);
+        setError(err.message);
         setStatus('error');
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [model.id, plate]);
+    // rel_path: a relocated / restored record points at a new file under the same id
+  }, [model.id, model.rel_path, plate]);
 
   const fs = model.full_spectrum;
   useEffect(() => {

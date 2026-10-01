@@ -1,9 +1,9 @@
 import { PROVENANCE } from '../format.js';
 
-function Item({ id, filter, onFilter, icon, label, count, warn }) {
+function Item({ id, filter, onFilter, icon, label, count, warn, danger }) {
   return (
     <li>
-      <button className={`side-item${filter === id ? ' on' : ''}${warn && count ? ' warn' : ''}`} data-testid={`filter-${id}`} onClick={() => onFilter(id)}>
+      <button className={`side-item${filter === id ? ' on' : ''}${warn && count ? ' warn' : ''}${danger && count ? ' danger' : ''}`} data-testid={`filter-${id}`} onClick={() => onFilter(id)}>
         <i className={`mdi ${icon}`} />
         <span className="grow">{label}</span>
         <span className="count">{count ?? 0}</span>
@@ -35,6 +35,7 @@ export default function Sidebar({ counts, filter, onFilter }) {
         </>
       )}
       <ul className="trash-item">
+        <Item id="missing" filter={filter} onFilter={onFilter} icon="mdi-file-alert-outline" label="遺失" count={counts.missing} danger />
         <Item id="trash" filter={filter} onFilter={onFilter} icon="mdi-delete-outline" label="回收桶" count={counts.trash} />
       </ul>
       <h3>標籤</h3>

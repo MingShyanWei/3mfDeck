@@ -1,5 +1,5 @@
 // Right-hand panel: edit metadata of the selected model + file info.
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import MetadataForm, { toDraft, saveDraft } from './MetadataForm.jsx';
 import ModelViewer from './ModelViewer.jsx';
 import ColorAnalysis from './ColorAnalysis.jsx';
@@ -12,15 +12,21 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
   const [exported, setExported] = useState(null);
   const [plate, setPlate] = useState(null); // selected plate of a multi-plate file
 
-  useEffect(() => {
-    window.api.get(id).then((m) => {
-      setModel(m);
-      setDraft(toDraft(m));
-      setSaved(false);
-      setExported(null);
-      setPlate(m.plates.length > 1 ? m.plates[0].plate : null);
-    });
+  const [inTrash, setInTrash] = useState(false); // missing record whose file is in .trash
+  const [actionError, setActionError] = useState('');
+  const load = useCallback(async () => {
+    const m = await window.api.get(id);
+    setModel(m);
+    setDraft(toDraft(m));
+    setSaved(false);
+    setExported(null);
+    setActionError('');
+    setPlate(m.plates.length > 1 ? m.plates[0].plate : null);
+    setInTrash(m.missing ? await window.api.missingInTrash(id) : false);
   }, [id]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   if (!model || !draft) return <aside className="detail" />;
   const dirty = JSON.stringify(draft) !== JSON.stringify(toDraft(model));
@@ -44,6 +50,23 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
   const restore = async () => {
     await window.api.restore(id);
     onRemoved();
+  };
+  // Missing-record actions; the list and counts refresh through onSaved / onRemoved
+  const relocate = async () => {
+    const r = await window.api.relocate(id);
+    if (!r) return;
+    if (r.error) return setActionError(r.error);
+    await load();
+    onSaved();
+  };
+  const removeRecord = async () => {
+    if (await window.api.removeRecord(id)) onRemoved();
+  };
+  const restoreMissing = async () => {
+    const r = await window.api.restoreMissing(id);
+    if (r.error) return setActionError(r.error);
+    await load();
+    onSaved();
   };
   const exportFile = async () => {
     const dest = await window.api.exportModel(id);
@@ -71,6 +94,24 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
         </button>
         <button className="icon" onClick={onClose} title="關閉"><i className="mdi mdi-close" /></button>
       </header>
+      {model.missing && (
+        <div className="callout danger missing-actions" data-testid="missing-actions">
+          <i className="mdi mdi-file-alert-outline" />
+          <div className="grow">
+            <div>遺失：目前的根目錄下找不到這個檔案（{model.rel_path}）。</div>
+            <div className="row">
+              <button data-testid="relocate" onClick={relocate}>重新定位…</button>
+              <button data-testid="remove-record" onClick={removeRecord}>移除記錄</button>
+              {inTrash && (
+                <button className="primary" data-testid="restore-missing" onClick={restoreMissing}>
+                  從回收桶還原
+                </button>
+              )}
+            </div>
+            {actionError && <div className="small" data-testid="missing-error">{actionError}</div>}
+          </div>
+        </div>
+      )}
       {exported && (
         <div className="callout note" data-testid="export-message">
           <i className="mdi mdi-check" />
@@ -108,9 +149,6 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
         ) : (
           <ColorAnalysis colors={model.colors} mixing={mixing} />
         ))}
-      {model.missing && (
-        <div className="callout danger"><i className="mdi mdi-file-alert-outline" /> 遺失：目前的根目錄下找不到這個檔案。</div>
-      )}
       {isUnlabeled(model) && (
         <div className="callout warn"><i className="mdi mdi-alert-outline" /> 來源未標，請補上來源類型。</div>
       )}

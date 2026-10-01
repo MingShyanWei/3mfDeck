@@ -25,6 +25,8 @@ export default function App() {
   const [dragging, setDragging] = useState(false);
   const [notice, setNotice] = useState(null);
   const [consistency, setConsistency] = useState(null);
+  // The "newly missing" notice shows once per occurrence; closing it is final
+  const [missingToastClosed, setMissingToastClosed] = useState(false);
 
   const refresh = useCallback(async () => {
     const [list, c] = await Promise.all([window.api.list({ q, filter, sort }), window.api.sidebar()]);
@@ -45,7 +47,14 @@ export default function App() {
   }, [thumbs]);
 
   // Startup consistency check (SPEC §4): untracked files -> offer a rebuild
-  const checkConsistency = useCallback(() => window.api.checkConsistency().then(setConsistency), []);
+  const checkConsistency = useCallback(
+    () =>
+      window.api.checkConsistency().then((c) => {
+        setConsistency(c);
+        if (c.newlyMissing) setMissingToastClosed(false);
+      }),
+    [],
+  );
   useEffect(() => {
     checkConsistency();
   }, [checkConsistency]);
@@ -137,10 +146,28 @@ export default function App() {
             <button className="primary" data-testid="rebuild-index" onClick={rebuildIndex}>重建索引</button>
           </div>
         )}
-        {consistency?.missing > 0 && (
-          <div className="callout danger" data-testid="missing-banner">
+        {consistency?.newlyMissing > 0 && !missingToastClosed && (
+          <div className="callout danger" data-testid="missing-toast">
             <i className="mdi mdi-file-alert-outline" />
-            <span className="grow">{consistency.missing} 筆記錄的檔案已不在根目錄，已標示為「遺失」。</span>
+            <span className="grow">{consistency.newlyMissing} 筆記錄新出現遺失（檔案不在目前的根目錄）。</span>
+            <button
+              data-testid="missing-toast-view"
+              onClick={() => {
+                setFilter('missing');
+                setMissingToastClosed(true);
+              }}
+            >
+              檢視遺失
+            </button>
+            <button className="icon" data-testid="missing-toast-close" onClick={() => setMissingToastClosed(true)} title="關閉">
+              <i className="mdi mdi-close" />
+            </button>
+          </div>
+        )}
+        {filter === 'missing' && (
+          <div className="callout note" data-testid="missing-note">
+            <i className="mdi mdi-file-alert-outline" />
+            <span className="grow">遺失：記錄還在，但檔案不在目前的根目錄。點選檔案可「重新定位」、「移除記錄」（不刪檔），檔案在回收桶時可「還原」。</span>
           </div>
         )}
         {filter === 'trash' && (

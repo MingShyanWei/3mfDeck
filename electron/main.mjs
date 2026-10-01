@@ -6,7 +6,8 @@ import path from 'node:path';
 import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb } from '../src/core/db.mjs';
 import { loadPreviewData, storeThumb, previewPlate } from '../src/core/preview.mjs';
 import { importPaths, indexNewFiles } from '../src/core/importer.mjs';
-import { trashModel, restoreModel, emptyTrash, exportModel, checkConsistency } from '../src/core/trash.mjs';
+import { trashModel, restoreModel, emptyTrash, exportModel } from '../src/core/trash.mjs';
+import { consistencyReport, relocateModel, removeRecord, findInTrash, restoreMissingFromTrash, isInside } from '../src/core/missing.mjs';
 import { loadSettings, switchRoot, markMissing, modelPath } from '../src/core/settings.mjs';
 import { SUPPORTED_EXTS } from '../src/core/parse/index.mjs';
 
@@ -60,9 +61,16 @@ function buildMenu() {
 }
 
 function registerIpc() {
-  ipcMain.handle('lib:list', (_e, opts) => markMissing(listModels(db, opts), root));
+  ipcMain.handle('lib:list', (_e, opts) => {
+    // 遺失 filter: records whose file is not under the current root
+    if (opts?.filter === 'missing') return markMissing(listModels(db, { ...opts, filter: 'all' }), root).filter((m) => m.missing);
+    return markMissing(listModels(db, opts), root);
+  });
   ipcMain.handle('lib:get', (_e, id) => markMissing([getModel(db, id)], root)[0]);
-  ipcMain.handle('lib:sidebar', () => sidebarCounts(db));
+  ipcMain.handle('lib:sidebar', () => ({
+    ...sidebarCounts(db),
+    missing: markMissing(listModels(db), root).filter((m) => m.missing).length,
+  }));
   ipcMain.handle('lib:update', (_e, id, fields) => updateModel(db, id, fields));
   ipcMain.handle('lib:setTags', (_e, id, names) => setTags(db, id, names));
   ipcMain.handle('lib:importPaths', (_e, paths) => importAndNotify(paths));
@@ -73,6 +81,8 @@ function registerIpc() {
     const model = getModel(db, id);
     const plate = previewPlate(model, requestedPlate);
     const file = modelPath(db, root, id);
+    // A missing record (遺失) is an expected state, not an error
+    if (!fs.existsSync(file)) return { format: model.format, missing: true };
     const { mtimeMs } = await fs.promises.stat(file);
     if (lastPreview?.file === file && lastPreview.mtimeMs === mtimeMs && lastPreview.plate === plate) return lastPreview.payload;
     const payload = await loadPreviewData(file, model.format, plate);
@@ -110,7 +120,54 @@ function registerIpc() {
     if (r.canceled || !r.filePaths.length) return null;
     return exportModel(db, root, id, r.filePaths[0]);
   });
-  ipcMain.handle('lib:consistency', () => checkConsistency(db, root));
+  ipcMain.handle('lib:consistency', () => consistencyReport(db, root, app.getPath('userData')));
+  // Missing-record actions. Errors come back as { error } for the UI to show.
+  ipcMain.handle('lib:relocate', async (_e, id) => {
+    const r = await dialog.showOpenDialog(win, {
+      title: '重新定位檔案',
+      properties: ['openFile'],
+      filters: [{ name: '3D 模型', extensions: SUPPORTED_EXTS.map((e) => e.slice(1)) }],
+    });
+    if (r.canceled || !r.filePaths.length) return null;
+    const picked = r.filePaths[0];
+    if (!isInside(root, picked)) {
+      const ok = await dialog.showMessageBox(win, {
+        type: 'question',
+        message: '這個檔案不在檔案櫃根目錄裡',
+        detail: `重新定位會把它搬進 ${path.join(root, String(new Date().getFullYear()))}（與匯入相同，同名自動加後綴、不覆蓋）。`,
+        buttons: ['取消', '搬進檔案櫃'],
+        defaultId: 1,
+        cancelId: 0,
+      });
+      if (ok.response !== 1) return null;
+    }
+    try {
+      return { relPath: await relocateModel(db, root, id, picked) };
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+  ipcMain.handle('lib:removeRecord', async (_e, id) => {
+    const ok = await dialog.showMessageBox(win, {
+      type: 'question',
+      message: `移除「${getModel(db, id).name}」的記錄？`,
+      detail: '只刪除檔案櫃的索引記錄（標籤、來源等），不會刪除任何檔案。',
+      buttons: ['取消', '移除記錄'],
+      defaultId: 0,
+      cancelId: 0,
+    });
+    if (ok.response !== 1) return false;
+    removeRecord(db, id);
+    return true;
+  });
+  ipcMain.handle('lib:missingInTrash', async (_e, id) => Boolean(await findInTrash(root, getModel(db, id).rel_path)));
+  ipcMain.handle('lib:restoreMissing', async (_e, id) => {
+    try {
+      return { relPath: await restoreMissingFromTrash(db, root, id) };
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
   ipcMain.handle('lib:rebuildIndex', async () => (await indexNewFiles(db, root)).length);
   ipcMain.handle('lib:reveal', (_e, id) => shell.showItemInFolder(modelPath(db, root, id)));
   ipcMain.handle('lib:idsNeedingThumb', () => idsNeedingThumb(db));

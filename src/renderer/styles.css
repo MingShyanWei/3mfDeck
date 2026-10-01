@@ -123,7 +123,7 @@ button.icon:hover { color: var(--text); }
 .badge-downloaded { color: var(--dl); border-color: currentColor; }
 .badge-self_made { color: var(--self); border-color: currentColor; }
 .badge-missing { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); font-weight: 600; }
-.card.missing .thumb, .list tr.missing td { opacity: 0.55; }
+.card.missing .thumb img, .card.missing .thumb > .mdi, .list tr.missing td { opacity: 0.55; }
 .badge-colors { color: var(--muted); }
 
 /* List */
@@ -214,3 +214,13 @@ button.icon:hover { color: var(--text); }
 .mixing { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
 .mixing-head { font-weight: 600; margin-bottom: 6px; }
 .mixing .info { grid-template-columns: 76px 1fr; }
+
+/* Missing records (遺失) */
+.side-item.danger:not(.on) { color: var(--danger); font-weight: 600; }
+.side-item.danger:not(.on) .count { color: var(--danger); }
+.card.missing { border: 2px solid var(--danger); }
+.thumb { position: relative; }
+.missing-overlay { position: absolute; top: 8px; left: 8px; z-index: 1; background: var(--danger); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; display: flex; align-items: center; gap: 4px; }
+.missing-overlay .mdi { font-size: 13px; opacity: 1; }
+.missing-actions { align-items: flex-start; }
+.missing-actions .row { margin-top: 6px; flex-wrap: wrap; }
