@@ -41,7 +41,7 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
   const rec = mode === 'inventory' ? inv?.recommended : ideal?.recommended;
   const hexes = suggestion?.spools.map((s) => s.hex) || [];
 
-  if (!colors.length || colors.length < 2) return null;
+  if (!colors.length) return null; // single-colour models still get a 1-spool suggestion
 
   return (
     <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose?.()}>

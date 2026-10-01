@@ -45,7 +45,7 @@ export default function ColorAnalysis({ colors, totals = null, title = '', mixin
       <h3 data-testid="color-analysis-title">
         顏色分析 · {title ? `${title}：` : ''}
         {colors.length} 色{totals ? ` ／ 全檔 ${totals.length} 色` : ''}
-        {!mixing && colors.length >= 2 && (
+        {!mixing && colors.length >= 1 && (
           <button className="small right" data-testid="suggest-open" onClick={() => setSuggestOpen(true)}>
             <i className="mdi mdi-palette" /> 建議捲色…
           </button>

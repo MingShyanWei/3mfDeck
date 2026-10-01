@@ -643,7 +643,9 @@ try {
     colours: present(await viewerPixels()).filter((k) => k !== 'gray'),
   });
   let st = await plateState();
-  assert.deepEqual([st.title, st.colours], ['顏色分析 · 盤 1：1 色 ／ 全檔 3 色', ['cyan']]);
+  assert.equal(st.title.startsWith('顏色分析 · 盤 1：1 色 ／ 全檔 3 色'), true, `title: ${st.title}`);
+  assert.match(st.title, /建議捲色…/, 'single-colour plate also offers the suggestion');
+  assert.deepEqual(st.colours, ['cyan']);
   assert.deepEqual(st.rows, ['#00FFFF 12 100%', '#FFFF00 — —', '#FF00FF — —']);
   assert.deepEqual(st.total, ['25%', '50%', '25%']);
   assert.match(st.caption, /「Cyan plate」 · 12 面/);
