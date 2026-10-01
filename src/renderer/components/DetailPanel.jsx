@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState } from 'react';
 import MetadataForm, { toDraft, saveDraft } from './MetadataForm.jsx';
 import ModelViewer from './ModelViewer.jsx';
 import ColorAnalysis from './ColorAnalysis.jsx';
-import ExportMapping from './ExportMapping.jsx';
 import { isUnlabeled, formatBytes, formatInt, formatBbox, formatDate } from '../format.js';
 
 export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose }) {
@@ -73,11 +72,22 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
     const dest = await window.api.exportModel(id);
     if (dest) setExported(dest);
   };
+  // M13d: the only export action, top right (Mix mode is always on now)
+  const export3mf = async () => {
+    const r = await window.api.exportQuantized(id, { overThreshold: 'nearest', mix: true });
+    if (r?.error) setActionError(r.error);
+    else if (r) setExported({ path: r.path, summary: r.summary, mixes: r.mixes });
+  };
 
   return (
     <aside className="detail" data-testid="detail-panel">
       <header>
         <h2 title={model.name}>{model.name}</h2>
+        {!model.missing && model.format === '3mf' && (
+          <button className="primary" data-testid="export-quantized" onClick={export3mf} title="匯出量化 3MF（單捲印不出的顏色寫成混合耗材 Mix）">
+            <i className="mdi mdi-printer-3d-nozzle-outline" /> 量化 3MF…
+          </button>
+        )}
         <button className="icon" data-testid="export" onClick={exportFile} disabled={model.missing} title="匯出（複製到資料夾）">
           <i className="mdi mdi-export-variant" />
         </button>
@@ -116,7 +126,14 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
       {exported && (
         <div className="callout note" data-testid="export-message">
           <i className="mdi mdi-check" />
-          <span className="grow">已匯出到 {exported}</span>
+          <span className="grow">
+            {typeof exported === 'string' ? `已匯出到 ${exported}` : (
+              <>
+                已匯出：{exported.path}
+                {exported.summary && `（${exported.summary.filter((x) => x.slot === null).length ? `跳過 ${exported.summary.filter((x) => x.slot === null).length} 色，` : ''}${exported.mixes ? `Mix ${exported.mixes} 組，` : ''}原檔未變動）`}
+              </>
+            )}
+          </span>
         </div>
       )}
       {trashed && (
@@ -150,7 +167,6 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
         ) : (
           <ColorAnalysis colors={model.colors} mixing={mixing} />
         ))}
-      {model.format === '3mf' && model.colors.length > 0 && !model.missing && <ExportMapping model={model} />}
       {isUnlabeled(model) && (
         <div className="callout warn"><i className="mdi mdi-alert-outline" /> 來源未標，請補上來源類型。</div>
       )}

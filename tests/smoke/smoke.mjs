@@ -924,38 +924,15 @@ try {
   const offSrc = path.join(rootB, year, 'offpalette.3mf');
   const offBefore = await fs.readFile(offSrc);
   await openModel('offpalette');
-  await page.waitForSelector('[data-testid=export-mapping]');
-  await saveTo('report.csv');
-  await page.click('[data-testid=export-options] > summary');
-  await page.click('[data-testid=export-csv]');
-  await page.waitForSelector('[data-testid=export-result]');
-  const csv = await fs.readFile(path.join(exportsDir, 'report.csv'), 'utf8');
-  const csvRows = csv.replace(/^\uFEFF/, '').trim().split('\r\n');
-  assert.equal(csvRows[0], '原始色,面數,佔比,指定捲槽,ΔE 或配方,備註');
-  assert.match(csvRows.find((r) => r.startsWith('#1E90FF')), /^#1E90FF,6,50%,槽1 C #00FFFF,配方 .*,需混色；量化匯出：量化到最近捲（ΔE 39\.3）$/);
-  assert.match(csvRows.find((r) => r.startsWith('#FFD700')), /槽3 Y #FFFF00,ΔE 11\.6,單捲$/);
+  await page.waitForSelector('[data-testid=export-quantized]');
 
   const { parse3mf } = await import('../../src/core/parse/threemf.mjs');
   const statsOfFile = async (p) => Object.fromEntries((await parse3mf(await fs.readFile(p))).colorStats.map((c) => [c.color, c.faces]));
-  await page.click('[data-testid=over-nearest]');
-  await saveTo('q-nearest.3mf');
-  await page.click('[data-testid=export-quantized]');
-  await page.waitForFunction(() => /q-nearest\.3mf/.test(document.querySelector('[data-testid=export-result]')?.textContent || ''));
-  assert.deepEqual(await statsOfFile(path.join(exportsDir, 'q-nearest.3mf')), { '#00FFFF': 6, '#FF00FF': 3, '#FFFF00': 2, '#000000': 1 });
-  await page.click('[data-testid=over-skip]');
-  await saveTo('q-skip.3mf');
-  await page.click('[data-testid=export-quantized]');
-  await page.waitForFunction(() => /q-skip\.3mf/.test(document.querySelector('[data-testid=export-result]')?.textContent || ''));
-  assert.match(await page.textContent('[data-testid=export-result]'), /跳過 2 色/);
-  assert.deepEqual(await fs.readFile(offSrc), offBefore, 'source 3MF never modified');
-  step('M9 export: CSV report rows ok; quantized 3MF -> C6 M3 Y2 K1; skip option leaves 2 colours unassigned; source untouched');
-
-  // 15b) M10: mixed-filament export (Full Spectrum virtual extruders)
-  await page.click('[data-testid=over-mix]');
+  // 15) M10: the single export action (detail header, Mix always on)
   await saveTo('q-mix.3mf');
   await page.click('[data-testid=export-quantized]');
-  await page.waitForFunction(() => /q-mix\.3mf/.test(document.querySelector('[data-testid=export-result]')?.textContent || ''));
-  assert.match(await page.textContent('[data-testid=export-result]'), /Mix 2 組/);
+  await page.waitForFunction(() => /q-mix\.3mf/.test(document.querySelector('[data-testid=export-message]')?.textContent || ''));
+  assert.match(await page.textContent('[data-testid=export-message]'), /Mix 2 組/);
   {
     const { default: JSZip } = await import('jszip');
     const zip = await JSZip.loadAsync(await fs.readFile(path.join(exportsDir, 'q-mix.3mf')));
@@ -992,10 +969,9 @@ try {
   assert.match(await page.textContent('[data-testid=slots-title]'), /自訂耗材槽（2 捲/);
   const customCells = await page.$$eval('[data-testid=color-row]', (rows) => rows.map((r) => [r.cells[0].textContent.trim().slice(0, 7), r.querySelector('[data-testid=print-cell]').dataset.mode]));
   assert.deepEqual(Object.fromEntries(customCells)['#1E90FF'], 'single');
-  await page.click('[data-testid=over-nearest]');
   await saveTo('q-custom.3mf');
   await page.click('[data-testid=export-quantized]');
-  await page.waitForFunction(() => /q-custom\.3mf/.test(document.querySelector('[data-testid=export-result]')?.textContent || ''));
+  await page.waitForFunction(() => /q-custom\.3mf/.test(document.querySelector('[data-testid=export-message]')?.textContent || ''));
   const JSZipMod = (await import('jszip')).default;
   const customZip = await JSZipMod.loadAsync(await fs.readFile(path.join(exportsDir, 'q-custom.3mf')));
   assert.deepEqual(JSON.parse(await customZip.file('Metadata/project_settings.config').async('string')).filament_colour, ['#1E90FFFF', '#333333FF']);
