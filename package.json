@@ -59,6 +59,11 @@
       "identity": "-",
       "hardenedRuntime": false,
       "files": [
+        "electron/**",
+        "src/core/**",
+        "dist/**",
+        "package.json",
+        "!node_modules/better-sqlite3/{deps,src,docs}/**",
         "!node_modules/better-sqlite3/prebuilds/{win32,linux,linuxmusl}*"
       ]
     },
@@ -79,8 +84,17 @@
         }
       ],
       "files": [
+        "electron/**",
+        "src/core/**",
+        "dist/**",
+        "package.json",
+        "!node_modules/better-sqlite3/{deps,src,docs}/**",
         "!node_modules/better-sqlite3/prebuilds/{darwin,linux,linuxmusl}*"
       ]
+    },
+    "deb": {
+      "packageName": "3mfdeck",
+      "artifactName": "3mfdeck_${version}_${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -105,6 +119,11 @@
         }
       ],
       "files": [
+        "electron/**",
+        "src/core/**",
+        "dist/**",
+        "package.json",
+        "!node_modules/better-sqlite3/{deps,src,docs}/**",
         "!node_modules/better-sqlite3/prebuilds/{darwin,win32}*"
       ]
     }
