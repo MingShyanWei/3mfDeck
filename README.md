@@ -119,7 +119,9 @@ src/core/i18n/     UI dictionaries (en / zh-TW / zh-CN)
 src/renderer/      React UI (three.js preview, detail panel, dialogs)
 tests/unit/        Vitest (30 files, 251 tests)
 tests/smoke/       Real Electron end-to-end test
-reports/           Acceptance evidence per milestone (screenshots, Orca GUI verification notes)
+docs/screenshots/  README screenshots (en / zh-TW / zh-CN)
+demo/models/       Procedural showcase models (regenerate: node scripts/make-demo-models.mjs)
+scripts/           Fixture, demo-model and screenshot generators
 SPEC.md            Full functional specification (final)
 ```
 

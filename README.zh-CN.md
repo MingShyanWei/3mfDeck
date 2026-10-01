@@ -119,7 +119,9 @@ src/core/i18n/     界面词典（en／zh-TW／zh-CN）
 src/renderer/      React UI（three.js 预览、详情面板、弹窗）
 tests/unit/        Vitest（30 个文件、251 项）
 tests/smoke/       真实 Electron 端到端测试
-reports/           各里程碑验收证据（截图、Orca GUI 验证记录）
+docs/screenshots/  README 截图（en／zh-TW／zh-CN）
+demo/models/       程序化生成的示例模型（可用 node scripts/make-demo-models.mjs 重新生成）
+scripts/           测试素材、示例模型与截图生成脚本
 SPEC.md            完整功能规格（已定稿）
 ```
 
