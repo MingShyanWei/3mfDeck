@@ -227,11 +227,11 @@ function registerIpc() {
   ipcMain.handle('lib:exportQuantized', async (_e, id, opts) => {
     const m = getModel(db, id);
     const slots = userSlots();
-    const dest = await askSavePath('匯出量化 3MF', `${m.name}-量化${slots.length}捲.3mf`, '3mf');
+    const dest = await askSavePath('匯出量化 3MF', `${m.name}-量化${slots.length}捲${opts?.mix ? 'mix' : ''}.3mf`, '3mf');
     if (!dest) return null;
     try {
       const r = await exportQuantized3mf(modelPath(db, root, id), dest, slots, { ...opts, overwrite: true });
-      return { path: dest, summary: r.summary };
+      return { path: dest, summary: r.summary, mixes: r.mixes.length };
     } catch (err) {
       return { error: err.message };
     }

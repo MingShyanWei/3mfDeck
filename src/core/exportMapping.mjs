@@ -20,6 +20,7 @@ import { Readable, PassThrough } from 'node:stream';
 import fs from 'node:fs';
 import { decodePaintColor } from './paintColor.mjs';
 import { printPlan, recipeText, U1_SLOTS, MIX_DELTA_E } from './filament.mjs';
+import { mixPrintPlan, mixedFilamentDefinitions, MIXED_PROJECT_DEFAULTS } from './mixExport.mjs';
 
 // Orca's paint_color string for extruder n (Model.cpp CONST_FILAMENTS; 1..17)
 export function encodeExtruder(n) {
@@ -111,22 +112,20 @@ export const U1_PRESETS = {
 };
 
 /** project_settings.config for an export: the slots as filaments on U1 system presets, nothing else. */
-export function exportProjectSettings(slots) {
+export function exportProjectSettings(slots, mixedDefs = null) {
   const n = slots.length;
-  return JSON.stringify(
-    {
-      filament_colour: slots.map((s) => s.hex.toUpperCase() + 'FF'),
-      filament_settings_id: Array(n).fill(U1_PRESETS.filament_settings_id),
-      filament_type: Array(n).fill(U1_PRESETS.filament_type),
-      printer_model: U1_PRESETS.printer_model,
-      printer_settings_id: U1_PRESETS.printer_settings_id,
-      print_settings_id: U1_PRESETS.print_settings_id,
-      from: 'project',
-      name: 'project_settings',
-    },
-    null,
-    4,
-  );
+  const cfg = {
+    filament_colour: slots.map((s) => s.hex.toUpperCase() + 'FF'),
+    filament_settings_id: Array(n).fill(U1_PRESETS.filament_settings_id),
+    filament_type: Array(n).fill(U1_PRESETS.filament_type),
+    printer_model: U1_PRESETS.printer_model,
+    printer_settings_id: U1_PRESETS.printer_settings_id,
+    print_settings_id: U1_PRESETS.print_settings_id,
+    from: 'project',
+    name: 'project_settings',
+  };
+  if (mixedDefs) Object.assign(cfg, MIXED_PROJECT_DEFAULTS, { mixed_filament_definitions: mixedDefs });
+  return JSON.stringify(cfg, null, 4);
 }
 
 // Source-project files that carry slicing settings or results: embedded
@@ -231,24 +230,57 @@ function transformModel(zipFile, faceSlot, stateMap) {
  * Every colour maps to the nearest slot (ΔE in the report); with
  * overThreshold = 'skip', colours beyond the threshold are left unassigned
  * (the face falls back to its part's default filament in Orca).
- * Returns { slots, summary: [{color, slot | null, deltaE, mode}], stats }.
+ * With `mix` (M10, SPEC 3.5c) colours that no single slot can print become
+ * Full Spectrum mixed filaments: a mixed_filament_definitions row is added and
+ * the faces point at the virtual extruder (base count + mix ordinal).
+ * Returns { slots, summary: [{color, slot | null, deltaE, mode, mix?}], stats, mixes }.
  */
-export async function exportQuantized3mf(srcPath, destPath, slots = U1_SLOTS, { threshold = MIX_DELTA_E, overThreshold = 'nearest', overwrite = false } = {}) {
+export async function exportQuantized3mf(srcPath, destPath, slots = U1_SLOTS, { threshold = MIX_DELTA_E, overThreshold = 'nearest', overwrite = false, mix = false } = {}) {
   const zip = await JSZip.loadAsync(await fs.promises.readFile(srcPath));
   const text = async (p) => (zip.file(p) ? zip.file(p).async('string') : null);
   const project = await text('Metadata/project_settings.config');
   const colours = project ? (JSON.parse(project).filament_colour || []).map((c) => c.slice(0, 7).toUpperCase()) : [];
 
   const summary = new Map();
-  const slotOf = (hex) => {
-    if (!summary.has(hex)) {
-      const p = printPlan(hex, slots, threshold);
-      const skip = p.mode === 'mix' && overThreshold === 'skip';
-      summary.set(hex, { color: hex, slot: skip ? null : p.nearest.slot, deltaE: p.nearest.deltaE, mode: p.mode, mixable: p.mixable ?? true });
+  const mixRows = []; // { compA, compB, mixB, ... } in first-appearance order
+  const mixKey = (m) => `${m.compA}|${m.compB}|${m.mixB}`;
+  const planFor = (hex) => {
+    if (summary.has(hex)) return summary.get(hex);
+    const p = printPlan(hex, slots, threshold);
+    const out = { color: hex, mode: p.mode, mixable: p.mixable ?? true };
+    if (p.mode === 'single') {
+      out.slot = p.nearest.slot;
+      out.deltaE = p.nearest.deltaE;
+    } else if (!mix || !p.mixable) {
+      // no mixed filaments requested, or not mixable from these spools: nearest slot
+      const skip = overThreshold === 'skip';
+      out.slot = skip ? null : p.nearest.slot;
+      out.deltaE = p.nearest.deltaE;
+    } else {
+      const mpp = mixPrintPlan(hex, slots, threshold);
+      if (!mpp.mixable) {
+        // even the best pigment blend stays beyond the threshold: cannot be
+        // printed from these spools -> nearest slot (or skip), noted 需購買
+        out.slot = overThreshold === 'skip' ? null : p.nearest.slot;
+        out.deltaE = p.nearest.deltaE;
+      } else {
+        const mp = mpp.mix;
+        const k = mixKey(mp);
+        let idx = mixRows.findIndex((r) => mixKey(r) === k);
+        if (idx === -1) {
+          mixRows.push(mp);
+          idx = mixRows.length - 1;
+        }
+        out.slot = slots.length + idx + 1; // virtual extruder id
+        out.deltaE = mp.deltaE;
+        out.mix = mp;
+      }
     }
-    return summary.get(hex).slot;
+    summary.set(hex, out);
+    return out;
   };
-  // old filament state n (colour colours[n-1]) -> new slot; states without a known
+  const slotOf = (hex) => planFor(hex).slot;
+  // old filament state n (colour colours[n-1]) -> new extruder; states without a known
   // colour become unassigned rather than pointing past the new slot count
   const stateMap = new Map(Array.from({ length: 32 }, (_, i) => [i + 1, colours[i] ? (slotOf(colours[i]) ?? 0) : 0]));
 
@@ -268,7 +300,7 @@ export async function exportQuantized3mf(srcPath, destPath, slots = U1_SLOTS, { 
       stripModelSettings(ms, (n) => (colours[n - 1] ? slotOf(colours[n - 1]) : null) || Math.min(n, slots.length)),
     );
   }
-  zip.file('Metadata/project_settings.config', exportProjectSettings(slots));
+  zip.file('Metadata/project_settings.config', exportProjectSettings(slots, mix ? mixedFilamentDefinitions(mixRows) : null));
   for (const name of Object.keys(zip.files)) if (SLICER_FILES.test(name)) zip.remove(name);
 
   await new Promise((resolve, reject) => {
@@ -280,5 +312,5 @@ export async function exportQuantized3mf(srcPath, destPath, slots = U1_SLOTS, { 
       .on('error', reject);
   });
   for (const s of pending) for (const k of Object.keys(allStats)) allStats[k] += s[k];
-  return { slots, summary: [...summary.values()], stats: allStats };
+  return { slots, summary: [...summary.values()], stats: allStats, mixes: mixRows };
 }

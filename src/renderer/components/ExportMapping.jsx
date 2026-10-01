@@ -4,10 +4,10 @@ import { useSlots } from '../slots.js';
 
 export default function ExportMapping({ model }) {
   const slots = useSlots();
-  const [overThreshold, setOverThreshold] = useState('nearest');
+  const [over, setOver] = useState('mix'); // 'nearest' | 'skip' | 'mix' (M10)
   const [result, setResult] = useState(null);
   const run = async (fn) => {
-    const r = await fn(model.id, { overThreshold });
+    const r = await fn(model.id, { overThreshold: over === 'skip' ? 'skip' : 'nearest', mix: over === 'mix' });
     if (r) setResult(r);
   };
   return (
@@ -15,11 +15,15 @@ export default function ExportMapping({ model }) {
       <h3>匯出映射（{slots.length} 捲：{slots.map((s) => s.hex).join(' ')}）</h3>
       <div className="row wrap">
         <label className="radio">
-          <input type="radio" name="over" data-testid="over-nearest" checked={overThreshold === 'nearest'} onChange={() => setOverThreshold('nearest')} />
-          超出門檻的顏色：量化到最近捲（報告標 ΔE）
+          <input type="radio" name="over" data-testid="over-mix" checked={over === 'mix'} onChange={() => setOver('mix')} />
+          超出門檻的顏色：寫成混合耗材 Mix（Full Spectrum，單捲印不出的顏色用兩捲混）
         </label>
         <label className="radio">
-          <input type="radio" name="over" data-testid="over-skip" checked={overThreshold === 'skip'} onChange={() => setOverThreshold('skip')} />
+          <input type="radio" name="over" data-testid="over-nearest" checked={over === 'nearest'} onChange={() => setOver('nearest')} />
+          量化到最近捲（報告標 ΔE）
+        </label>
+        <label className="radio">
+          <input type="radio" name="over" data-testid="over-skip" checked={over === 'skip'} onChange={() => setOver('skip')} />
           跳過該面（不指定捲，沿用零件預設捲）
         </label>
       </div>
@@ -35,10 +39,10 @@ export default function ExportMapping({ model }) {
       {result?.path && (
         <div className="small ok" data-testid="export-result">
           已匯出：{result.path}
-          {result.summary && `（${result.summary.filter((s) => s.slot === null).length ? `跳過 ${result.summary.filter((s) => s.slot === null).length} 色，` : ''}原檔未變動）`}
+          {result.summary && `（${result.summary.filter((s) => s.slot === null).length ? `跳過 ${result.summary.filter((s) => s.slot === null).length} 色，` : ''}${result.mixes ? `Mix ${result.mixes} 組，` : ''}原檔未變動）`}
         </div>
       )}
-      <div className="small muted">需混色／需購買的顏色在 3MF 中只能指定單一捲（Orca 逐面只記一捲），詳見報告。</div>
+      <div className="small muted">Mix＝兩捲以 FilamentMixer 顏料模型算出的混合色（Orca 原生 Full Spectrum 混合耗材）；配方僅供參考，不回寫原檔。</div>
     </section>
   );
 }

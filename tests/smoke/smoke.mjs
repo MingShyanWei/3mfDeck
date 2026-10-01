@@ -840,6 +840,7 @@ try {
 
   const { parse3mf } = await import('../../src/core/parse/threemf.mjs');
   const statsOfFile = async (p) => Object.fromEntries((await parse3mf(await fs.readFile(p))).colorStats.map((c) => [c.color, c.faces]));
+  await page.click('[data-testid=over-nearest]');
   await saveTo('q-nearest.3mf');
   await page.click('[data-testid=export-quantized]');
   await page.waitForFunction(() => /q-nearest\.3mf/.test(document.querySelector('[data-testid=export-result]')?.textContent || ''));
@@ -851,6 +852,34 @@ try {
   assert.match(await page.textContent('[data-testid=export-result]'), /跳過 2 色/);
   assert.deepEqual(await fs.readFile(offSrc), offBefore, 'source 3MF never modified');
   step('M9 export: CSV report rows ok; quantized 3MF -> C6 M3 Y2 K1; skip option leaves 2 colours unassigned; source untouched');
+
+  // 15b) M10: mixed-filament export (Full Spectrum virtual extruders)
+  await page.click('[data-testid=over-mix]');
+  await saveTo('q-mix.3mf');
+  await page.click('[data-testid=export-quantized]');
+  await page.waitForFunction(() => /q-mix\.3mf/.test(document.querySelector('[data-testid=export-result]')?.textContent || ''));
+  assert.match(await page.textContent('[data-testid=export-result]'), /Mix 2 組/);
+  {
+    const { default: JSZip } = await import('jszip');
+    const zip = await JSZip.loadAsync(await fs.readFile(path.join(exportsDir, 'q-mix.3mf')));
+    const cfg = JSON.parse(await zip.file('Metadata/project_settings.config').async('string'));
+    const rows = cfg.mixed_filament_definitions.split(';');
+    assert.equal(rows.length, 2, 'one mix row per unmixed colour');
+    for (const row of rows) assert.match(row, /^[1-4],[1-4],1,1,(?:\d{1,3}),0,g,w,m0,z0,xa0,xb0,d0,o0,u\d+,cm2$/);
+    assert.equal(cfg.mixed_filament_region_collapse, '1');
+    // faces point at virtual extruders 5.. (2 mixes over 4 physical spools)
+    const { decodePaintColor } = await import('../../src/core/paintColor.mjs');
+    const states = new Set();
+    for (const name of Object.keys(zip.files)) {
+      if (/\.model$/i.test(name)) {
+        const xml = await zip.file(name).async('string');
+        for (const m of xml.matchAll(/paint_color="([^"]+)"/g)) for (const s of Object.keys(decodePaintColor(m[1]))) states.add(Number(s));
+      }
+    }
+    assert.ok([...states].some((s) => s >= 5), `virtual extruder states present: ${[...states].sort((a, b) => a - b).join(',')}`);
+  }
+  assert.deepEqual(await fs.readFile(offSrc), offBefore, 'source 3MF never modified (mix)');
+  step('M10 export: 超門檻顏色寫成 mixed_filament_definitions（2 組 Mix），面指向虛擬擠出頭 5+；原檔未動');
 
   // Custom spools: 2 spools equal to two of the file colours
   await page.click('[data-testid=settings-button]');

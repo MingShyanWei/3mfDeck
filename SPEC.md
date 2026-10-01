@@ -122,6 +122,17 @@
   - 產出必須在 Snapmaker Orca GUI 實際開啟驗證（CLI 有版本檢查坑，不可作準）：色塊分配與原圖一致、可切片。
 - **捲色自訂（設定頁）**：耗材槽顏色可在設定頁自填「實際裝的線材色」（色碼，預設理想 CMYK＃00FFFF/#FF00FF/#FFFF00/#000000＋黑），捲數可 1–4。耗材映射、混色配方、量化匯出全部改用自訂捲色計算——解決「配方用理想色」的限制。
 
+### 3.5c 混色耗材匯出（M10，Full Spectrum virtual extruders）
+- 量化 3MF 匯出升級：ΔE ≤ 門檻 → 指定實體捲；需混色 → 寫成 **Mix（虛擬擠出頭）**，Orca 以原生 mixed filament 混色列印。
+- `Metadata/project_settings.config` 新增 `mixed_filament_definitions` 列（modern dialect）：
+  `compA,compB,1,1,mix_b_percent,0,g,w,m0,z0,xa0,xb0,d0,o0,uN,cm2`，每列兩個實體捲＋B 佔比。
+  **虛擬擠出頭編號＝實體捲數＋第 N 個 enabled 未刪除列**（4 捲時第一個 mix = 5）；面以 paint_color state 指向該編號。
+- 配方求解用 **FilamentMixer 顏料模型**（ratdoux/OrcaSlicer-FullSpectrum 的 filament_mixer_model.h，MIT，移植自 SamiSalah221/3mf-to-glb 的 TS port）：
+  對所有捲對（compA, compB）× mix_b_percent 0–100% 網格搜尋，取 ΔE(CIEDE2000) 最小者；與單捲最近槽比較，單捲 ΔE ≤ 門檻仍用單捲。
+- `filament_colour` 陣列維持僅實體捲（虛擬擠出頭顯示色由 Orca 自算）。
+- 預覽與報告的「混色估計色」改用同一 FilamentMixer 模型（不再是 halftone 平均），保持匯出前所見＝匯出後所得。
+- 驗收：匯出檔在 Snapmaker Orca GUI 開啟，mix 定義被載入（耗材列表出現混合色）、面指定正確、無錯誤；以使用者的 `Filament+Swatch+Sample+Card-U1-量化4捲_mix.3mf` 為 ground truth 對照檔案結構。
+
 ## 4. 資料模型（SQLite）
 
 ```sql
