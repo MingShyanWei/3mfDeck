@@ -436,20 +436,6 @@ try {
   assert.equal(await exists(path.join(lib, year, 'textured.glb')), false);
   step(`清空回收桶: 取消於第 2 次確認 -> 保留; 兩次確認 -> 永久刪除 (${asked.join(' / ')})`);
 
-  // Export: copy, never move
-  const exportDir = path.join(base, 'exported');
-  await app.evaluate(({ dialog }, dir) => {
-    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [dir] });
-  }, exportDir);
-  await page.click('[data-testid=filter-all]');
-  await openModel('painted');
-  await page.click('[data-testid=export]');
-  await page.waitForSelector('[data-testid=export-message]');
-  assert.match(await page.textContent('[data-testid=export-message]'), new RegExp(`已匯出到 ${path.join(exportDir, 'painted.3mf')}`));
-  assert.deepEqual(await fs.readFile(path.join(exportDir, 'painted.3mf')), await fs.readFile(path.join(lib, year, 'painted.3mf')));
-  step('匯出: painted.3mf copied to ' + exportDir + ' (source still in library)');
-  await page.fill('[data-testid=search]', '');
-
   // 10) Pull the DB and restart: startup consistency check offers a rebuild
   const liveFiles = liveCount - 1; // textured.glb was deleted permanently
   await app.close();

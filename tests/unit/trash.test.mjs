@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { openDb, getModel, listModels, setTags, updateModel, sidebarCounts } from '../../src/core/db.mjs';
 import { importPaths, indexNewFiles } from '../../src/core/importer.mjs';
-import { trashModel, restoreModel, emptyTrash, exportModel, isTrashed } from '../../src/core/trash.mjs';
+import { trashModel, restoreModel, emptyTrash, isTrashed } from '../../src/core/trash.mjs';
 import { consistencyReport } from '../../src/core/missing.mjs';
 import { FIXTURES, tmpDir, stage, exists } from './helpers.mjs';
 
@@ -74,16 +74,6 @@ describe('trash', () => {
     expect(await exists(path.join(root, '2026', 'painted.3mf'))).toBe(true);
     expect(sidebarCounts(db).tags).toEqual([]); // orphan tag dropped
     expect(await emptyTrash(db, root)).toBe(0); // nothing left, no error
-  });
-});
-
-describe('exportModel', () => {
-  it('copies (never moves) into the chosen folder, suffixing on clashes', async () => {
-    const out = path.join(base, 'export');
-    expect(await exportModel(db, root, ids[1], out)).toBe(path.join(out, 'painted.3mf'));
-    expect(await exportModel(db, root, ids[1], out)).toBe(path.join(out, 'painted-2.3mf'));
-    expect(await exists(path.join(root, '2026', 'painted.3mf'))).toBe(true); // source untouched
-    expect(await fs.readFile(path.join(out, 'painted-2.3mf'))).toEqual(await fixture('painted.3mf'));
   });
 });
 

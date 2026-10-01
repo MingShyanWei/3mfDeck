@@ -54,11 +54,6 @@ export async function moveWithinRoot(root, relSrc, relDest) {
   return path.relative(root, dest);
 }
 
-/** Copy (never move) a file into `dir`, suffixing on name clashes. Returns the copy's path. */
-export function copyInto(src, dir) {
-  return placeUnique(src, dir, path.basename(src), (s, d) => fs.copyFile(s, d, constants.COPYFILE_EXCL));
-}
-
 const isSupported = (p) => SUPPORTED_EXTS.includes(path.extname(p).toLowerCase());
 
 /**

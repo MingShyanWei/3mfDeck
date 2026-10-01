@@ -1,9 +1,8 @@
-// Recycle bin and export (SPEC 3.7).
+// Recycle bin (SPEC 3.7).
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { TRASH_DIR, moveWithinRoot, copyInto } from './library.mjs';
+import { TRASH_DIR, moveWithinRoot } from './library.mjs';
 import { getModel, listModels, setRelPath, deleteModels } from './db.mjs';
-import { modelPath } from './settings.mjs';
 
 export const isTrashed = (rel) => rel.startsWith(`${TRASH_DIR}/`);
 
@@ -53,9 +52,4 @@ export async function emptyTrash(db, root) {
   deleteModels(db, ids);
   await fs.rm(path.join(root, TRASH_DIR), { recursive: true, force: true });
   return ids.length;
-}
-
-/** Copy (never move) a model's file into `destDir`. Returns the copy's path. */
-export function exportModel(db, root, id, destDir) {
-  return copyInto(modelPath(db, root, id), destDir);
 }

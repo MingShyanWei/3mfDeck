@@ -69,10 +69,6 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
     await load();
     onSaved();
   };
-  const exportFile = async () => {
-    const dest = await window.api.exportModel(id);
-    if (dest) setExported(dest);
-  };
   // M13d: the only export action, top right (Mix mode is always on now)
   const export3mf = async () => {
     const r = await window.api.exportQuantized(id, { overThreshold: 'nearest', mix: true });
@@ -86,9 +82,6 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
         <ProvenanceBadge model={model} />
         <PlateBadge model={model} />
         <span className="spacer" />
-        <button className="icon" data-testid="export" onClick={exportFile} disabled={model.missing} title="匯出（複製到資料夾）">
-          <i className="mdi mdi-export-variant" />
-        </button>
         {trashed ? (
           <button className="icon" data-testid="restore" onClick={restore} disabled={model.missing} title="還原">
             <i className="mdi mdi-restore" />
@@ -125,12 +118,8 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
         <div className="callout note" data-testid="export-message">
           <i className="mdi mdi-check" />
           <span className="grow">
-            {typeof exported === 'string' ? `已匯出到 ${exported}` : (
-              <>
-                已匯出：{exported.path}
-                {exported.summary && `（${exported.summary.filter((x) => x.slot === null).length ? `跳過 ${exported.summary.filter((x) => x.slot === null).length} 色，` : ''}${exported.mixes ? `Mix ${exported.mixes} 組，` : ''}原檔未變動）`}
-              </>
-            )}
+            已匯出：{exported.path}
+            {exported.summary && `（${exported.summary.filter((x) => x.slot === null).length ? `跳過 ${exported.summary.filter((x) => x.slot === null).length} 色，` : ''}${exported.mixes ? `Mix ${exported.mixes} 組，` : ''}原檔未變動）`}
           </span>
         </div>
       )}
@@ -162,8 +151,8 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
       <div className="detail-title">
         <h2 title={model.name}>{model.name}</h2>
         {!model.missing && model.format === '3mf' && (
-          <button className="primary" data-testid="export-quantized" onClick={export3mf} title="匯出量化 3MF（單捲印不出的顏色寫成混合耗材 Mix）">
-            <i className="mdi mdi-printer-3d-nozzle-outline" /> 量化 3MF…
+          <button className="primary" data-testid="export-quantized" onClick={export3mf} title="匯出 3MF：顏色量化到捲色，單捲印不出的寫成混合耗材 Mix（原檔不動）">
+            <i className="mdi mdi-cube-send" /> 匯出 3MF…
           </button>
         )}
       </div>

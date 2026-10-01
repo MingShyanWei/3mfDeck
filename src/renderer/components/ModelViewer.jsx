@@ -193,7 +193,7 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
           )}
           {spools.mapping.some((m) => m.mode === 'mix') && (
             <div className="small muted" data-testid="mix-note">
-              單捲 ΔE &gt; {MIX_DELTA_E} 的顏色以兩捲混色（Full Spectrum 混合耗材，FilamentMixer 顏料模型，與量化 3MF 匯出相同）估計，預覽顯示混色結果；實際以 Orca 為準。
+              單捲 ΔE &gt; {MIX_DELTA_E} 的顏色以兩捲混色（Full Spectrum 混合耗材，FilamentMixer 顏料模型，與「匯出 3MF」相同）估計，預覽顯示混色結果；實際以 Orca 為準。
             </div>
           )}
         </div>

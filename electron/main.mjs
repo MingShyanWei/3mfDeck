@@ -6,7 +6,7 @@ import path from 'node:path';
 import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb } from '../src/core/db.mjs';
 import { loadPreviewData, storeThumb, previewPlate } from '../src/core/preview.mjs';
 import { importPaths, indexNewFiles } from '../src/core/importer.mjs';
-import { trashModel, restoreModel, emptyTrash, exportModel } from '../src/core/trash.mjs';
+import { trashModel, restoreModel, emptyTrash } from '../src/core/trash.mjs';
 import { consistencyReport, relocateModel, removeRecord, findInTrash, restoreMissingFromTrash, isInside, removeMissingRecords, findByFilename, applyRelocations } from '../src/core/missing.mjs';
 import { loadSettings, saveSettings, validateSpools, validateInventory, switchRoot, markMissing, modelPath } from '../src/core/settings.mjs';
 import { mappingCsv, exportQuantized3mf } from '../src/core/exportMapping.mjs';
@@ -117,11 +117,6 @@ function registerIpc() {
     });
     if (second.response !== 1) return null;
     return emptyTrash(db, root);
-  });
-  ipcMain.handle('lib:export', async (_e, id) => {
-    const r = await dialog.showOpenDialog(win, { title: '匯出到…', properties: ['openDirectory', 'createDirectory'] });
-    if (r.canceled || !r.filePaths.length) return null;
-    return exportModel(db, root, id, r.filePaths[0]);
   });
   ipcMain.handle('lib:consistency', () => consistencyReport(db, root, app.getPath('userData')));
   // Missing-record actions. Errors come back as { error } for the UI to show.

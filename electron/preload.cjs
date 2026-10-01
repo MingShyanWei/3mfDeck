@@ -19,7 +19,6 @@ contextBridge.exposeInMainWorld('api', {
   trash: (id) => ipcRenderer.invoke('lib:trash', id),
   restore: (id) => ipcRenderer.invoke('lib:restore', id),
   emptyTrash: () => ipcRenderer.invoke('lib:emptyTrash'),
-  exportModel: (id) => ipcRenderer.invoke('lib:export', id),
   checkConsistency: () => ipcRenderer.invoke('lib:consistency'),
   relocate: (id) => ipcRenderer.invoke('lib:relocate', id),
   removeRecord: (id) => ipcRenderer.invoke('lib:removeRecord', id),
