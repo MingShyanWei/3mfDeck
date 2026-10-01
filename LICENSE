@@ -1,0 +1,43 @@
+MIT License
+
+Copyright (c) 2026 Caspar Wei (MingShyanWei)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## Third-party notices
+
+Third-party components used in this project remain under their own licenses:
+
+- **FilamentMixer pigment model** (`src/core/filamentMixer.mjs`, `vendor/filamentMixer.ts`)
+  — MIT License, Copyright (c) 2026 **Justin Hayes**.
+  TypeScript port of the header-only C++ pigment colour mixer, coefficients
+  auto-generated from the reference implementation:
+  <https://github.com/ratdoux/OrcaSlicer-FullSpectrum> (`src/libslic3r/filament_mixer_model.h`).
+  Used to predict Full Spectrum mixed colours (blue + yellow → green) instead of
+  a naive RGB average.
+
+- **Snapmaker U1 conversion** (`src/core/u1Convert.mjs`, `src/core/orcaProfiles.mjs`)
+  is written from scratch for this project. It reads machine geometry from a
+  locally installed Snapmaker Orca's system profiles at runtime; no third-party
+  converter code or profile data is vendored into this repository.
+
+- Everything else (3MF/STL/OBJ/AMF/GLB/STEP parsing, colour analysis, spool
+  suggestion, export writers, UI) is original work of this project.

@@ -121,10 +121,16 @@ SPEC.md            完整功能規格（已定稿）
 - **混色配方無法逐面寫兩捲**：Orca 逐面只記一捲，因此混色以虛擬擠出頭（Mix）表達。
 - **大檔案**：內含 500MB 以上模型（如某些 Meshy 匯出）需用串流解析，處理時間較長。
 
-## 授權
+## License
 
-尚未決定（目前 repo 未附 LICENSE）。要開源的話建議 MIT。
+**MIT** — see [LICENSE](LICENSE).
 
-## 作者
+Third-party components keep their own licenses; see the notices in [LICENSE](LICENSE).
+In short: the pigment mixing model is MIT (Justin Hayes, ported from
+[OrcaSlicer-FullSpectrum](https://github.com/ratdoux/OrcaSlicer-FullSpectrum)); the
+Snapmaker U1 conversion is original to this project and reads machine geometry from a
+locally installed Snapmaker Orca at runtime.
+
+## Author
 
 **Caspar Wei** ([@MingShyanWei](https://github.com/MingShyanWei)) — [github.com/MingShyanWei/3mfDeck](https://github.com/MingShyanWei/3mfDeck)
