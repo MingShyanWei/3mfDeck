@@ -3,3 +3,6 @@ dist/
 release/
 .DS_Store
 reports/ui-design/variants/
+
+build/icon.iconset/
+build/icon.svg.png
