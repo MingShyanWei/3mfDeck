@@ -99,7 +99,7 @@ for (const file of FILES) {
       await page.waitForSelector('[data-testid=viewer][data-status=ready]', { timeout: 300000 });
     }),
   );
-  for (const mode of ['filament', 'wireframe', 'original']) {
+  for (const mode of ['filament', 'original']) {
     r.phases.push(
       await phase(`mode ${mode}`, async () => {
         if (await page.isDisabled(`[data-testid=mode-${mode}]`)) return;

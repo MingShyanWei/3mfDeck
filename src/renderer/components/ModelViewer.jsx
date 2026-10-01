@@ -12,7 +12,6 @@ const MODE_LABELS = [
   ['original', '原始', 'mdi-palette-outline'],
   ['filament', '耗材映射', 'mdi-printer-3d-nozzle-outline'],
   ['estimate', '混色估計', 'mdi-blur'],
-  ['wireframe', '線框', 'mdi-cube-scan'],
 ];
 
 // `plate`: show only that slicer plate (multi-plate 3MF); `colors`: the

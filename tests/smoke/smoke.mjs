@@ -251,11 +251,6 @@ try {
   px = await viewerPixels();
   assert.deepEqual(present(px).filter((k) => k !== 'gray'), ['black', 'cyan', 'magenta', 'yellow']);
   step('耗材映射: spools ' + spools.join(' | '));
-  await setMode('wireframe');
-  px = await viewerPixels();
-  assert.ok(!present(px).includes('cyan') && !present(px).includes('magenta'), 'wireframe hides paint colours ' + JSON.stringify(px));
-  assert.ok((px.blue || 0) + (px.other || 0) > 150, 'wire lines drawn ' + JSON.stringify(px));
-  step('線框: ' + JSON.stringify(px));
   await setMode('original');
   assert.ok(present(await viewerPixels()).includes('cyan'));
 
@@ -285,9 +280,7 @@ try {
   px = await viewerPixels();
   assert.ok(present(px).includes('red') && present(px).includes('green'), 'GLB texture ' + JSON.stringify(px));
   assert.equal(await page.isDisabled('[data-testid=mode-filament]'), true);
-  await setMode('wireframe');
-  assert.ok(!present(await viewerPixels()).includes('red'));
-  step('preview textured.glb: ' + JSON.stringify(px) + '; 耗材映射 disabled; 線框 hides texture');
+  step('preview textured.glb: ' + JSON.stringify(px) + '; 耗材映射 disabled');
 
   // STL: grey (cube.stl is the one tagged 鴨子; "cube" alone also matches cube.glb / cube-2.stl)
   await openModel('cube', '鴨子');
@@ -702,7 +695,7 @@ try {
   await page.click('[data-testid=import-skip-all]');
   await openModel('dithered');
   const modeNames = await page.$$eval('.modes button', (b) => b.map((x) => x.dataset.testid));
-  assert.deepEqual(modeNames, ['mode-original', 'mode-filament', 'mode-estimate', 'mode-wireframe']);
+  assert.deepEqual(modeNames, ['mode-original', 'mode-filament', 'mode-estimate']);
   assert.match(await page.textContent('[data-testid=mixing-detect]'), /抖色檔（頂點混色率 9\d\.\d%，門檻 50%）/);
   assert.match(await page.textContent('[data-testid=mixing-spools]'), /5 捲（超過 U1 的 4 個耗材槽）/);
   assert.match(await page.textContent('[data-testid=mixing-average]'), /#D7BE8C.*估計值，實際以 Orca 渲染為準/);

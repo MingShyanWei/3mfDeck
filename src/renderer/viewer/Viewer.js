@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { VIEW_DIR, fitDistance } from './fit.js';
 
-export const MODES = ['original', 'filament', 'estimate', 'wireframe'];
+export const MODES = ['original', 'filament', 'estimate'];
 
 export class Viewer {
   constructor(canvas, { preserveDrawingBuffer = false } = {}) {
@@ -17,7 +17,6 @@ export class Viewer {
     key.position.set(0.3, 0.6, 1);
     this.camera.add(key);
     this.scene.add(this.camera);
-    this.wireMaterial = new THREE.MeshBasicMaterial({ color: 0x4a6fa5, wireframe: true });
     this.built = null;
     this.root = null;
     this.target = new THREE.Vector3();
@@ -46,8 +45,8 @@ export class Viewer {
     this.root.traverse((o) => {
       if (!o.isMesh) return;
       o.geometry.dispose();
-      for (const m of [o.userData.material, o.material].flat()) {
-        if (!m || m === this.wireMaterial) continue;
+      for (const m of [o.material].flat()) {
+        if (!m) continue;
         m.map?.dispose();
         m.dispose();
       }
@@ -68,16 +67,11 @@ export class Viewer {
     this.camera.updateProjectionMatrix();
   }
 
-  /** 'original' | 'filament' (needs paint data) | 'estimate' (Full Spectrum estimate) | 'wireframe' */
+  /** 'original' | 'filament' (needs paint data) | 'estimate' (Full Spectrum estimate) */
   setMode(mode) {
     if (!this.root) return;
-    this.root.traverse((o) => {
-      if (!o.isMesh) return;
-      o.userData.material ??= o.material;
-      o.material = mode === 'wireframe' ? this.wireMaterial : o.userData.material;
-    });
     const paint = this.built.paint;
-    if (paint && mode !== 'wireframe') {
+    if (paint) {
       // Swap the backing array (same length) instead of copying 50 MB+ on big models
       for (const c of paint.chunks) {
         const attr = c.geometry.getAttribute('color');
@@ -112,7 +106,6 @@ export class Viewer {
 
   dispose() {
     this.clear();
-    this.wireMaterial.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();
   }
