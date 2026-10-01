@@ -716,6 +716,77 @@ try {
   await page.click('[data-testid=filter-missing]');
   await page.waitForFunction((n) => document.querySelectorAll('[data-testid=model-card]').length === n, left);
   await page.screenshot({ path: path.join(base, 'missing.png') });
+
+  // 14) Batch handling of missing records
+  // a) 依檔名找回: preview name matches under the root, apply the confirmed ones
+  const put = async (from, rel) => {
+    await fs.mkdir(path.dirname(path.join(rootB, rel)), { recursive: true });
+    await fs.copyFile(from, path.join(rootB, rel));
+  };
+  await put(path.join(lib, year, 'materials.3mf'), 'recovered/a/materials.3mf'); // unique, same size
+  await put(path.join(lib, year, 'mixed.3mf'), 'recovered/b/deep/mixed.3mf'); // unique, nested
+  await put(path.join(FIX, 'pyramid_ascii.stl'), 'recovered/c/cube.stl'); // same name, different size
+  await put(path.join(lib, year, 'box.obj'), 'recovered/x/box.obj'); // two candidates -> ambiguous
+  await put(path.join(lib, year, 'box.obj'), 'recovered/y/box.obj');
+  await page.click('[data-testid=recover-open]');
+  await page.waitForSelector('[data-testid=recover-summary]');
+  assert.match(await page.textContent('[data-testid=recover-summary]'), /找到 3 筆 · 多個候選 1 筆.*找不到 3 筆/);
+  const recRows = await page.$$eval('[data-testid=recover-row]', (rows) =>
+    rows.map((r) => [r.dataset.name, r.dataset.status, r.querySelector('[data-testid=recover-check]')?.checked ?? null, r.cells[3].textContent.trim()]),
+  );
+  const rowOf = (n) => recRows.find((r) => r[0] === n);
+  assert.deepEqual(rowOf('materials').slice(1, 3), ['match', true]);
+  assert.deepEqual(rowOf('mixed').slice(1, 3), ['match', true]);
+  assert.match(rowOf('mixed')[3], /recovered\/b\/deep\/mixed\.3mf/);
+  assert.deepEqual(rowOf('cube').slice(1, 3), ['match', false]); // different size: not pre-selected
+  assert.match(rowOf('cube')[3], /大小不同/);
+  assert.equal(rowOf('box')[1], 'ambiguous');
+  assert.match(rowOf('box')[3], /多個候選：recovered\/x\/box\.obj、recovered\/y\/box\.obj/);
+  assert.match(await page.textContent('[data-testid=recover-apply]'), /套用 2 筆/);
+  await page.screenshot({ path: path.join(base, 'recover.png') });
+  await page.click('[data-testid=recover-apply]');
+  await page.waitForSelector('[data-testid=recover-result]');
+  assert.match(await page.textContent('[data-testid=recover-result]'), /已重新定位 2 筆$/);
+  await page.click('[data-testid=recover-close]');
+  left -= 2;
+  await missingNow(left);
+  assert.equal(await exists(path.join(rootB, 'recovered', 'a', 'materials.3mf')), true, 'recovered in place, not moved');
+  step(`依檔名找回: ${recRows.map((r) => `${r[0]}=${r[1]}${r[2] ? '✓' : ''}`).join(', ')}; applied 2 -> 遺失 ${left}`);
+
+  // b) Batch remove: partial selection, cancel at the 2nd confirmation, then confirm; then select all
+  await page.click('[data-testid=filter-missing]');
+  await page.waitForFunction((n) => document.querySelectorAll('[data-testid=model-card]').length === n, left);
+  const picks = await page.$$('[data-testid=pick]');
+  await picks[0].click();
+  await picks[1].click();
+  assert.match(await page.textContent('[data-testid=missing-remove-selected]'), /移除所選（2）/);
+  const confirmAnswers = (answers) =>
+    app.evaluate(({ dialog }, rs) => {
+      globalThis.__asked = [];
+      dialog.showMessageBox = async (_w, o) => {
+        globalThis.__asked.push(o.message);
+        return { response: rs.shift() ?? 0 };
+      };
+    }, answers);
+  await confirmAnswers([1, 0]);
+  await page.click('[data-testid=missing-remove-selected]');
+  await page.waitForFunction(() => true);
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal((await app.evaluate(() => globalThis.__asked)).length, 2);
+  await missingNow(left); // cancelled at the 2nd confirmation: nothing removed
+  await confirmAnswers([1, 1]);
+  await page.click('[data-testid=missing-remove-selected]');
+  left -= 2;
+  await missingNow(left);
+  assert.deepEqual(await app.evaluate(() => globalThis.__asked), ['移除 2 筆遺失記錄？', '再次確認：移除 2 筆記錄？']);
+  await page.waitForFunction((n) => document.querySelectorAll('[data-testid=model-card]').length === n, left);
+  await page.click('[data-testid=missing-select-all]');
+  assert.match(await page.textContent('[data-testid=missing-remove-selected]'), new RegExp(`移除所選（${left}）`));
+  await confirmAnswers([1, 1]);
+  await page.click('[data-testid=missing-remove-selected]');
+  await missingNow(0);
+  for (const f of ['cube.stl', 'cube.glb', 'cube-2.stl', 'box.obj', 'box.amf']) assert.equal(await exists(path.join(lib, year, f)), true, `${f} must survive record removal`);
+  step('批次移除: 2 selected (cancel at 2nd confirm kept them, then removed), then 全選 removed the rest -> 遺失 0; old files untouched');
   await page.click('[data-testid=filter-all]');
 
   await page.screenshot({ path: path.join(base, 'smoke.png') });

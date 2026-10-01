@@ -4,6 +4,7 @@ import { ModelGrid, ModelList } from './components/ModelViews.jsx';
 import DetailPanel from './components/DetailPanel.jsx';
 import ImportDialog from './components/ImportDialog.jsx';
 import SettingsDialog from './components/SettingsDialog.jsx';
+import RecoverDialog from './components/RecoverDialog.jsx';
 import { runThumbQueue } from './thumbQueue.js';
 
 const SORTS = [
@@ -27,6 +28,23 @@ export default function App() {
   const [consistency, setConsistency] = useState(null);
   // The "newly missing" notice shows once per occurrence; closing it is final
   const [missingToastClosed, setMissingToastClosed] = useState(false);
+  // Multi-select in the 遺失 view (batch remove), and the 依檔名找回 dialog
+  const [picked, setPicked] = useState(new Set());
+  const [recoverOpen, setRecoverOpen] = useState(false);
+  useEffect(() => setPicked(new Set()), [filter]);
+  const togglePick = (id) => {
+    const next = new Set(picked);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setPicked(next);
+  };
+  const removePicked = async () => {
+    const removed = await window.api.removeMissing([...picked]);
+    if (!removed) return; // cancelled
+    setPicked(new Set());
+    setSelectedId(null);
+    refresh();
+    checkConsistency();
+  };
 
   const refresh = useCallback(async () => {
     const [list, c] = await Promise.all([window.api.list({ q, filter, sort }), window.api.sidebar()]);
@@ -168,6 +186,19 @@ export default function App() {
           <div className="callout note" data-testid="missing-note">
             <i className="mdi mdi-file-alert-outline" />
             <span className="grow">遺失：記錄還在，但檔案不在目前的根目錄。點選檔案可「重新定位」、「移除記錄」（不刪檔），檔案在回收桶時可「還原」。</span>
+            <button data-testid="recover-open" disabled={!models.length} onClick={() => setRecoverOpen(true)}>
+              <i className="mdi mdi-file-find-outline" /> 依檔名找回…
+            </button>
+            <button
+              data-testid="missing-select-all"
+              disabled={!models.length}
+              onClick={() => setPicked(picked.size === models.length ? new Set() : new Set(models.map((m) => m.id)))}
+            >
+              {picked.size === models.length && models.length ? '取消全選' : '全選'}
+            </button>
+            <button data-testid="missing-remove-selected" disabled={!picked.size} onClick={removePicked}>
+              移除所選（{picked.size}）…
+            </button>
           </div>
         )}
         {filter === 'trash' && (
@@ -189,9 +220,9 @@ export default function App() {
               <p>{counts?.all ? '沒有符合條件的檔案' : '把 3MF / STL / OBJ / GLB… 拖進來，或按「匯入…」'}</p>
             </div>
           ) : view === 'grid' ? (
-            <ModelGrid models={models} selectedId={selectedId} onSelect={setSelectedId} />
+            <ModelGrid models={models} selectedId={selectedId} onSelect={setSelectedId} picked={filter === 'missing' ? picked : null} onPick={togglePick} />
           ) : (
-            <ModelList models={models} selectedId={selectedId} onSelect={setSelectedId} />
+            <ModelList models={models} selectedId={selectedId} onSelect={setSelectedId} picked={filter === 'missing' ? picked : null} onPick={togglePick} />
           )}
         </div>
       </main>
@@ -220,6 +251,16 @@ export default function App() {
           onDone={() => {
             setImportIds(null);
             refresh();
+          }}
+        />
+      )}
+      {recoverOpen && (
+        <RecoverDialog
+          onClose={() => setRecoverOpen(false)}
+          onApplied={() => {
+            refresh();
+            thumbs();
+            checkConsistency();
           }}
         />
       )}

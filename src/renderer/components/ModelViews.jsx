@@ -2,12 +2,23 @@
 import { ProvenanceBadge, ColorBadge, MissingBadge, PlateBadge } from './Badges.jsx';
 import { isUnlabeled, formatBytes, formatInt, formatDate } from '../format.js';
 
-export function ModelGrid({ models, selectedId, onSelect }) {
+// `picked` (a Set of ids, or null): multi-select checkboxes, used by the 遺失 view
+function Pick({ id, picked, onPick }) {
+  if (!picked) return null;
+  return (
+    <label className="pick" title="選取">
+      <input type="checkbox" data-testid="pick" checked={picked.has(id)} onChange={() => onPick(id)} />
+    </label>
+  );
+}
+
+export function ModelGrid({ models, selectedId, onSelect, picked = null, onPick }) {
   return (
     <div className="grid" data-testid="model-grid">
       {models.map((m) => (
+        <div className="card-wrap" key={m.id}>
+          <Pick id={m.id} picked={picked} onPick={onPick} />
         <button
-          key={m.id}
           className={`card${selectedId === m.id ? ' selected' : ''}${isUnlabeled(m) ? ' unlabeled' : ''}${m.missing ? ' missing' : ''}`}
           data-testid="model-card"
           onClick={() => onSelect(m.id)}
@@ -37,16 +48,18 @@ export function ModelGrid({ models, selectedId, onSelect }) {
             </div>
           </div>
         </button>
+        </div>
       ))}
     </div>
   );
 }
 
-export function ModelList({ models, selectedId, onSelect }) {
+export function ModelList({ models, selectedId, onSelect, picked = null, onPick }) {
   return (
     <table className="list" data-testid="model-list">
       <thead>
         <tr>
+          {picked && <th />}
           <th>名稱</th>
           <th>格式</th>
           <th>來源</th>
@@ -65,6 +78,11 @@ export function ModelList({ models, selectedId, onSelect }) {
             className={`${selectedId === m.id ? 'selected' : ''}${isUnlabeled(m) ? ' unlabeled' : ''}${m.missing ? ' missing' : ''}`}
             onClick={() => onSelect(m.id)}
           >
+            {picked && (
+              <td onClick={(e) => e.stopPropagation()}>
+                <Pick id={m.id} picked={picked} onPick={onPick} />
+              </td>
+            )}
             <td className="name">{m.name} <MissingBadge model={m} /></td>
             <td className="mono">{m.format}</td>
             <td><ProvenanceBadge model={m} /></td>

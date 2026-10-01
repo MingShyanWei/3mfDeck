@@ -7,7 +7,7 @@ import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getT
 import { loadPreviewData, storeThumb, previewPlate } from '../src/core/preview.mjs';
 import { importPaths, indexNewFiles } from '../src/core/importer.mjs';
 import { trashModel, restoreModel, emptyTrash, exportModel } from '../src/core/trash.mjs';
-import { consistencyReport, relocateModel, removeRecord, findInTrash, restoreMissingFromTrash, isInside } from '../src/core/missing.mjs';
+import { consistencyReport, relocateModel, removeRecord, findInTrash, restoreMissingFromTrash, isInside, removeMissingRecords, findByFilename, applyRelocations } from '../src/core/missing.mjs';
 import { loadSettings, switchRoot, markMissing, modelPath } from '../src/core/settings.mjs';
 import { SUPPORTED_EXTS } from '../src/core/parse/index.mjs';
 
@@ -160,6 +160,31 @@ function registerIpc() {
     removeRecord(db, id);
     return true;
   });
+  // Batch remove of missing records: two confirmations; index only, files untouched
+  ipcMain.handle('lib:removeMissing', async (_e, ids) => {
+    if (!ids.length) return [];
+    const first = await dialog.showMessageBox(win, {
+      type: 'warning',
+      message: `移除 ${ids.length} 筆遺失記錄？`,
+      detail: '只刪除檔案櫃的索引記錄（標籤、來源、備註），不會刪除任何檔案。',
+      buttons: ['取消', '移除…'],
+      defaultId: 0,
+      cancelId: 0,
+    });
+    if (first.response !== 1) return null;
+    const second = await dialog.showMessageBox(win, {
+      type: 'warning',
+      message: `再次確認：移除 ${ids.length} 筆記錄？`,
+      detail: '這些記錄的標籤與來源資料將無法復原。',
+      buttons: ['取消', '移除記錄'],
+      defaultId: 0,
+      cancelId: 0,
+    });
+    if (second.response !== 1) return null;
+    return removeMissingRecords(db, root, ids);
+  });
+  ipcMain.handle('lib:findByFilename', () => findByFilename(db, root));
+  ipcMain.handle('lib:applyRelocations', (_e, pairs) => applyRelocations(db, root, pairs));
   ipcMain.handle('lib:missingInTrash', async (_e, id) => Boolean(await findInTrash(root, getModel(db, id).rel_path)));
   ipcMain.handle('lib:restoreMissing', async (_e, id) => {
     try {

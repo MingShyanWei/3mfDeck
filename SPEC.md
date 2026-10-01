@@ -62,7 +62,13 @@
      3MF 亦須支援 **basematerials/colorgroup 材質色**（Meshy 等匯出的 3MF 用材質色而非 paint_color）：
      讀取 basematerials 色表與三角面的 materialindex，與 paint_color 合併為「顏色分布」
      （同一檔兩者並存時逐面以 paint_color 優先）。
-  2. **耗材映射**：把 paint_color 的顏色量化成最接近的耗材槽色（U1 預設 CMYK 四色），顯示「這檔案會用到哪幾捲」。
+  2. **耗材映射**（M6 升級，支援混色）：
+     - **非混色檔**（paint_color 每面單一值或單一位元）：維持現行「量化到最接近的單一耗材槽」（CIEDE2000），顯示用到哪幾捲。
+     - **Full Spectrum 混色檔**（偵測：paint_color 為多位元遮罩，>1 bit）：
+       - 逐面解碼遮罩 → 參與捲集合（讀 `Metadata/project_settings.config` 的 `filament_colour` 對應捲色）。
+       - 統計「哪幾捲參與、各佔多少面」，回答「這檔案會用到哪幾捲」。
+       - 預覽以**減色混合估計**（CMYK 油墨模型）顯示估計色，UI 明確標「估計值，實際以 Orca 渲染為準」。
+       - 驗證：拿 `FullSpectrum Lizard-U1.3mf` 的 `Metadata/plate_1.png`（Orca 官方預覽圖）對照估計色。
   3. **線框**。
 - 匯入時離線算一張 512px 縮圖存 DB（清單用，不即時渲染）。
 

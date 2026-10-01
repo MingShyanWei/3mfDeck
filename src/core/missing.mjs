@@ -5,7 +5,7 @@
 import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { TRASH_DIR, moveIntoLibrary, moveWithinRoot } from './library.mjs';
+import { TRASH_DIR, moveIntoLibrary, moveWithinRoot, listLibraryFiles } from './library.mjs';
 import { getModel, listModels, setRelPath, deleteModels, knownRelPaths, replaceDerived } from './db.mjs';
 import { parseFile, SUPPORTED_EXTS } from './parse/index.mjs';
 import { loadSettings, saveSettings } from './settings.mjs';
@@ -77,6 +77,75 @@ async function apply(db, root, id, rel) {
 /** Remove the index record only; whatever file it pointed to is left alone. */
 export function removeRecord(db, id) {
   deleteModels(db, [id]);
+}
+
+/**
+ * Batch remove: drops the index records of the given ids that are actually
+ * missing right now (stale or live ids from the UI are ignored). Files are
+ * never touched. Returns the removed ids.
+ */
+export function removeMissingRecords(db, root, ids) {
+  const missing = new Set(missingIds(db, root));
+  const removed = ids.filter((id) => missing.has(id));
+  deleteModels(db, removed);
+  return removed;
+}
+
+/**
+ * Find missing records' files by name: for each missing library record, look
+ * for files under root (recursively, hidden dirs such as .trash excluded) with
+ * the same file name that no record uses yet. Names compare case-insensitively
+ * (macOS volumes usually are). Result per record:
+ *   status 'match'     exactly one candidate, claimed by no other missing record
+ *   status 'ambiguous' several candidates, or the candidate is wanted by
+ *                      several missing records -> left to manual relocation
+ *   status 'none'      nothing found
+ * `sameSize` tells whether the match has the size the record remembers.
+ */
+export async function findByFilename(db, root) {
+  const known = knownRelPaths(db);
+  const byName = new Map();
+  for (const rel of await listLibraryFiles(root)) {
+    if (known.has(rel)) continue;
+    const key = path.basename(rel).toLowerCase();
+    if (!byName.has(key)) byName.set(key, []);
+    byName.get(key).push(rel);
+  }
+  const ids = new Set(missingIds(db, root));
+  const rows = listModels(db)
+    .filter((m) => ids.has(m.id))
+    .map((m) => ({ id: m.id, name: m.name, relPath: m.rel_path, sizeBytes: m.size_bytes, candidates: byName.get(path.basename(m.rel_path).toLowerCase()) || [] }));
+  const claims = new Map(); // candidate rel -> number of missing records wanting it
+  for (const r of rows) if (r.candidates.length === 1) claims.set(r.candidates[0], (claims.get(r.candidates[0]) || 0) + 1);
+  const out = [];
+  for (const r of rows) {
+    const { candidates, ...rest } = r;
+    if (!candidates.length) out.push({ ...rest, status: 'none', candidates });
+    else if (candidates.length > 1 || claims.get(candidates[0]) > 1) out.push({ ...rest, status: 'ambiguous', candidates });
+    else {
+      const { size } = await fs.stat(path.join(root, candidates[0]));
+      out.push({ ...rest, status: 'match', candidates, match: candidates[0], sameSize: size === r.sizeBytes });
+    }
+  }
+  return out.sort((a, b) => a.id - b.id);
+}
+
+/**
+ * Apply confirmed { id, relPath } pairs (paths inside root). Each goes through
+ * relocateModel, so user metadata is kept and file data re-read. Failures are
+ * collected per record instead of aborting the batch.
+ */
+export async function applyRelocations(db, root, pairs) {
+  const done = [];
+  const errors = [];
+  for (const { id, relPath } of pairs) {
+    try {
+      done.push({ id, relPath: await relocateModel(db, root, id, path.join(root, relPath)) });
+    } catch (err) {
+      errors.push({ id, error: err.message });
+    }
+  }
+  return { done, errors };
 }
 
 /**
