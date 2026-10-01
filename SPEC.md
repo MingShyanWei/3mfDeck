@@ -59,6 +59,9 @@
 - 即時渲染：可旋轉/縮放/平移（OrbitControls）。
 - 著色模式（切換按鈕）：
   1. **原始**：3MF 用 paint_color 上色、GLB 用原貼圖、STL/OBJ 灰色。
+     3MF 亦須支援 **basematerials/colorgroup 材質色**（Meshy 等匯出的 3MF 用材質色而非 paint_color）：
+     讀取 basematerials 色表與三角面的 materialindex，與 paint_color 合併為「顏色分布」
+     （同一檔兩者並存時逐面以 paint_color 優先）。
   2. **耗材映射**：把 paint_color 的顏色量化成最接近的耗材槽色（U1 預設 CMYK 四色），顯示「這檔案會用到哪幾捲」。
   3. **線框**。
 - 匯入時離線算一張 512px 縮圖存 DB（清單用，不即時渲染）。

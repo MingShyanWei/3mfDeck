@@ -36,13 +36,15 @@ describe('importPaths', () => {
     for (const r of rows) expect(await exists(path.join(root, r.rel_path))).toBe(true);
   });
 
-  it('indexNewFiles picks up files already in a (new) root', async () => {
+  it('indexNewFiles picks up files already in a (new) root; .trash files come back as trashed', async () => {
     const root = await tmpDir();
     await stage(path.join(root, '2025'), 'cube.stl');
-    await stage(path.join(root, '.trash'), 'box.obj');
+    await stage(path.join(root, '.trash', '7', '2025'), 'box.obj');
+    await stage(path.join(root, '.hidden'), 'box.amf'); // other dot dirs are ignored
     const db = openDb(':memory:');
-    expect(await indexNewFiles(db, root)).toHaveLength(1);
+    expect(await indexNewFiles(db, root)).toHaveLength(2);
     expect(await indexNewFiles(db, root)).toHaveLength(0);
     expect(listModels(db).map((m) => m.rel_path)).toEqual(['2025/cube.stl']);
+    expect(listModels(db, { filter: 'trash' }).map((m) => m.rel_path)).toEqual(['.trash/7/2025/box.obj']);
   });
 });

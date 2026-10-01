@@ -1,6 +1,6 @@
 // Import pipeline: move into library → parse → index.
 import path from 'node:path';
-import { collectImportFiles, moveIntoLibrary, listLibraryFiles } from './library.mjs';
+import { collectImportFiles, moveIntoLibrary, listLibraryFiles, listTrashFiles } from './library.mjs';
 import { parseFile } from './parse/index.mjs';
 import { insertModel, knownRelPaths } from './db.mjs';
 
@@ -29,12 +29,20 @@ export async function importPaths(db, root, paths, now = new Date()) {
   return { ids, skipped, errors };
 }
 
-/** Index files under root that the DB does not know yet (used after switching root). */
-export async function indexNewFiles(db, root) {
+/** Files under root (library and .trash) that the DB does not know, as rel paths. */
+export async function untrackedFiles(db, root) {
   const known = knownRelPaths(db);
+  return [...(await listLibraryFiles(root)), ...(await listTrashFiles(root))].filter((rel) => !known.has(rel));
+}
+
+/**
+ * Index files under root that the DB does not know yet (switching root,
+ * rebuilding a lost DB). Files in .trash are indexed as trashed models so
+ * they stay restorable.
+ */
+export async function indexNewFiles(db, root) {
   const ids = [];
-  for (const rel of await listLibraryFiles(root)) {
-    if (known.has(rel)) continue;
+  for (const rel of await untrackedFiles(db, root)) {
     const parsed = await parseFile(path.join(root, rel));
     ids.push(insertModel(db, { name: stemOf(rel), relPath: rel, parsed }));
   }

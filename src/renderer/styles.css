@@ -196,3 +196,5 @@ button.icon:hover { color: var(--text); }
 .dist tr.dither td { background: var(--warn-bg); }
 .dist .badge { margin-left: 6px; }
 .detail header .icon:disabled { opacity: 0.3; }
+
+.trash-item { margin-top: 10px !important; border-top: 1px solid var(--border); padding-top: 6px !important; }

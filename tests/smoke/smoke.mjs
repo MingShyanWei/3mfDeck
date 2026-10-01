@@ -3,6 +3,7 @@
 // drag & drop (CDP Input.dispatchDragEvent), check the library UI, and fail
 // on any console error.
 // Run: npm run smoke   (builds the renderer first)
+// Packaged app: MF_APP_PATH="/Applications/3MF 櫃.app/Contents/MacOS/3MF 櫃" node tests/smoke/smoke.mjs
 import { _electron as electron } from 'playwright-core';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -56,24 +57,27 @@ const present = (counts, min = 150) => Object.keys(counts).filter((k) => counts[
 const step = (msg) => console.log(`• ${msg}`);
 
 const consoleProblems = [];
-const app = await electron.launch({
-  args: [ROOT],
-  env: { ...process.env, MF_USER_DATA: path.join(base, 'userData'), MF_LIBRARY_ROOT: lib },
-});
-app.process().stderr.on('data', (d) => {
-  const s = d.toString();
-  // Chromium's own noise on stderr is not ours; JS errors in main are
-  if (/Error|Uncaught|UnhandledPromiseRejection/.test(s)) consoleProblems.push(`[main] ${s.trim()}`);
-});
-
-try {
-  const page = await app.firstWindow();
-  page.on('console', (m) => {
+const APP_PATH = process.env.MF_APP_PATH;
+async function launch() {
+  const env = { ...process.env, MF_USER_DATA: path.join(base, 'userData'), MF_LIBRARY_ROOT: lib };
+  const a = await electron.launch(APP_PATH ? { executablePath: APP_PATH, args: [], env } : { args: [ROOT], env });
+  a.process().stderr.on('data', (d) => {
+    const s = d.toString();
+    // Chromium's own noise on stderr is not ours; JS errors in main are
+    if (/Error|Uncaught|UnhandledPromiseRejection/.test(s)) consoleProblems.push(`[main] ${s.trim()}`);
+  });
+  const p = await a.firstWindow();
+  p.on('console', (m) => {
     if (m.type() === 'error' || m.type() === 'warning') consoleProblems.push(`[renderer ${m.type()}] ${m.text()}`);
   });
-  page.on('pageerror', (e) => consoleProblems.push(`[renderer pageerror] ${e.message}`));
-  await page.waitForSelector('.toolbar');
-  step('app launched, window title: ' + (await page.title()));
+  p.on('pageerror', (e) => consoleProblems.push(`[renderer pageerror] ${e.message}`));
+  await p.waitForSelector('.toolbar');
+  return [a, p];
+}
+
+let [app, page] = await launch();
+try {
+  step(`app launched (${APP_PATH || 'dev: electron .'}), window title: ` + (await page.title()));
 
   const importViaMenu = async (paths) => {
     await app.evaluate(({ dialog, Menu }, filePaths) => {
@@ -362,11 +366,106 @@ try {
   await page.$eval('[data-testid=detail-panel]', (el) => el.scrollTo(0, 420));
   await page.screenshot({ path: path.join(base, 'color-analysis.png') });
 
+  // 9) M4: trash (restore keeps metadata), empty trash with two confirmations, export
+  const cardCount = () => page.$$eval('[data-testid=model-card]', (els) => els.length);
+  const liveCount = total + 6;
+  await page.fill('[data-testid=search]', '');
+  await page.click('[data-testid=filter-all]');
+  await page.waitForFunction((n) => document.querySelectorAll('[data-testid=model-card]').length === n, liveCount);
+  await openModel('cube', '鴨子'); // cube.stl, tagged 鴨子 + smoke, provenance AI/Meshy
+  await page.click('[data-testid=trash]');
+  await page.waitForSelector('[data-testid=detail-panel]', { state: 'detached' });
+  await page.fill('[data-testid=search]', '');
+  await page.waitForFunction((n) => document.querySelectorAll('[data-testid=model-card]').length === n, liveCount - 1);
+  assert.equal(await exists(path.join(lib, year, 'cube.stl')), false);
+  const trashed = (await fs.readdir(path.join(lib, '.trash'), { recursive: true })).filter((f) => f.endsWith('cube.stl'));
+  assert.equal(trashed.length, 1);
+  assert.match(await page.textContent('[data-testid=filter-trash]'), /回收桶\s*1/);
+  assert.equal(await page.$('[data-testid="filter-tag:鴨子"]'), null, 'tag of a trashed model is hidden');
+  step(`刪除: cube.stl -> .trash/${trashed[0]}; 清單 ${liveCount} -> ${await cardCount()}`);
+
+  await page.click('[data-testid=filter-trash]');
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 1);
+  await page.click('[data-testid=model-card]');
+  await page.waitForSelector('[data-testid=viewer][data-status=ready]'); // preview works from the trash too
+  await page.click('[data-testid=restore]');
+  await page.waitForSelector('[data-testid=detail-panel]', { state: 'detached' });
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 0);
+  assert.equal(await exists(path.join(lib, year, 'cube.stl')), true);
+  await page.click('[data-testid="filter-tag:鴨子"]');
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 1);
+  assert.match(await page.textContent('[data-testid=model-card]'), /Meshy/);
+  step('還原: cube.stl back at ' + path.join(year, 'cube.stl') + ', tag 鴨子 + Meshy provenance intact');
+
+  // Empty trash: cancel at the 2nd confirmation keeps everything; confirming twice deletes
+  await page.click('[data-testid=filter-all]');
+  await openModel('textured');
+  await page.click('[data-testid=trash]');
+  await page.waitForSelector('[data-testid=detail-panel]', { state: 'detached' });
+  await page.fill('[data-testid=search]', '');
+  await page.click('[data-testid=filter-trash]');
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 1);
+  const stubConfirm = (responses) =>
+    app.evaluate(({ dialog }, rs) => {
+      globalThis.__asked = [];
+      dialog.showMessageBox = async (_w, opts) => {
+        globalThis.__asked.push(opts.message);
+        return { response: rs.shift() ?? 0 };
+      };
+    }, responses);
+  await stubConfirm([1, 0]);
+  await page.click('[data-testid=empty-trash]');
+  await page.waitForFunction(() => true);
+  await new Promise((r) => setTimeout(r, 300));
+  const askedCancel = await app.evaluate(() => globalThis.__asked);
+  assert.equal(askedCancel.length, 2);
+  assert.equal(await cardCount(), 1, 'cancelled at the second confirmation');
+  await stubConfirm([1, 1]);
+  await page.click('[data-testid=empty-trash]');
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 0);
+  const asked = await app.evaluate(() => globalThis.__asked);
+  assert.deepEqual(asked, ['清空回收桶？', '再次確認：永久刪除 1 個檔案？']);
+  assert.equal(await exists(path.join(lib, '.trash')), false);
+  assert.equal(await exists(path.join(lib, year, 'textured.glb')), false);
+  step(`清空回收桶: 取消於第 2 次確認 -> 保留; 兩次確認 -> 永久刪除 (${asked.join(' / ')})`);
+
+  // Export: copy, never move
+  const exportDir = path.join(base, 'exported');
+  await app.evaluate(({ dialog }, dir) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [dir] });
+  }, exportDir);
+  await page.click('[data-testid=filter-all]');
+  await openModel('painted');
+  await page.click('[data-testid=export]');
+  await page.waitForSelector('[data-testid=export-message]');
+  assert.match(await page.textContent('[data-testid=export-message]'), new RegExp(`已匯出到 ${path.join(exportDir, 'painted.3mf')}`));
+  assert.deepEqual(await fs.readFile(path.join(exportDir, 'painted.3mf')), await fs.readFile(path.join(lib, year, 'painted.3mf')));
+  step('匯出: painted.3mf copied to ' + exportDir + ' (source still in library)');
+  await page.fill('[data-testid=search]', '');
+
+  // 10) Pull the DB and restart: startup consistency check offers a rebuild
+  const liveFiles = liveCount - 1; // textured.glb was deleted permanently
+  await app.close();
+  for (const f of ['library.db', 'library.db-wal', 'library.db-shm']) await fs.rm(path.join(base, 'userData', f), { force: true });
+  [app, page] = await launch();
+  await page.waitForSelector('[data-testid=consistency-banner]');
+  assert.match(await page.textContent('[data-testid=consistency-banner]'), new RegExp(`發現 ${liveFiles} 個檔案`));
+  assert.equal(await cardCount(), 0);
+  await page.click('[data-testid=rebuild-index]');
+  await page.waitForFunction((n) => document.querySelectorAll('[data-testid=model-card]').length === n, liveFiles);
+  await page.waitForSelector('[data-testid=consistency-banner]', { state: 'detached' });
+  await page.fill('[data-testid=search]', 'painted');
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 1);
+  assert.match(await page.textContent('[data-testid=model-card]'), /MakerWorld.*4 色/);
+  await page.fill('[data-testid=search]', '');
+  await page.waitForFunction((n) => document.querySelectorAll('[data-testid=card-thumb]').length === n, liveFiles);
+  step(`拔掉 DB 重開: banner "發現 ${liveFiles} 個檔案"; 重建索引 -> ${await cardCount()} cards, thumbnails regenerated, 3MF metadata re-parsed`);
+
   // 6) Settings page: switch library root (SPEC 3.7)
   const rootB = path.join(base, 'libraryB');
   await fs.mkdir(path.join(rootB, '2025'), { recursive: true });
   await fs.copyFile(path.join(FIX, 'fixture.step'), path.join(rootB, '2025', 'part.step'));
-  const allCount = total + 6;
+  const allCount = liveFiles; // after the rebuild every live file is indexed again
   await page.click('[data-testid=filter-all]');
   await page.click('[data-testid=settings-button]');
   await page.waitForFunction((v) => document.querySelector('[data-testid=settings-root]')?.textContent === v, lib);

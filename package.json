@@ -14,29 +14,55 @@
     "start": "electron .",
     "fixtures": "node scripts/make-fixtures.mjs",
     "test": "vitest run",
-    "smoke": "vite build && node tests/smoke/smoke.mjs"
+    "smoke": "vite build && node tests/smoke/smoke.mjs",
+    "dist": "vite build && electron-builder --mac dmg"
   },
   "build": {
     "appId": "tw.aktzin.mf-cabinet",
     "productName": "3MF 櫃",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**",
+      "src/core/**",
+      "dist/**",
+      "package.json",
+      "!node_modules/better-sqlite3/{deps,src,docs}/**",
+      "!node_modules/better-sqlite3/prebuilds/{win32,linux,linuxmusl,darwin-x64}*"
+    ],
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "npmRebuild": false,
     "mac": {
-      "target": "dmg"
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.utilities",
+      "identity": "-",
+      "hardenedRuntime": false
     }
   },
   "dependencies": {
-    "@mdi/font": "^7.4.47",
     "better-sqlite3": "^13.0.3",
     "fast-xml-parser": "^5.11.2",
-    "jszip": "^3.10.2",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "three": "^0.186.1"
+    "jszip": "^3.10.2"
   },
   "devDependencies": {
+    "@mdi/font": "^7.4.47",
     "@vitejs/plugin-react": "^6.1.1",
     "electron": "^44.5.1",
     "electron-builder": "^26.15.3",
     "playwright-core": "^1.63.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "three": "^0.186.1",
     "vite": "^8.3.1",
     "vitest": "^5.0.3"
   },

@@ -5,16 +5,18 @@ import ModelViewer from './ModelViewer.jsx';
 import ColorAnalysis from './ColorAnalysis.jsx';
 import { isUnlabeled, formatBytes, formatInt, formatBbox, formatDate } from '../format.js';
 
-export default function DetailPanel({ id, platforms, onSaved, onClose }) {
+export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose }) {
   const [model, setModel] = useState(null);
   const [draft, setDraft] = useState(null);
   const [saved, setSaved] = useState(false);
+  const [exported, setExported] = useState(null);
 
   useEffect(() => {
     window.api.get(id).then((m) => {
       setModel(m);
       setDraft(toDraft(m));
       setSaved(false);
+      setExported(null);
     });
   }, [id]);
 
@@ -29,15 +31,51 @@ export default function DetailPanel({ id, platforms, onSaved, onClose }) {
     onSaved();
   };
 
+  const trashed = model.rel_path.startsWith('.trash/');
+  // Delete / restore move the model out of the current list view
+  const trash = async () => {
+    await window.api.trash(id);
+    onRemoved();
+  };
+  const restore = async () => {
+    await window.api.restore(id);
+    onRemoved();
+  };
+  const exportFile = async () => {
+    const dest = await window.api.exportModel(id);
+    if (dest) setExported(dest);
+  };
+
   return (
     <aside className="detail" data-testid="detail-panel">
       <header>
         <h2 title={model.name}>{model.name}</h2>
+        <button className="icon" data-testid="export" onClick={exportFile} disabled={model.missing} title="匯出（複製到資料夾）">
+          <i className="mdi mdi-export-variant" />
+        </button>
+        {trashed ? (
+          <button className="icon" data-testid="restore" onClick={restore} disabled={model.missing} title="還原">
+            <i className="mdi mdi-restore" />
+          </button>
+        ) : (
+          <button className="icon" data-testid="trash" onClick={trash} disabled={model.missing} title="刪除（移到回收桶）">
+            <i className="mdi mdi-delete-outline" />
+          </button>
+        )}
         <button className="icon" data-testid="reveal" onClick={() => window.api.reveal(id)} disabled={model.missing} title="在 Finder 顯示">
           <i className="mdi mdi-folder-search-outline" />
         </button>
         <button className="icon" onClick={onClose} title="關閉"><i className="mdi mdi-close" /></button>
       </header>
+      {exported && (
+        <div className="callout note" data-testid="export-message">
+          <i className="mdi mdi-check" />
+          <span className="grow">已匯出到 {exported}</span>
+        </div>
+      )}
+      {trashed && (
+        <div className="callout warn"><i className="mdi mdi-delete-outline" /> <span className="grow">此檔案在回收桶中，可按「還原」放回原位置。</span></div>
+      )}
       <ModelViewer model={model} />
       {model.format === '3mf' && model.colors.length > 0 && <ColorAnalysis colors={model.colors} />}
       {model.missing && (

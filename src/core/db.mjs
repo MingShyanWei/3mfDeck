@@ -132,14 +132,19 @@ const SORTS = {
 
 const rowOut = (r) => ({ ...r, has_thumb: Boolean(r.has_thumb), tags: JSON.parse(r.tags), bbox_mm: r.bbox_mm ? JSON.parse(r.bbox_mm) : null });
 
+// Trashed models keep their row (metadata survives a restore); their file
+// lives under <root>/.trash/, so rel_path tells them apart.
+const TRASHED = `m.rel_path LIKE '.trash/%'`;
+
 /**
  * List models.
  * - q: substring match on name, notes, tags (case-insensitive)
- * - filter: 'all' | 'unlabeled' | 'type:<provenance_type>' | 'platform:<name>' | 'tag:<name>'
+ * - filter: 'all' | 'unlabeled' | 'type:<provenance_type>' | 'platform:<name>' | 'tag:<name>' | 'trash'
+ *   (every filter except 'trash' excludes trashed models)
  * - sort: 'imported' | 'name' | 'colors'
  */
 export function listModels(db, { q = '', filter = 'all', sort = 'imported' } = {}) {
-  const where = [];
+  const where = [filter === 'trash' ? TRASHED : `NOT ${TRASHED}`];
   const params = {};
   if (q.trim()) {
     params.q = `%${q.trim()}%`;
@@ -157,7 +162,7 @@ export function listModels(db, { q = '', filter = 'all', sort = 'imported' } = {
     where.push('EXISTS (SELECT 1 FROM model_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.model_id = m.id AND t.name = @ftag)');
     params.ftag = filter.slice(4);
   }
-  const sql = `SELECT ${LIST_COLUMNS} FROM models m ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+  const sql = `SELECT ${LIST_COLUMNS} FROM models m WHERE ${where.join(' AND ')}
     ORDER BY ${SORTS[sort] || SORTS.imported}`;
   return db.prepare(sql).all(params).map(rowOut);
 }
@@ -169,22 +174,37 @@ export function getModel(db, id) {
   return { ...rowOut(row), colors };
 }
 
-/** Sidebar data: counts per filter, platforms and tags in use. */
+/** Sidebar data: counts per filter, platforms and tags in use (trash counted separately). */
 export function sidebarCounts(db) {
   const one = (sql) => db.prepare(sql).pluck().get();
+  const live = `NOT ${TRASHED}`;
   return {
-    all: one('SELECT COUNT(*) FROM models'),
-    unlabeled: one(`SELECT COUNT(*) FROM models WHERE provenance_type IS NULL OR provenance_type = 'unknown'`),
+    all: one(`SELECT COUNT(*) FROM models m WHERE ${live}`),
+    unlabeled: one(`SELECT COUNT(*) FROM models m WHERE ${live} AND (provenance_type IS NULL OR provenance_type = 'unknown')`),
     types: Object.fromEntries(
-      db.prepare('SELECT provenance_type AS k, COUNT(*) AS n FROM models GROUP BY provenance_type').all().map((r) => [r.k, r.n]),
+      db.prepare(`SELECT provenance_type AS k, COUNT(*) AS n FROM models m WHERE ${live} GROUP BY provenance_type`).all().map((r) => [r.k, r.n]),
     ),
     platforms: db
-      .prepare(`SELECT platform AS name, COUNT(*) AS n FROM models WHERE platform IS NOT NULL AND platform != '' GROUP BY platform ORDER BY platform COLLATE NOCASE`)
+      .prepare(`SELECT platform AS name, COUNT(*) AS n FROM models m WHERE ${live} AND platform IS NOT NULL AND platform != '' GROUP BY platform ORDER BY platform COLLATE NOCASE`)
       .all(),
     tags: db
-      .prepare('SELECT t.name, COUNT(*) AS n FROM tags t JOIN model_tags mt ON mt.tag_id = t.id GROUP BY t.id ORDER BY t.name COLLATE NOCASE')
+      .prepare(`SELECT t.name, COUNT(*) AS n FROM tags t JOIN model_tags mt ON mt.tag_id = t.id JOIN models m ON m.id = mt.model_id WHERE ${live} GROUP BY t.id ORDER BY t.name COLLATE NOCASE`)
       .all(),
+    trash: one(`SELECT COUNT(*) FROM models m WHERE ${TRASHED}`),
   };
+}
+
+export function setRelPath(db, id, relPath) {
+  db.prepare('UPDATE models SET rel_path = ? WHERE id = ?').run(relPath, id);
+}
+
+/** Permanently drop rows (tags/colour stats cascade). */
+export function deleteModels(db, ids) {
+  const del = db.prepare('DELETE FROM models WHERE id = ?');
+  db.transaction(() => {
+    for (const id of ids) del.run(id);
+    db.prepare('DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM model_tags)').run();
+  })();
 }
 
 export function knownRelPaths(db) {

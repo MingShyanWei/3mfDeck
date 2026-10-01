@@ -24,6 +24,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [consistency, setConsistency] = useState(null);
 
   const refresh = useCallback(async () => {
     const [list, c] = await Promise.all([window.api.list({ q, filter, sort }), window.api.sidebar()]);
@@ -42,6 +43,25 @@ export default function App() {
   useEffect(() => {
     thumbs();
   }, [thumbs]);
+
+  // Startup consistency check (SPEC §4): untracked files -> offer a rebuild
+  const checkConsistency = useCallback(() => window.api.checkConsistency().then(setConsistency), []);
+  useEffect(() => {
+    checkConsistency();
+  }, [checkConsistency]);
+  const rebuildIndex = async () => {
+    await window.api.rebuildIndex();
+    await refresh();
+    thumbs();
+    checkConsistency();
+  };
+  const emptyTrash = async () => {
+    const n = await window.api.emptyTrash();
+    if (n) {
+      setSelectedId(null);
+      refresh();
+    }
+  };
 
   // Import results arrive from main for both menu and drag & drop imports
   useEffect(
@@ -110,6 +130,26 @@ export default function App() {
             <button className="icon" onClick={() => setNotice(null)}><i className="mdi mdi-close" /></button>
           </div>
         )}
+        {consistency?.untracked.length > 0 && (
+          <div className="callout warn" data-testid="consistency-banner">
+            <i className="mdi mdi-database-alert-outline" />
+            <span className="grow">發現 {consistency.untracked.length} 個檔案在檔案櫃中但不在索引裡（索引可能遺失或檔案是手動放入的）。</span>
+            <button className="primary" data-testid="rebuild-index" onClick={rebuildIndex}>重建索引</button>
+          </div>
+        )}
+        {consistency?.missing > 0 && (
+          <div className="callout danger" data-testid="missing-banner">
+            <i className="mdi mdi-file-alert-outline" />
+            <span className="grow">{consistency.missing} 筆記錄的檔案已不在根目錄，已標示為「遺失」。</span>
+          </div>
+        )}
+        {filter === 'trash' && (
+          <div className="callout note">
+            <i className="mdi mdi-delete-outline" />
+            <span className="grow">回收桶：{counts?.trash ?? 0} 個檔案，可逐一還原。</span>
+            <button data-testid="empty-trash" disabled={!counts?.trash} onClick={emptyTrash}>清空回收桶…</button>
+          </div>
+        )}
         {counts && counts.unlabeled > 0 && filter !== 'unlabeled' && (
           <button className="callout warn link" onClick={() => setFilter('unlabeled')}>
             <i className="mdi mdi-help-circle-outline" /> 有 {counts.unlabeled} 個檔案來源未標，點此檢視
@@ -128,7 +168,18 @@ export default function App() {
           )}
         </div>
       </main>
-      {selectedId && <DetailPanel id={selectedId} platforms={platforms} onSaved={refresh} onClose={() => setSelectedId(null)} />}
+      {selectedId && (
+        <DetailPanel
+          id={selectedId}
+          platforms={platforms}
+          onSaved={refresh}
+          onRemoved={() => {
+            setSelectedId(null);
+            refresh();
+          }}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
       {dragging && (
         <div className="drop-overlay">
           <i className="mdi mdi-tray-arrow-down" />
@@ -152,6 +203,7 @@ export default function App() {
             setSelectedId(null);
             refresh();
             thumbs();
+            checkConsistency();
           }}
         />
       )}

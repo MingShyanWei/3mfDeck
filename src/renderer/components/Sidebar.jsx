@@ -34,6 +34,9 @@ export default function Sidebar({ counts, filter, onFilter }) {
           </ul>
         </>
       )}
+      <ul className="trash-item">
+        <Item id="trash" filter={filter} onFilter={onFilter} icon="mdi-delete-outline" label="回收桶" count={counts.trash} />
+      </ul>
       <h3>標籤</h3>
       {counts.tags.length === 0 && <p className="muted small pad">尚無標籤</p>}
       <ul>

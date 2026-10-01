@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb } from '../src/core/db.mjs';
 import { loadPreviewData, storeThumb } from '../src/core/preview.mjs';
-import { importPaths } from '../src/core/importer.mjs';
+import { importPaths, indexNewFiles } from '../src/core/importer.mjs';
+import { trashModel, restoreModel, emptyTrash, exportModel, checkConsistency } from '../src/core/trash.mjs';
 import { loadSettings, switchRoot, markMissing, modelPath } from '../src/core/settings.mjs';
 import { SUPPORTED_EXTS } from '../src/core/parse/index.mjs';
 
@@ -68,6 +69,39 @@ function registerIpc() {
   ipcMain.handle('lib:preview', (_e, id) => {
     return loadPreviewData(modelPath(db, root, id), getModel(db, id).format);
   });
+  ipcMain.handle('lib:trash', (_e, id) => trashModel(db, root, id));
+  ipcMain.handle('lib:restore', (_e, id) => restoreModel(db, root, id));
+  // Permanent deletion: two separate confirmations (SPEC 3.6)
+  ipcMain.handle('lib:emptyTrash', async () => {
+    const n = sidebarCounts(db).trash;
+    if (!n) return 0;
+    const first = await dialog.showMessageBox(win, {
+      type: 'warning',
+      message: `清空回收桶？`,
+      detail: `回收桶內的 ${n} 個檔案將被永久刪除。`,
+      buttons: ['取消', '清空…'],
+      defaultId: 0,
+      cancelId: 0,
+    });
+    if (first.response !== 1) return null;
+    const second = await dialog.showMessageBox(win, {
+      type: 'warning',
+      message: `再次確認：永久刪除 ${n} 個檔案？`,
+      detail: '此動作無法復原。',
+      buttons: ['取消', '永久刪除'],
+      defaultId: 0,
+      cancelId: 0,
+    });
+    if (second.response !== 1) return null;
+    return emptyTrash(db, root);
+  });
+  ipcMain.handle('lib:export', async (_e, id) => {
+    const r = await dialog.showOpenDialog(win, { title: '匯出到…', properties: ['openDirectory', 'createDirectory'] });
+    if (r.canceled || !r.filePaths.length) return null;
+    return exportModel(db, root, id, r.filePaths[0]);
+  });
+  ipcMain.handle('lib:consistency', () => checkConsistency(db, root));
+  ipcMain.handle('lib:rebuildIndex', async () => (await indexNewFiles(db, root)).length);
   ipcMain.handle('lib:reveal', (_e, id) => shell.showItemInFolder(modelPath(db, root, id)));
   ipcMain.handle('lib:idsNeedingThumb', () => idsNeedingThumb(db));
   ipcMain.handle('lib:setThumb', (_e, id, bytes) => storeThumb(db, id, bytes));
