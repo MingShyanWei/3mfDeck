@@ -38,6 +38,33 @@ function AppFooter() {
   );
 }
 
+// M30 (SPEC 3.13): a newer release, found only when the user turned the
+// update check on. Non-blocking: download (system browser), skip this
+// version, or close for this session. Never downloads or installs anything.
+function UpdateNotice() {
+  const [notice, setNotice] = useState(null);
+  const [closed, setClosed] = useState(null); // version closed for this session
+  useEffect(() => {
+    window.api.updateStatus().then(setNotice);
+    return window.api.onUpdate(setNotice);
+  }, []);
+  if (!notice || closed === notice.version) return null;
+  return (
+    <div className="update-notice" data-testid="update-notice" data-version={notice.version}>
+      <div className="row">
+        <i className="mdi mdi-arrow-up-circle-outline" />
+        <span className="grow">{t('update.available', { version: notice.version })}</span>
+        <button className="icon" data-testid="update-close" title={t('update.dismiss')} onClick={() => setClosed(notice.version)}><i className="mdi mdi-close" /></button>
+      </div>
+      <div className="small muted">{t('update.manual')}</div>
+      <div className="row">
+        <button className="small primary" data-testid="update-open" onClick={() => window.api.openUpdate()}>{t('update.download')}</button>
+        <button className="small" data-testid="update-skip" onClick={() => window.api.skipUpdate(notice.version)}>{t('update.skip')}</button>
+      </div>
+    </div>
+  );
+}
+
 export default function Sidebar({ counts, filter, onFilter, colors = [], onToggleColor, onClearColors, onPurchase }) {
   if (!counts) return <aside className="sidebar" />;
   return (
@@ -103,6 +130,7 @@ export default function Sidebar({ counts, filter, onFilter, colors = [], onToggl
           <Item key={tag.name} id={`tag:${tag.name}`} filter={filter} onFilter={onFilter} icon="mdi-tag-outline" label={tag.name} count={tag.n} />
         ))}
       </ul>
+      <UpdateNotice />
       <AppFooter />
     </aside>
   );

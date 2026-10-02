@@ -10,13 +10,17 @@ export default function SettingsDialog({ onClose, onRootChanged, onSpoolsChanged
   const [spoolMsg, setSpoolMsg] = useState('');
   const [inventory, setInventory] = useState(null); // draft filament inventory
   const [invMsg, setInvMsg] = useState('');
+  const [updateCheck, setUpdateCheck] = useState(false); // M30: off by default
+  const [version, setVersion] = useState(null);
 
   useEffect(() => {
     window.api.getSettings().then((s) => {
       setSettings(s);
       setSpools(s.spools);
       setInventory(s.inventory || []);
+      setUpdateCheck(s.updateCheck === true);
     });
+    window.api.appInfo().then((i) => setVersion(i.version));
   }, []);
 
   const setCount = (n) => setSpools(Array.from({ length: n }, (_, i) => spools[i] ?? DEFAULT_SPOOLS[i]));
@@ -126,6 +130,23 @@ export default function SettingsDialog({ onClose, onRootChanged, onSpoolsChanged
               {invMsg && <p className="small" data-testid="inventory-message">{invMsg}</p>}
             </fieldset>
           )}
+          <fieldset className="spool-editor" data-testid="updates-section">
+            <legend>{t('settings.updates')}</legend>
+            <div className="row">
+              <span className="grow" data-testid="settings-version">{t('settings.currentVersion', { version: version ?? '…' })}</span>
+              <button data-testid="settings-open-releases" onClick={() => window.api.openReleases()}><i className="mdi mdi-open-in-new" /> {t('settings.openReleases')}</button>
+            </div>
+            <label className="row check">
+              <input type="checkbox" data-testid="settings-update-check" checked={updateCheck} onChange={async (e) => {
+                const on = e.target.checked;
+                setUpdateCheck(on);
+                await window.api.setUpdateCheck(on);
+              }} />
+              <span>{t('settings.updateCheck')}</span>
+            </label>
+            <p className="small muted" data-testid="update-check-note">{t('settings.updateCheckNote')}</p>
+            <p className="small muted" data-testid="update-manual-note">{t('settings.manualUpdateNote')}</p>
+          </fieldset>
         </div>
         <footer>
           <span className="spacer" />

@@ -55,7 +55,7 @@
 - English／繁體中文／简体中文，默认跟随系统语言，可在设置页切换并记住；日期与数字按语言格式化
 
 **离线保证**
-- App 本身**不发任何网络请求**（无账号、无云端、不连打印机）。唯一的外部调用是两个固定链接交给系统浏览器打开：侧栏作者链接、设置页的 3dfilamentprofiles.com My Spools 页。
+- App 默认**不发任何网络请求**（无账号、无云端、不连打印机）。固定链接（作者、Releases 页、3dfilamentprofiles.com My Spools）交给系统浏览器打开；App 本身唯一可能的请求是可选的更新检查，默认关闭、需用户自行开启（见[更新](#更新)）。
 - 侧栏左下显示版本号 `1.<YYMM>.<DHHMM>`（构建时间，例如 `1.2610.21122`；发行文件名带同一字符串），悬停可看完整时间与 commit。
 
 ---
@@ -99,6 +99,13 @@
 
 **Windows：** `.exe` 也未做代码签名；SmartScreen 若警告，请点击“更多信息 → 仍要运行”。
 
+### 更新
+
+3mfDeck 不会自己下载或安装更新——**更新一律手动**到 [Releases](https://github.com/MingShyanWei/3mfDeck/releases) 下载安装（macOS 的 App 内自动更新需要 Developer ID 签名，本版为 ad-hoc 签名）。
+
+- **设置 › 版本与更新**：显示当前版本，以及“打开 Releases 页面”按钮（交给系统浏览器，App 不发请求）。
+- **自动检查更新（会连接 GitHub）**：可选，**默认关闭**。关闭时 App 完全不发出任何请求；开启后在启动时向 GitHub Releases API 查询最新版，以 release 说明中的构建标记（`<!-- build: 1.YYMM.DHHMM -->`）与本机版本比对，有新版时在侧栏显示小提示（前往下载／跳过此版本／关闭）。离线或 API 限流时静默忽略。
+
 ## 开发
 
 ```bash
@@ -106,9 +113,10 @@ git clone git@github.com:MingShyanWei/3mfDeck.git
 cd 3mfDeck
 npm install
 npm run dev        # vite build + 启动 Electron
-npm test           # Vitest 单元测试（251 项）
+npm test           # Vitest 单元测试（279 项）
 npm run smoke      # Electron 端到端 smoke（使用隔离的文件夹与数据库）
-npm run dist       # 打包 macOS dmg
+npm run dist       # 打包 macOS dmg（文件名带构建版本）
+node scripts/release-notes.mjs  # 生成含构建标记、大小、SHA256 的 release 说明
 ```
 
 常用环境变量（测试用）：
@@ -130,7 +138,7 @@ src/core/          纯逻辑，可单独测试：解析、颜色、混色、导�
   orcaProfiles.mjs 读取本机 Snapmaker Orca 的机型 profile（仅取几何数据，不联网）
 src/core/i18n/     界面词典（en／zh-TW／zh-CN）
 src/renderer/      React UI（three.js 预览、详情面板、弹窗）
-tests/unit/        Vitest（30 个文件、251 项）
+tests/unit/        Vitest（33 个文件、279 项）
 tests/smoke/       真实 Electron 端到端测试
 docs/screenshots/  README 截图（en／zh-TW／zh-CN）
 demo/models/       程序化生成的示例模型（可用 node scripts/make-demo-models.mjs 重新生成）

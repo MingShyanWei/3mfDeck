@@ -16,6 +16,11 @@ contextBridge.exposeInMainWorld('api', {
   setLanguage: (lang) => ipcRenderer.invoke('settings:setLanguage', lang),
   openRepo: () => ipcRenderer.invoke('app:openRepo'),
   openFilamentProfiles: () => ipcRenderer.invoke('app:openFilamentProfiles'),
+  openReleases: () => ipcRenderer.invoke('app:openReleases'),
+  setUpdateCheck: (on) => ipcRenderer.invoke('settings:setUpdateCheck', on),
+  updateStatus: () => ipcRenderer.invoke('update:status'),
+  openUpdate: () => ipcRenderer.invoke('update:open'),
+  skipUpdate: (version) => ipcRenderer.invoke('update:skip', version),
   convertU1: (id) => ipcRenderer.invoke('lib:convertU1', id),
   update: (id, fields) => ipcRenderer.invoke('lib:update', id, fields),
   setTags: (id, names) => ipcRenderer.invoke('lib:setTags', id, names),
@@ -47,4 +52,5 @@ contextBridge.exposeInMainWorld('api', {
   chooseRoot: () => ipcRenderer.invoke('settings:chooseRoot'),
   onImported: on('lib:imported'),
   onOpenSettings: on('ui:openSettings'),
+  onUpdate: on('ui:update'),
 });

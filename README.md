@@ -55,7 +55,7 @@ Downloading models is easy; the trouble starts afterwards:
 - English / 繁體中文 / 简体中文; follows the system language by default, can be switched in Settings and is remembered; dates and numbers are formatted for the language
 
 **Offline guarantee**
-- The app itself **makes no network requests** (no account, no cloud, no printer connection). The only outside calls are two fixed links handed to the system browser: the author link in the sidebar and the 3dfilamentprofiles.com My Spools page in Settings.
+- By default the app **makes no network requests** (no account, no cloud, no printer connection). Fixed links (author, Releases page, 3dfilamentprofiles.com My Spools) are handed to the system browser. The only request the app itself can make is the optional update check, which is off until you turn it on (see [Updates](#updates)).
 - The bottom of the sidebar shows the version `1.<YYMM>.<DHHMM>` (build time, e.g. `1.2610.21122`; the release file names carry the same string); hover for the full time and commit.
 
 ---
@@ -99,6 +99,13 @@ Opening without this warning would need Apple Developer Program signing and nota
 
 **Windows:** the `.exe` files are not code-signed either; if SmartScreen warns, click **More info → Run anyway**.
 
+### Updates
+
+3mfDeck never downloads or installs updates itself — **updates are always downloaded and installed by hand** from [Releases](https://github.com/MingShyanWei/3mfDeck/releases) (in-app auto-update on macOS would need a Developer ID signature; this build is ad-hoc signed).
+
+- **Settings › Version & updates** shows the current version and a button that opens the Releases page in your browser (no request from the app).
+- **Check for updates automatically (connects to GitHub)** — optional, **off by default**. While off, the app sends no request at all. When on, it asks the GitHub Releases API for the newest release at startup and compares the build marker in the release notes (`<!-- build: 1.YYMM.DHHMM -->`) with your version; a newer one shows a small notice in the sidebar (go to download, skip this version, or close). Failures (offline, rate limit) are ignored silently.
+
 ## Development
 
 ```bash
@@ -106,9 +113,10 @@ git clone git@github.com:MingShyanWei/3mfDeck.git
 cd 3mfDeck
 npm install
 npm run dev        # vite build + start Electron
-npm test           # Vitest unit tests (251)
+npm test           # Vitest unit tests (279)
 npm run smoke      # Electron end-to-end smoke test (isolated folders and database)
-npm run dist       # package the macOS dmg
+npm run dist       # package the macOS dmg (file names carry the build version)
+node scripts/release-notes.mjs  # release notes with the build marker, sizes and SHA256
 ```
 
 Useful environment variables (for testing):
@@ -130,7 +138,7 @@ src/core/          Pure logic, testable on its own: parsing, colours, mixing, ex
   orcaProfiles.mjs Reads the local Snapmaker Orca printer profiles (geometry only, no network)
 src/core/i18n/     UI dictionaries (en / zh-TW / zh-CN)
 src/renderer/      React UI (three.js preview, detail panel, dialogs)
-tests/unit/        Vitest (30 files, 251 tests)
+tests/unit/        Vitest (33 files, 279 tests)
 tests/smoke/       Real Electron end-to-end test
 docs/screenshots/  README screenshots (en / zh-TW / zh-CN)
 demo/models/       Procedural showcase models (regenerate: node scripts/make-demo-models.mjs)

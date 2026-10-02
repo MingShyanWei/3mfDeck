@@ -24,6 +24,8 @@ export function loadSettings(userDataDir, defaultRoot) {
     spools: saved.spools || DEFAULT_SPOOLS,
     inventory: (Array.isArray(saved.inventory) ? saved.inventory : []),
     language: saved.language ?? null, // M24: null until the user picks one (then the system locale decides)
+    updateCheck: saved.updateCheck === true, // M30: off unless the user turned it on
+    skippedUpdate: saved.skippedUpdate ?? null,
   };
 }
 

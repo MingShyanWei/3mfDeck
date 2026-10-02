@@ -1,5 +1,5 @@
 // Electron main process: window, menu, IPC to the core library.
-import { app, BrowserWindow, Menu, ipcMain, dialog, protocol, shell, nativeImage } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, dialog, protocol, shell, nativeImage, net } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -22,6 +22,7 @@ import { import3dfpInventory, FILAMENT_PROFILES_URL } from '../src/core/inventor
 import { slotsFromColours } from '../src/core/filament.mjs';
 import { SUPPORTED_EXTS } from '../src/core/parse/index.mjs';
 import { t, setLang, getLang, pickLang, LANGS } from '../src/core/i18n/index.mjs';
+import { checkForUpdate, RELEASES_URL, LATEST_RELEASE_API } from '../src/core/updateCheck.mjs';
 
 // Test hooks: isolate userData / library root (used by the smoke test)
 if (process.env.MF_USER_DATA) app.setPath('userData', process.env.MF_USER_DATA);
@@ -83,7 +84,28 @@ function appInfo() {
   } catch {
     // no build info (should not happen after vite build): show the launch time, still marked dev when unpackaged
   }
-  return { ...versionLabel(info, app.isPackaged), commit: info.commit, author: AUTHOR, repo: REPO };
+  // buildVersion: the bare stamp (no "dev"), what the update check compares
+  return { ...versionLabel(info, app.isPackaged), buildVersion: versionLabel(info, true).version, commit: info.commit, author: AUTHOR, repo: REPO };
+}
+
+// M30 (SPEC 3.13): the optional update check (layer 2). Runs only when the
+// user turned it on in Settings (off by default): at startup and when it is
+// switched on. checkForUpdate makes no request when disabled. Tests point it
+// at a local server with MF_UPDATE_API_URL.
+let updateNotice = null; // { version, url } of a newer release, or null
+async function runUpdateCheck() {
+  const s = loadSettings(app.getPath('userData'), root);
+  const found = await checkForUpdate({
+    enabled: s.updateCheck,
+    current: appInfo().buildVersion,
+    skipped: s.skippedUpdate,
+    fetch: (url, opts) => net.fetch(url, opts),
+    url: process.env.MF_UPDATE_API_URL || LATEST_RELEASE_API,
+  });
+  // the setting may have been switched off while the request was in flight
+  updateNotice = loadSettings(app.getPath('userData'), root).updateCheck ? found : null;
+  win?.webContents.send('ui:update', updateNotice);
+  return updateNotice;
 }
 
 /** Switch the main process to `lang`: core messages, menu, About panel. */
@@ -105,6 +127,22 @@ function registerIpc() {
   // Opens the project page in the system browser; the app itself never makes a
   // network request (SPEC: fully offline). Only this fixed URL can be opened.
   ipcMain.handle('app:openRepo', () => shell.openExternal(REPO_URL));
+  // M30 layer 1: the Releases page in the system browser (no request from the app)
+  ipcMain.handle('app:openReleases', () => shell.openExternal(RELEASES_URL));
+  ipcMain.handle('update:status', () => updateNotice);
+  ipcMain.handle('update:open', () => shell.openExternal(updateNotice?.url ?? RELEASES_URL));
+  ipcMain.handle('update:skip', (_e, version) => {
+    saveSettings(app.getPath('userData'), { skippedUpdate: String(version) });
+    updateNotice = null;
+    win?.webContents.send('ui:update', null);
+  });
+  ipcMain.handle('settings:setUpdateCheck', (_e, on) => {
+    saveSettings(app.getPath('userData'), { updateCheck: on === true });
+    if (on === true) return runUpdateCheck();
+    updateNotice = null;
+    win?.webContents.send('ui:update', null);
+    return null;
+  });
   // M26: the inventory export source, same rule: one fixed URL in the system browser
   ipcMain.handle('app:openFilamentProfiles', () => shell.openExternal(FILAMENT_PROFILES_URL));
   ipcMain.handle('lib:list', (_e, opts) => {
@@ -262,7 +300,10 @@ function registerIpc() {
   ipcMain.handle('lib:idsNeedingThumb', () => idsNeedingThumb(db));
   ipcMain.handle('lib:setThumb', (_e, id, bytes) => storeThumb(db, id, bytes, thumbIsBlack(bytes)));
   ipcMain.handle('lib:importDialog', () => importViaDialog());
-  ipcMain.handle('settings:get', () => ({ libraryRoot: root, spools: loadSettings(app.getPath('userData'), root).spools, inventory: loadSettings(app.getPath('userData'), root).inventory, language: getLang() }));
+  ipcMain.handle('settings:get', () => {
+    const s = loadSettings(app.getPath('userData'), root);
+    return { libraryRoot: root, spools: s.spools, inventory: s.inventory, language: getLang(), updateCheck: s.updateCheck };
+  });
   ipcMain.handle('settings:setInventory', (_e, list) => {
     try {
       const clean = validateInventory(list);
@@ -397,6 +438,7 @@ app.whenReady().then(() => {
   // Dropping a file outside the drop zone must not navigate the window away
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.loadFile(path.join(import.meta.dirname, '..', 'dist', 'index.html'));
+  runUpdateCheck(); // no-op (and no request) unless the user turned the check on
   backfillSourcePrinters();
 });
 

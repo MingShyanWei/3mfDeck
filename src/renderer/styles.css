@@ -409,3 +409,15 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
 .app-credit span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .app-credit:hover:not(:disabled) { color: var(--accent); border-color: transparent; }
 .app-credit .mdi { font-size: 11px; }
+
+/* M30: update notice (sidebar) and the settings checkbox row */
+.update-notice { margin: 8px 6px 0; padding: 10px; border-radius: 12px; background: var(--panel); box-shadow: 0 0 0 1px var(--accent) inset; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.update-notice .row { display: flex; align-items: center; gap: 6px; }
+.update-notice .mdi-arrow-up-circle-outline { color: var(--accent); font-size: 16px; }
+.update-notice button.icon { padding: 2px; }
+.update-notice .row:last-child { flex-wrap: wrap; }
+.update-notice .row:last-child button { white-space: nowrap; padding: 4px 10px; }
+.spool-editor label.check { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 8px; font-size: 13px; color: var(--text); }
+.spool-editor label.check input { width: auto; flex: none; margin: 0; }
+.spool-editor label.check > span { font-size: 13px; color: var(--text); }
+.spool-editor p { margin: 0; }

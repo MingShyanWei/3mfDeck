@@ -9,6 +9,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import http from 'node:http';
 
 const ROOT = path.join(import.meta.dirname, '..', '..');
 const FIX = path.join(ROOT, 'tests', 'fixtures');
@@ -16,6 +17,17 @@ const FIX = path.join(ROOT, 'tests', 'fixtures');
 const WINE = process.env.MF_WINE_3MF || path.join(os.homedir(), 'Library/Mobile Documents/com~apple~CloudDocs/3mf/Wine-U1.3mf');
 
 const base = await fs.mkdtemp(path.join(os.tmpdir(), 'mfcab-smoke-'));
+// M30: a stand-in for the GitHub Releases API that counts every request. Every
+// launch points the app at it (MF_UPDATE_API_URL); with the update check off
+// (the default) it must never be hit.
+const updateHits = [];
+const updateServer = http.createServer((req, res) => {
+  updateHits.push(req.url);
+  res.setHeader('content-type', 'application/json');
+  res.end(JSON.stringify({ body: 'Smoke release\n<!-- build: 9.9999.99999 -->', html_url: 'https://github.com/MingShyanWei/3mfDeck/releases/tag/v-smoke' }));
+});
+await new Promise((r) => updateServer.listen(0, '127.0.0.1', r));
+const UPDATE_API = `http://127.0.0.1:${updateServer.address().port}/repos/MingShyanWei/3mfDeck/releases/latest`;
 const lib = path.join(base, 'library');
 const inbox = path.join(base, 'inbox');
 await fs.mkdir(path.join(inbox, 'dup'), { recursive: true });
@@ -62,7 +74,7 @@ const consoleProblems = [];
 const APP_PATH = process.env.MF_APP_PATH;
 async function launch(extraEnv = {}) {
   // MF_LANG: the steps below assert the Traditional Chinese UI (a saved language choice still wins)
-  const env = { ...process.env, MF_USER_DATA: path.join(base, 'userData'), MF_LIBRARY_ROOT: lib, MF_LANG: 'zh-TW', ...extraEnv };
+  const env = { ...process.env, MF_USER_DATA: path.join(base, 'userData'), MF_LIBRARY_ROOT: lib, MF_LANG: 'zh-TW', MF_UPDATE_API_URL: UPDATE_API, ...extraEnv };
   const a = await electron.launch(APP_PATH ? { executablePath: APP_PATH, args: [], env } : { args: [ROOT], env });
   a.process().stderr.on('data', (d) => {
     const s = d.toString();
@@ -1261,6 +1273,86 @@ try {
     await page.fill('[data-testid=search]', '');
   }
 
+  // 16c) M30 (SPEC 3.13): update notification — off by default and then silent; on: one request, a non-blocking notice
+  let hitsWhenDisabled;
+  {
+    const settings = () => page.evaluate(() => window.api.getSettings());
+    const config = async () => JSON.parse(await fs.readFile(path.join(base, 'userData', 'config.json'), 'utf8'));
+    // every launch so far (several restarts) ran with the check off: not one request
+    assert.deepEqual(updateHits, [], 'update API hit while the check is off');
+    assert.equal((await settings()).updateCheck, false);
+    // record every http(s) request the app makes from here on (main's net.fetch goes through the session too)
+    const watchRequests = () => app.evaluate(({ session }) => {
+      globalThis.__requests = [];
+      session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (d, cb) => {
+        globalThis.__requests.push(d.url);
+        cb({});
+      });
+    });
+    const requests = () => app.evaluate(() => globalThis.__requests);
+    await watchRequests();
+    await app.evaluate(({ shell }) => {
+      shell.openExternal = async (url) => {
+        globalThis.__openedExternal = url; // no browser in tests
+      };
+    });
+    // layer 1: version + Releases page via the system browser; layer 3 stated
+    await page.click('[data-testid=settings-button]');
+    await page.waitForSelector('[data-testid=updates-section]');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=settings-version]').textContent.includes('…'));
+    const shownVersion = (await page.textContent('[data-testid=settings-version]')).trim();
+    const sidebarVersion = (await page.textContent('[data-testid=app-version]')).trim().replace(/^v/, '');
+    assert.equal(shownVersion, `目前版本 ${sidebarVersion}`);
+    assert.equal(await page.isChecked('[data-testid=settings-update-check]'), false);
+    assert.match(await page.textContent('[data-testid=settings-update-check] + span'), /自動檢查更新（會連線 GitHub）/);
+    assert.match(await page.textContent('[data-testid=update-manual-note]'), /更新一律手動下載安裝/);
+    await page.click('[data-testid=settings-open-releases]');
+    assert.equal(await app.evaluate(() => globalThis.__openedExternal), 'https://github.com/MingShyanWei/3mfDeck/releases');
+    await page.click('[data-testid=settings-done]');
+    await new Promise((r) => setTimeout(r, 1500));
+    assert.deepEqual(updateHits, [], 'opening settings / the Releases button made a request');
+    assert.deepEqual(await requests(), [], 'the app made an http(s) request with the check off');
+    // layer 2 on: one request, a newer build -> non-blocking notice
+    await page.click('[data-testid=settings-button]');
+    await page.check('[data-testid=settings-update-check]');
+    await page.click('[data-testid=settings-done]');
+    await page.waitForSelector('[data-testid=update-notice][data-version="9.9999.99999"]');
+    assert.equal(updateHits.length, 1);
+    assert.deepEqual(await requests(), [UPDATE_API]);
+    assert.equal((await config()).updateCheck, true);
+    assert.match(await page.textContent('[data-testid=update-notice]'), /有新版本 9\.9999\.99999.*請手動下載並安裝/s);
+    await page.click('[data-testid=update-open]');
+    assert.equal(await app.evaluate(() => globalThis.__openedExternal), 'https://github.com/MingShyanWei/3mfDeck/releases/tag/v-smoke');
+    await page.click('[data-testid=update-close]'); // closed for this session only
+    assert.equal(await page.$('[data-testid=update-notice]'), null);
+    // restart: checked at startup, offered again; skip this version
+    await app.close();
+    [app, page] = await launch();
+    await page.waitForSelector('[data-testid=update-notice][data-version="9.9999.99999"]');
+    assert.equal(updateHits.length, 2);
+    await page.click('[data-testid=update-skip]');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=update-notice]'));
+    assert.equal((await config()).skippedUpdate, '9.9999.99999');
+    // restart: checked, but the skipped version is not offered
+    await app.close();
+    [app, page] = await launch();
+    for (let i = 0; i < 50 && updateHits.length < 3; i++) await new Promise((r) => setTimeout(r, 100));
+    assert.equal(updateHits.length, 3);
+    await new Promise((r) => setTimeout(r, 800));
+    assert.equal(await page.$('[data-testid=update-notice]'), null, 'skipped version offered again');
+    // off again: no request from now on (checked at the end of the run, after more restarts)
+    await page.click('[data-testid=settings-button]');
+    await page.uncheck('[data-testid=settings-update-check]');
+    await page.click('[data-testid=settings-done]');
+    assert.equal((await config()).updateCheck, false);
+    await app.close();
+    [app, page] = await launch();
+    await new Promise((r) => setTimeout(r, 1500));
+    hitsWhenDisabled = updateHits.length;
+    assert.equal(hitsWhenDisabled, 3, 'switched off: no request at startup');
+    step(`M30 更新通知: 預設關閉，前面所有啟動（含多次重啟）對更新 API 0 次請求、App http(s) 請求 0；設定頁顯示「${shownVersion}」＋開啟 Releases（系統瀏覽器）；開啟後 1 次請求、側欄提示 9.9999.99999（前往下載／關閉／略過）；重啟再查、略過後不再提示；關閉後重啟 0 次請求`);
+  }
+
   // 17) M24: UI language — settings switch (en / zh-CN / zh-TW), menu, Intl, cross-language colour search, remembered
   {
     const sidebarText = () => page.textContent('.sidebar');
@@ -1351,8 +1443,11 @@ try {
     assert.deepEqual(await snapshot(), legacyBefore, 'old userData untouched');
     step(`M20 3mfDeck: 視窗標題/側欄已改名；遷移 ${Object.keys(legacyBefore).join(', ')} -> 新資料夾，${after.list} 筆、非 U1 ${after.sidebar.nonU1}、色名 ${after.sidebar.colors.length} 種與遷移前相同；舊資料夾 sha256 不變`);
   }
+  // M30: the relaunch above (fresh userData, check off) made no request either
+  assert.equal(updateHits.length, hitsWhenDisabled, `update API hit after the check was switched off: ${updateHits.join(', ')}`);
 } finally {
   await app.close();
+  updateServer.close();
 }
 
 if (consoleProblems.length) {
