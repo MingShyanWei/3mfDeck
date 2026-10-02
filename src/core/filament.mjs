@@ -261,9 +261,12 @@ export function printPlan(hex, slots = U1_SLOTS, threshold = MIX_DELTA_E) {
 /**
  * Map a colour distribution ([{color, faces, pct}], e.g. color_stats) onto
  * slots. Returns { mapping: [{color, faces, pct, slot, deltaE, mode, recipe?,
- * mixable?, previewHex}], used: [{slot, name, label, hex, faces, pct}] } —
- * `used` answers "which spools will this file use", sorted by slot number;
- * mixed colours count towards each slot by their recipe share.
+ * mixable?, previewHex}], used: [{slot, name, label, hex, faces, pct}],
+ * printablePct, unprintablePct } — `used` answers "which spools will this
+ * file use", sorted by slot number; mixed colours count towards each slot by
+ * their recipe share. M29 (SPEC 3.5e): a colour that cannot be mixed counts
+ * towards its nearest slot (what the export prints when the filament is not
+ * bought), not towards the recipe it does not reach.
  */
 export function mapToSlots(colorStats, slots = U1_SLOTS, threshold = MIX_DELTA_E) {
   const mapping = colorStats.map((c) => {
@@ -278,11 +281,17 @@ export function mapToSlots(colorStats, slots = U1_SLOTS, threshold = MIX_DELTA_E
     u.pct += pct;
     used.set(slot, u);
   };
+  let bad = 0;
   for (const m of mapping) {
-    if (m.mode === 'single') add(m.slot, m.faces, m.pct);
-    else for (const w of m.recipe.weights) add(w.slot, (m.faces * w.pct) / 100, (m.pct * w.pct) / 100);
+    if (m.mode === 'mix' && m.mixable) for (const w of m.recipe.weights) add(w.slot, (m.faces * w.pct) / 100, (m.pct * w.pct) / 100);
+    else add(m.slot, m.faces, m.pct);
+    if (m.mode === 'mix' && !m.mixable) bad += m.faces;
   }
+  const total = mapping.reduce((t, m) => t + m.faces, 0) || 1;
+  const unprintablePct = Math.round((bad / total) * 10000) / 100;
   return {
+    printablePct: Math.round((100 - unprintablePct) * 100) / 100,
+    unprintablePct,
     mapping,
     used: [...used.values()]
       .map((u) => ({ ...u, faces: Math.round(u.faces), pct: Math.round(u.pct * 100) / 100 }))

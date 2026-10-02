@@ -323,7 +323,7 @@ try {
   await openModel('painted');
   assert.deepEqual(await tableRows(), ['#00FFFF 6 50%', '#FF00FF 3 25%', '#FFFF00 2 16.67%', '#000000 1 8.33%']);
   assert.deepEqual(await warningTypes(), ['few-colors']);
-  assert.match(await page.textContent('[data-testid=warning-few-colors]'), /色塊少於 4 色不需混色，量化成實色平塗最乾淨/);
+  assert.match(await page.textContent('[data-testid=warning-few-colors]'), /每個顏色都能在 ΔE ≤ 15 內對應到某個耗材槽，不需混色，量化成實色平塗最乾淨/);
   const bars = await page.$$eval('[data-testid=color-row] .bar', (els) => els.map((e) => Math.round(parseFloat(e.style.width))));
   assert.deepEqual(bars, [100, 50, 33, 17]);
   step('painted.3mf 分布表: ' + (await tableRows()).join(' | ') + '; 警示: few-colors; 長條 ' + bars.join('/'));
@@ -1214,6 +1214,51 @@ try {
     await page.click('[data-testid=app-credit]');
     assert.equal(await app.evaluate(() => globalThis.__openedExternal), 'https://github.com/MingShyanWei/3mfDeck');
     step(`M22 版本: ${version}（${tooltip}）；作者列「${credit}」點擊交給系統瀏覽器`);
+  }
+
+  // 16b) M29 (SPEC 3.5e): honest numbers on reindeer's colour shares (97.47 % main colour + 3 small colours)
+  {
+    await page.click('[data-testid=settings-button]');
+    await page.waitForSelector('[data-testid=spool-editor]');
+    await page.click('[data-testid=spool-reset]'); // ideal CMYK
+    await page.waitForSelector('[data-testid=spool-message]');
+    await page.click('[data-testid=settings-done]');
+    await importViaMenu([await stage('reindeer.3mf', 'm29-reindeer.3mf')]);
+    await page.click('[data-testid=import-skip-all]');
+    await openModel('m29-reindeer');
+    // fix 5: no "no mixing needed" next to colours that need mixing / buying
+    assert.equal(await page.$('[data-testid=warning-few-colors]'), null, 'no contradicting "no mixing needed" hint');
+    // fix 4: the unprintable share stated next to the printable one
+    assert.equal((await page.textContent('[data-testid=color-analysis] [data-testid=printable-summary]')).trim(), '可印 97.66%、不可印 2.34%');
+    // fix 5: a colour to buy shows the fallback spool; its blend is marked reference-only
+    const buyCells = await page.$$eval('[data-testid=print-cell][data-mode=buy]', (cells) => cells.map((c) => ({ first: c.firstElementChild?.className, fallback: c.querySelector('[data-testid=buy-fallback]')?.textContent, ref: c.querySelector('[data-testid=buy-reference]')?.textContent })));
+    assert.equal(buyCells.length, 2, JSON.stringify(buyCells));
+    for (const b of buyCells) {
+      assert.match(b.first, /badge/, 'the cell leads with 需買線材, not a recipe');
+      assert.match(b.fallback, /^不買則用 槽\d [CMYK]（ΔE [\d.]+）$/);
+      assert.match(b.ref, /仍差 ΔE [\d.]+（超過 15），僅供參考、不會採用/);
+    }
+    // fix 3: spool usage split by recipe (main colour Y68 + M32), unprintable colours on their nearest slot
+    await setMode('filament');
+    const used = await page.$$eval('[data-testid=spool]', (els) => els.map((e) => e.textContent.trim()));
+    assert.deepEqual(used, ['槽2 M 洋紅 · 31.42%', '槽3 Y 黃 · 66.28%', '槽4 K 黑 · 2.3%']);
+    assert.equal((await page.textContent('[data-testid=spools] [data-testid=printable-summary]')).trim(), '可印 97.66%、不可印 2.34%');
+    await setMode('original');
+    // fix 1 + 2: k=1 (97.47 % of the area) leaves 3 colours unprintable and is not recommended
+    await page.click('[data-testid=suggest-open]');
+    await page.waitForSelector('[data-testid=suggest-recommended]');
+    const rec = await page.$eval('[data-testid=suggest-recommended]', (e) => ({ text: e.textContent.trim(), complete: e.dataset.complete }));
+    const recK = Number(rec.text.match(/建議 (\d) 捲/)[1]);
+    assert.equal(rec.complete, '1', rec.text);
+    assert.ok(recK > 1, rec.text);
+    assert.match(rec.text, /所有顏色都印得出/);
+    assert.equal((await page.textContent('[data-testid=suggest-k1-missing]')).trim(), '印不出 3 色');
+    assert.equal(await page.$(`[data-testid=suggest-k${recK}-missing]`), null);
+    assert.equal((await page.textContent('[data-testid=suggest-unprintable]')).trim(), '不可印 0%');
+    const k1 = (await page.textContent('[data-testid=suggest-results] label:first-child')).replace(/\s+/g, ' ').trim();
+    await page.click('[data-testid=suggest-close]');
+    step(`M29 誠實數字（reindeer 色分布）: 無「不需混色」；可印 97.66%、不可印 2.34%；買線材列「不買則用…／僅供參考」×2；捲用量 ${used.join(' | ')}；k=1「${k1}」不推薦，推薦 k=${recK}（全部印得出、不可印 0%）`);
+    await page.fill('[data-testid=search]', '');
   }
 
   // 17) M24: UI language — settings switch (en / zh-CN / zh-TW), menu, Intl, cross-language colour search, remembered

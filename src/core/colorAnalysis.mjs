@@ -1,6 +1,6 @@
 // Colour analysis (SPEC 3.5): warnings over a 3MF colour distribution.
 // Shared by renderer and tests, so no Node APIs.
-import { deltaE2000, rgbToLab, hexToRgb, U1_SLOTS } from './filament.mjs';
+import { deltaE2000, rgbToLab, hexToRgb, nearestSlot, U1_SLOTS, MIX_DELTA_E } from './filament.mjs';
 import { t } from './i18n/index.mjs';
 
 // "A large single-colour area split by dithering into two close values":
@@ -30,12 +30,16 @@ export function ditherPairs(colors, opts = DITHER) {
 }
 
 /**
- * Warnings for a colour distribution ([{color, faces, pct}]):
+ * Warnings for a colour distribution ([{color, faces, pct}]) on `slots`:
  * - dither: suspected dither pair(s)
- * - few-colors: <= slot count, no mixing needed
- * - needs-mixing: more colours than filament slots
+ * - few-colors: every colour is within MIX_DELTA_E of some slot, so no mixing
+ *   is needed (M29, SPEC 3.5e: not just "<= slot count" — a 4-colour file can
+ *   still have colours no slot prints)
+ * - needs-mixing: more colours than slots and not all of them near a slot
+ * A file with few colours that are not all near a slot gets neither: the
+ * colour table's "cannot print with one spool" summary says what is needed.
  */
-export function analyzeColors(colors, slotCount = U1_SLOTS.length) {
+export function analyzeColors(colors, slots = U1_SLOTS) {
   const warnings = [];
   for (const p of ditherPairs(colors)) {
     warnings.push({
@@ -44,11 +48,9 @@ export function analyzeColors(colors, slotCount = U1_SLOTS.length) {
       message: t('analysis.dither', { a: p.colors[0], pa: p.pcts[0], b: p.colors[1], pb: p.pcts[1], dE: p.deltaE, sum: p.combined }),
     });
   }
-  if (colors.length <= slotCount) {
-    warnings.push({ type: 'few-colors', message: t('analysis.fewColors', { n: slotCount }) });
-  } else {
-    warnings.push({ type: 'needs-mixing', message: t('analysis.needsMixing', { n: slotCount }) });
-  }
+  const allNear = colors.every((c) => nearestSlot(c.color, slots).deltaE <= MIX_DELTA_E);
+  if (allNear) warnings.push({ type: 'few-colors', message: t('analysis.fewColors', { dE: MIX_DELTA_E }) });
+  else if (colors.length > slots.length) warnings.push({ type: 'needs-mixing', message: t('analysis.needsMixing', { n: slots.length }) });
   return warnings;
 }
 

@@ -1,10 +1,13 @@
 // M11 (SPEC 3.5d): spool colour suggestion from a model's colour distribution.
 // Area-weighted k-means in CIE L*a*b* finds the k spool colours that best
 // cover the model's faces; coverage is judged with the printing pipeline
-// (single spool within MIX_DELTA_E, or a mixable two-spool blend), and the
-// smallest k meeting the target is recommended.
-import { rgbToLab, hexToRgb, nearestSlot, deltaE2000, MIX_DELTA_E, slotsFromColours } from './filament.mjs';
-import { mixPrintPlan } from './mixExport.mjs';
+// (single spool within MIX_DELTA_E, or a mixable two-spool blend).
+// M29 (SPEC 3.5e): a k is recommended only when every must-cover colour
+// prints (coverage.mjs), not when the area coverage passes 95 %; candidate
+// spool sets also come from weightings that do not let the main colour
+// average small colours away.
+import { rgbToLab, hexToRgb, MIX_DELTA_E } from './filament.mjs';
+import { coverageOf, compareCoverage, recommend, MUST_COVER_PCT } from './coverage.mjs';
 import { t } from './i18n/index.mjs';
 
 /** CIE L*a*b* (D65) -> sRGB hex (inverse of rgbToLab). */
@@ -99,59 +102,33 @@ function weightedKMeans(points, k, seed = 1) {
 
 /**
  * Suggested spool colours for a colour distribution ([{color, faces, pct}]).
- * Runs k = 1..maxK; each entry: { k, spools: [{hex, faces, pct}], singlePct,
- * mixPct, worst }. `singlePct` = faces a single suggested spool prints within
- * threshold; `mixPct` additionally counts faces reachable by a mixable
- * two-spool blend. The recommendation is the smallest k with mixPct >= target.
+ * Runs k = 1..maxK; each entry: { k, spools: [{slot, hex, faces, pct}],
+ * singlePct, mixPct, unprintablePct, worst, uncovered, complete } (see
+ * coverageOf; spool pct = usage split by mix recipe). Per k the best of three
+ * k-means weightings is kept: by area (the plain fit), by sqrt(area) and one
+ * weight per colour (so a 0.2 % colour can win its own spool). The
+ * recommendation is the smallest k that prints every must-cover colour
+ * (`complete`); if none does, the largest k, marked incomplete.
  */
-export function suggestSpools(colorStats, maxK = 4, { threshold = MIX_DELTA_E, target = 0.95, restarts = 8 } = {}) {
-  const totalFaces = colorStats.reduce((t, c) => t + c.faces, 0) || 1;
-  const points = colorStats.map((c) => ({ lab: rgbToLab(hexToRgb(c.color)), w: c.faces, color: c.color, faces: c.faces }));
+export function suggestSpools(colorStats, maxK = 4, { threshold = MIX_DELTA_E, mustCoverPct = MUST_COVER_PCT, restarts = 8 } = {}) {
+  const weightings = [(c) => c.faces, (c) => Math.sqrt(c.faces), () => 1];
   const results = [];
   for (let k = 1; k <= Math.min(maxK, 8); k++) {
-    let best = null;
-    for (let r = 0; r < restarts; r++) {
-      const run = weightedKMeans(points, k, r + 1);
-      if (!best || run.err < best.err) best = run;
-    }
-    const hexes = best.centroids.map(labToHex);
-    const slots = slotsFromColours(hexes);
-    // per-colour: which spool covers it, or a mixable blend
-    const per = new Map();
-    let singleFaces = 0;
-    let mixFaces = 0;
-    for (const c of colorStats) {
-      const near = nearestSlot(c.color, slots);
-      let mode = 'single';
-      let via = t('slot.n', { n: near.slot });
-      if (near.deltaE > threshold) {
-        const plan = mixPrintPlan(c.color, slots, threshold);
-        if (plan.mode === 'mix' && plan.mixable) {
-          mode = 'mix';
-          via = plan.mix.text;
-        } else {
-          mode = 'buy';
-          via = t('suggest.viaNearest', { slot: t('slot.n', { n: near.slot }), dE: Math.round(near.deltaE * 10) / 10 });
-        }
+    let pick = null;
+    weightings.forEach((weigh, wi) => {
+      const points = colorStats.map((c) => ({ lab: rgbToLab(hexToRgb(c.color)), w: weigh(c) }));
+      let best = null;
+      for (let r = 0; r < restarts; r++) {
+        const run = weightedKMeans(points, k, r + 1);
+        if (!best || run.err < best.err) best = run;
       }
-      if (mode !== 'buy') singleFaces += mode === 'single' ? c.faces : 0;
-      if (mode !== 'buy') mixFaces += c.faces;
-      per.set(c.color, { mode, via, deltaE: Math.round(near.deltaE * 10) / 10 });
-    }
-    // spool usage: faces whose nearest spool is this slot
-    const usage = slots.map((s) => {
-      const faces = colorStats.filter((c) => nearestSlot(c.color, slots).slot === s.slot).reduce((t, c) => t + c.faces, 0);
-      return { ...s, faces, pct: Math.round((faces / totalFaces) * 10000) / 100 };
+      const hexes = best.centroids.map(labToHex);
+      const cov = coverageOf(colorStats, hexes, { threshold, mustCoverPct });
+      // the area-weighted fit (wi 0) wins ties: other weightings only replace it when they print more
+      if (!pick || compareCoverage(cov, pick.cov) < 0) pick = { hexes, cov, wi };
     });
-    const worst = [...per.entries()].filter(([, v]) => v.mode === 'buy').sort((a, b) => b[1].deltaE - a[1].deltaE).slice(0, 5);
-    results.push({
-      k,
-      spools: usage,
-      singlePct: Math.round((singleFaces / totalFaces) * 10000) / 100,
-      mixPct: Math.round((mixFaces / totalFaces) * 10000) / 100,
-      worst,
-    });
+    const { usage, ...cov } = pick.cov;
+    results.push({ k, spools: usage, ...cov });
   }
-  const recommended = results.find((r) => r.mixPct >= target * 100) || results[results.length - 1];
-  return { results, recommended };
+  return { results, recommended: recommend(results) };
 }

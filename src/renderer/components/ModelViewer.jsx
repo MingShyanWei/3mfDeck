@@ -175,6 +175,9 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
               </span>
             ))}
           </div>
+          {spools.unprintablePct > 0 && (
+            <div className="small warn-text" data-testid="printable-summary">{t('analysis.printable', { ok: spools.printablePct, bad: spools.unprintablePct })}</div>
+          )}
           {spools.mapping.some((m) => m.deltaE > 0) && (
             <ul className="mapping small">
               {spools.mapping.filter((m) => m.deltaE > 0).map((m) => (
@@ -182,10 +185,16 @@ export default function ModelViewer({ model, plate = null, colors = model.colors
                   <span className="swatch" style={{ background: m.color }} /> {m.color} →{' '}
                   {m.mode === 'single' ? (
                     <>{t('viewer.single', { slot: m.slot, dE: m.deltaE })}</>
-                  ) : (
+                  ) : m.mixable ? (
                     <>
                       {t('viewer.mix', { recipe: recipeText(m.recipe) })} <span className="swatch" style={{ background: m.recipe.mixHex }} /> {t('viewer.mixDetail', { hex: m.recipe.mixHex, dE: m.recipe.deltaE, nearest: m.nearest.name, nearestDE: m.deltaE })}
-                      {!m.mixable && <span className="badge badge-warn">{t('viewer.unmixable')}</span>}
+                    </>
+                  ) : (
+                    // M29 (SPEC 3.5e): not mixable -> what prints if not bought; the blend is a reference only
+                    <>
+                      <span className="badge badge-warn">{t('viewer.unmixable')}</span>{' '}
+                      {t('analysis.buyNearest', { slot: `${t('slot.n', { n: m.slot })}${m.nearest.name ? ` ${m.nearest.name}` : ''}`, dE: m.deltaE })}
+                      <span className="muted"> · {t('analysis.refRecipe', { recipe: recipeText(m.recipe), dE: m.recipe.deltaE, max: MIX_DELTA_E })}</span>
                     </>
                   )}
                 </li>

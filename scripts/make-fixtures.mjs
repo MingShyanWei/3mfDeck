@@ -245,7 +245,7 @@ ${plate(3, '', [[6, 1]])}
 // Paint strings are OrcaSlicer's CONST_FILAMENTS (one filament per face).
 const ORCA_FILAMENT = ['', '4', '8', '0C', '1C', '2C'];
 const CMYKW = ['#0086D6', '#EC008C', '#F4EE2A', '#000000', '#FFFFFF'];
-async function grid3mf(paintOf) {
+async function grid3mf(paintOf, colours = CMYKW) {
   const N = 80;
   const verts = [];
   for (let y = 0; y <= N; y++) for (let x = 0; x <= N; x++) verts.push(`<vertex x="${x}" y="${y}" z="0"/>`);
@@ -274,7 +274,7 @@ async function grid3mf(paintOf) {
   zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>');
   zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>');
   zip.file('3D/3dmodel.model', model);
-  zip.file('Metadata/project_settings.config', JSON.stringify({ filament_colour: CMYKW }, null, 4));
+  zip.file('Metadata/project_settings.config', JSON.stringify({ filament_colour: colours }, null, 4));
   return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 }
 
@@ -484,6 +484,14 @@ await fs.writeFile(path.join(OUT, 'multiplate.3mf'), await multiplate3mf());
 }
 // Same grid painted in 5 vertical bands (16 columns each) -> region painting.
 await fs.writeFile(path.join(OUT, 'regions.3mf'), await grid3mf((_, x) => Math.floor(x / 16) + 1));
+// M29: reindeer_ams-U1.3mf's colour shares on the 12,800-face grid — a 97.47 %
+// main colour and three small detail colours (2.11 %, 0.23 %, 0.19 %).
+{
+  const REINDEER = ['#B5865B', '#6F5034', '#FF0000', '#000000'];
+  const counts = [12476, 270, 30, 24];
+  const ends = counts.map((_, i) => counts.slice(0, i + 1).reduce((a, b) => a + b, 0));
+  await fs.writeFile(path.join(OUT, 'reindeer.3mf'), await grid3mf((face) => ends.findIndex((e) => face < e) + 1, REINDEER));
+}
 // paint_color + basematerials in one file: 6 painted faces cyan, 2 magenta,
 // 4 unpainted -> material orange (not the part's default extruder 4).
 await fs.writeFile(

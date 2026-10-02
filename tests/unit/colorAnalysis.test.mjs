@@ -1,3 +1,4 @@
+import { slotsFromColours } from '../../src/core/filament.mjs';
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -39,7 +40,7 @@ describe('analyzeColors', () => {
   it('painted.3mf (4 colours): only the "no mixing needed" hint', async () => {
     const w = analyzeColors(await stats('painted.3mf'));
     expect(types(w)).toEqual(['few-colors']);
-    expect(w[0].message).toBe('色塊少於 4 色不需混色，量化成實色平塗最乾淨');
+    expect(w[0].message).toBe('每個顏色都能在 ΔE ≤ 15 內對應到某個耗材槽，不需混色，量化成實色平塗最乾淨');
   });
 
   it('dither.3mf (6 colours): dither pair + Full Spectrum warning', async () => {
@@ -49,14 +50,23 @@ describe('analyzeColors', () => {
     expect(w[1].message).toBe('超過 4 色，需 Full Spectrum 混色');
   });
 
-  it('boundary: 1 and 4 colours -> few-colors, 5 colours -> needs-mixing', () => {
-    const n = (k) => Array.from({ length: k }, (_, i) => ({ color: ['#000000', '#FFFFFF', '#00FFFF', '#FF00FF', '#FFFF00'][i], faces: 1, pct: 100 / k }));
-    expect(types(analyzeColors(n(1)))).toEqual(['few-colors']);
-    expect(types(analyzeColors(n(4)))).toEqual(['few-colors']);
-    expect(types(analyzeColors(n(5)))).toEqual(['needs-mixing']);
+  it('M29: "no mixing needed" only when every colour is near a slot, not merely <= 4 colours', () => {
+    const of = (hexes) => hexes.map((color) => ({ color, faces: 1, pct: 100 / hexes.length }));
+    expect(types(analyzeColors(of(['#000000'])))).toEqual(['few-colors']);
+    expect(types(analyzeColors(of(['#00FFFF', '#FF00FF', '#FFFF00', '#000000'])))).toEqual(['few-colors']);
+    // 2 colours, white is far from every CMYK slot: no "no mixing needed" (the table summary covers it)
+    expect(types(analyzeColors(of(['#000000', '#FFFFFF'])))).toEqual([]);
+    // reindeer (4 colours, 3 of them far from CMYK): never the contradicting hint
+    expect(types(analyzeColors(of(['#B5865B', '#6F5034', '#FF0000', '#000000'])))).toEqual([]);
+    // more colours than slots and not all near -> needs mixing
+    expect(types(analyzeColors(of(['#000000', '#FFFFFF', '#00FFFF', '#FF00FF', '#FFFF00'])))).toEqual(['needs-mixing']);
+    // 6 colours all within ΔE 15 of CMYK: no mixing needed even though > 4
+    expect(types(analyzeColors(of(['#00FFFF', '#00F0F0', '#FF00FF', '#F000F0', '#FFFF00', '#000000'])))).toEqual(['few-colors']);
   });
 
-  it('respects a different slot count', () => {
-    expect(types(analyzeColors([{ color: '#000000', pct: 50 }, { color: '#FFFFFF', pct: 50 }], 1))).toEqual(['needs-mixing']);
+  it('judges against the given spools', () => {
+    const two = [{ color: '#000000', faces: 1, pct: 50 }, { color: '#FFFFFF', faces: 1, pct: 50 }];
+    expect(types(analyzeColors(two, slotsFromColours(['#000000'])))).toEqual(['needs-mixing']);
+    expect(types(analyzeColors(two, slotsFromColours(['#000000', '#FFFFFF'])))).toEqual(['few-colors']);
   });
 });

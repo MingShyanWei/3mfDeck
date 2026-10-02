@@ -10,16 +10,25 @@ import { t, getLang, locale } from '../../core/i18n/index.mjs';
 
 const ICONS = { dither: 'mdi-select-compare', 'few-colors': 'mdi-check-circle-outline', 'needs-mixing': 'mdi-palette-swatch-variant' };
 
+const slotLabel = (s) => (s.name ? `${t('slot.n', { n: s.slot })} ${s.name}` : slotName(s));
+
 function PrintCell({ plan }) {
-  if (plan.mode === 'single') return <td className="small" data-testid="print-cell" data-mode="single">{t('analysis.single', { slot: plan.nearest.name ? `${t('slot.n', { n: plan.nearest.slot })} ${plan.nearest.name}` : slotName(plan.nearest) })}</td>;
-  return (
-    <td className="small" data-testid="print-cell" data-mode={plan.mixable ? 'mix' : 'buy'}>
-      <span className="swatch" style={{ background: plan.recipe.mixHex }} /> {recipeText(plan.recipe)}
-      {plan.mixable ? (
+  if (plan.mode === 'single') return <td className="small" data-testid="print-cell" data-mode="single">{t('analysis.single', { slot: slotLabel(plan.nearest) })}</td>;
+  if (plan.mixable) {
+    return (
+      <td className="small" data-testid="print-cell" data-mode="mix">
+        <span className="swatch" style={{ background: plan.recipe.mixHex }} /> {recipeText(plan.recipe)}
         <span className="muted">（ΔE {plan.recipe.deltaE}）</span>
-      ) : (
-        <span className="badge badge-warn" title={t('analysis.buyTitle', { dE: plan.recipe.deltaE })}>{t('analysis.buy')}</span>
-      )}
+      </td>
+    );
+  }
+  // M29 (SPEC 3.5e): a colour to buy shows what happens if it is not bought; the
+  // best blend it cannot reach is a reference only, never presented as the plan
+  return (
+    <td className="small" data-testid="print-cell" data-mode="buy">
+      <span className="badge badge-warn" title={t('analysis.buyTitle', { dE: plan.recipe.deltaE })}>{t('analysis.buy')}</span>{' '}
+      <span data-testid="buy-fallback">{t('analysis.buyNearest', { slot: slotLabel(plan.nearest), dE: plan.nearest.deltaE })}</span>
+      <div className="muted" data-testid="buy-reference">{t('analysis.refRecipe', { recipe: recipeText(plan.recipe), dE: plan.recipe.deltaE, max: MIX_DELTA_E })}</div>
     </td>
   );
 }
@@ -31,7 +40,7 @@ export default function ColorAnalysis({ colors, totals = null, title = '', mixin
   const slots = useSlots();
   const [suggestOpen, setSuggestOpen] = useState(false);
   const lang = getLang(); // warning texts are written in the current language
-  const warnings = useMemo(() => (colors.length ? analyzeColors(colors) : []), [colors, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  const warnings = useMemo(() => (colors.length ? analyzeColors(colors, slots) : []), [colors, slots, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   const ditherColors = new Set(warnings.filter((w) => w.type === 'dither').flatMap((w) => w.colors));
   const max = Math.max(...colors.map((c) => c.pct), 0);
   const totalPct = new Map((totals || []).map((c) => [c.color, c.pct]));
@@ -39,6 +48,8 @@ export default function ColorAnalysis({ colors, totals = null, title = '', mixin
   const plans = useMemo(() => (mixing ? null : new Map([...colors, ...(totals || [])].map((c) => [c.color, printPlan(c.color, slots)]))), [colors, totals, mixing, slots]);
   const needMix = plans ? colors.filter((c) => plans.get(c.color).mode === 'mix') : [];
   const unmixable = needMix.filter((c) => !plans.get(c.color).mixable);
+  // M29: the share that cannot be printed with these spools, stated next to the printable one
+  const badPct = Math.round(unmixable.reduce((s, c) => s + c.faces, 0) / (colors.reduce((s, c) => s + c.faces, 0) || 1) * 10000) / 100;
   // Plate rows first, then colours used only on other plates (0 faces here)
   const rows = totals ? [...colors, ...totals.filter((x) => !colors.some((c) => c.color === x.color)).map((x) => ({ color: x.color, faces: 0, pct: 0 }))] : colors;
 
@@ -88,6 +99,7 @@ export default function ColorAnalysis({ colors, totals = null, title = '', mixin
           <i className="mdi mdi-palette-swatch-variant" />
           <span className="grow">
             {t('analysis.needMix', { n: needMix.length, dE: MIX_DELTA_E, unmixable: unmixable.length > 0 ? t('analysis.unmixable', { n: unmixable.length }) : '' })}
+            {unmixable.length > 0 && <b data-testid="printable-summary"> {t('analysis.printable', { ok: Math.round((100 - badPct) * 100) / 100, bad: badPct })}</b>}
           </span>
         </div>
       )}

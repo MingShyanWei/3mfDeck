@@ -44,14 +44,25 @@ describe('suggestFromInventory', () => {
     for (const g of gecko) expect(Math.min(...hexes.map((h) => near(g.color, h)))).toBeLessThan(5);
   });
 
-  it('stops at 3 spools (98.6 %) and suggests buying the small yellow remainder', () => {
-    const { recommended, buy } = suggestFromInventory(gecko, inv, 4);
-    // yellow is 1.38 % of the faces: not worth a 4th slot; 3 spools already pass 95 %
-    expect(recommended.k).toBe(3);
-    expect(recommended.mixPct).toBeCloseTo(98.61, 1);
+  it('M29: does not stop at 3 spools (98.6 %) while the 1.38 % yellow cannot print; 4 print everything', () => {
+    const { results, recommended, buy } = suggestFromInventory(gecko, inv, 4);
+    const r3 = results.find((r) => r.k === 3);
+    expect(r3.mixPct).toBeCloseTo(98.62, 1);
+    expect(r3.complete).toBe(false);
+    expect(r3.uncovered.map((u) => u.color)).toEqual(['#E3C137']);
+    expect(r3.unprintablePct).toBeCloseTo(1.38, 1);
+    expect(recommended.k).toBe(4);
+    expect(recommended.complete).toBe(true);
+    expect(recommended.unprintablePct).toBe(0);
+    expect(buy).toBeNull();
+  });
+
+  it('M29: when no k prints everything, the largest is recommended as incomplete and the gap is bought', () => {
+    const { recommended, buy } = suggestFromInventory(gecko, inv.filter((f) => f.hex !== '#E8C840'), 4);
+    expect(recommended.complete).toBe(false);
+    expect(recommended.uncovered.map((u) => u.color)).toEqual(['#E3C137']);
     expect(buy).not.toBeNull();
-    const buyHexes = buy.spools.map((s) => s.hex);
-    expect(Math.min(...buyHexes.map((h) => near('#E3C137', h)))).toBeLessThan(10);
+    expect(Math.min(...buy.spools.map((s) => near('#E3C137', s.hex)))).toBeLessThan(10);
   });
 
   it('suggests purchases for colours the inventory cannot cover', () => {
@@ -69,6 +80,6 @@ describe('suggestFromInventory', () => {
   it('empty inventory returns nothing (caller falls back to ideal colours)', () => {
     const r = suggestFromInventory(gecko, [], 4);
     expect(r.results).toHaveLength(0);
-    expect(r.recommended).toBeUndefined();
+    expect(r.recommended).toBeNull();
   });
 });

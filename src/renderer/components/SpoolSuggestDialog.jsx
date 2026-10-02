@@ -4,13 +4,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { suggestSpools, STANDARD_PRESETS } from '../../core/spoolSuggest.mjs';
 import { suggestFromInventory, coverageOf } from '../../core/inventorySuggest.mjs';
+import { MUST_COVER_PCT } from '../../core/coverage.mjs';
 import { useSetSpools, useSlots } from '../slots.js';
 import { t, getLang } from '../../core/i18n/index.mjs';
 
 // conic coverage ring: single-spool share, + mixing share, rest uncovered
 const ring = (c) => `conic-gradient(var(--text) 0 ${c.singlePct}%, var(--accent) ${c.singlePct}% ${c.mixPct}%, var(--ring-track) ${c.mixPct}% 100%)`;
-// suggestSpools' worst entries are [hex, {deltaE}], coverageOf's are {color, deltaE}
-const gap = (w) => (Array.isArray(w) ? { color: w[0], deltaE: w[1]?.deltaE } : { color: w.color, deltaE: w.deltaE });
+// M29: each spool's share is its usage split by mix recipe (coverage.mjs)
+const shares = (cov, names = []) => cov.usage.map((u, i) => (names[i] ? `${names[i]} · ` : '') + t('suggest.share', { pct: u.pct }));
 const one = (n) => Math.round(n * 10) / 10; // headline numbers: 1 decimal
 const inkOn = (hex) => {
   const n = parseInt(hex.slice(1, 7), 16);
@@ -80,11 +81,11 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
   // what the stage shows
   let stage;
   if (preset) {
-    stage = { kicker: ['mdi-palette-outline', t('suggest.presets')], title: preset.name, desc: t('suggest.presetDesc'), cov: preset.cov, hexes: preset.hexes, names: preset.hexes.map(() => ''), worst: preset.cov.worst.map(gap), key: `preset:${preset.id}` };
+    stage = { kicker: ['mdi-palette-outline', t('suggest.presets')], title: preset.name, desc: t('suggest.presetDesc'), cov: preset.cov, hexes: preset.hexes, names: shares(preset.cov), worst: preset.cov.worst, key: `preset:${preset.id}` };
   } else if (sel === 'inventory') {
-    stage = invPick && { kicker: ['mdi-library', t('suggest.fromInventory')], title: t('suggest.invTitle', { k: invPick.k }), desc: t('suggest.invDesc', { k: invPick.k }), cov: invPick, hexes: invPick.spools.map((s) => s.hex), names: invPick.spools.map((s) => s.name || ''), worst: invPick.worst.map(gap), key: `inventory:${invPick.k}`, results: inv.results, k: invK, rec: inv.recommended, setK: setInvK };
+    stage = invPick && { kicker: ['mdi-library', t('suggest.fromInventory')], title: t('suggest.invTitle', { k: invPick.k }), desc: t('suggest.invDesc', { k: invPick.k }), cov: invPick, hexes: invPick.spools.map((s) => s.hex), names: shares({ usage: invPick.spools }, invPick.spools.map((s) => s.name)), worst: invPick.worst, key: `inventory:${invPick.k}`, results: inv.results, k: invK, rec: inv.recommended, setK: setInvK };
   } else {
-    stage = idealPick && { kicker: ['mdi-star-four-points', t('suggest.ideal')], title: t('suggest.idealTitle', { k: idealPick.k }), desc: t('suggest.idealDesc'), cov: idealPick, hexes: idealPick.spools.map((s) => s.hex), names: idealPick.spools.map((s) => t('suggest.share', { pct: s.pct })), worst: idealPick.worst.map(gap), key: `ideal:${idealPick.k}`, results: ideal.results, k: idealK, rec: ideal.recommended, setK: setIdealK, flag: t('suggest.needBuy') };
+    stage = idealPick && { kicker: ['mdi-star-four-points', t('suggest.ideal')], title: t('suggest.idealTitle', { k: idealPick.k }), desc: t('suggest.idealDesc'), cov: idealPick, hexes: idealPick.spools.map((s) => s.hex), names: shares({ usage: idealPick.spools }), worst: idealPick.worst, key: `ideal:${idealPick.k}`, results: ideal.results, k: idealK, rec: ideal.recommended, setK: setIdealK, flag: t('suggest.needBuy') };
   }
   const isSuggestion = stage && !preset;
 
@@ -105,7 +106,7 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
           <div data-testid="standard-presets">
             {presets.map((p) => (
               <Option key={p.id} testid={`preset-${p.id}`} on={sel === p.id} cov={p.cov} hexes={p.hexes} title={p.name} onClick={() => setSel(p.id)}>
-                <div className="cov">{t('suggest.presetCov', { single: p.cov.singlePct, mix: p.cov.mixPct })}</div>
+                <div className="cov">{t('suggest.presetCov', { single: p.cov.singlePct, mix: p.cov.mixPct, bad: p.cov.unprintablePct })}</div>
               </Option>
             ))}
           </div>
@@ -124,7 +125,7 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
               <div className="sg-desc">{stage.desc}</div>
               <div className="sg-show">
                 <div className="sg-ring" style={{ background: ring(stage.cov) }}>
-                  <div className="c"><b>{one(stage.cov.mixPct)}<small>%</small></b><span>{t('suggest.mixCov')}</span><em>{t('suggest.singleCov', { pct: one(stage.cov.singlePct) })}</em></div>
+                  <div className="c"><b>{one(stage.cov.mixPct)}<small>%</small></b><span>{t('suggest.mixCov')}</span><em>{t('suggest.singleCov', { pct: one(stage.cov.singlePct) })}</em><em className={stage.cov.unprintablePct > 0 ? 'bad' : ''} data-testid={isSuggestion ? 'suggest-unprintable' : undefined}>{t('suggest.unprintableCov', { pct: stage.cov.unprintablePct })}</em></div>
                 </div>
                 <div>
                   <div className="suggest-spools" data-testid={isSuggestion ? 'suggest-spools-list' : undefined}>
@@ -141,7 +142,11 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
                   </div>
                   <div className="small muted" style={{ marginTop: 8 }}>
                     {t('suggest.vsNow', { diff: `${stage.cov.mixPct >= current.mixPct ? '+' : ''}${one(stage.cov.mixPct - current.mixPct)}` })}
-                    {isSuggestion && stage.rec && <span data-testid="suggest-recommended">{t('suggest.recommended', { k: stage.rec.k, pct: stage.rec.mixPct })}</span>}
+                    {isSuggestion && stage.rec && (
+                      <span data-testid="suggest-recommended" data-complete={stage.rec.complete ? '1' : '0'}>
+                        {stage.rec.complete ? t('suggest.recommended', { k: stage.rec.k }) : t('suggest.recommendedIncomplete', { k: stage.rec.k, n: stage.rec.uncovered.length })}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -151,7 +156,8 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
                     <label key={r.k} className={`sg-k${r.k === stage.k ? ' on' : ''}`}>
                       <input type="radio" name="suggestk" data-testid={`suggest-k${r.k}`} checked={r.k === stage.k} onChange={() => stage.setK(r.k)} />
                       <b>{t('suggest.kSpools', { k: r.k })}</b>
-                      <span>{t('suggest.kCov', { single: r.singlePct, mix: r.mixPct })}</span>
+                      <span>{t('suggest.kCov', { single: r.singlePct, mix: r.mixPct, bad: r.unprintablePct })}</span>
+                      {r.uncovered.length > 0 && <span className="miss" data-testid={`suggest-k${r.k}-missing`}>{t('suggest.kMissing', { n: r.uncovered.length })}</span>}
                       {r.k === stage.rec?.k && <span className="rec">{t('suggest.rec')}</span>}
                     </label>
                   ))}
@@ -162,13 +168,13 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
                 {stage.worst.length > 0 && (
                   <div className="chips">
                     {stage.worst.slice(0, 8).map((w) => (
-                      <span key={w.color} className="sg-chip"><span className="swatch" style={{ background: w.color }} /><span className="mono">{w.color}</span><span className="d">ΔE {w.deltaE}</span></span>
+                      <span key={w.color} className="sg-chip"><span className="swatch" style={{ background: w.color }} /><span className="mono">{w.color}</span><span className="d">{w.pct}% · ΔE {w.deltaE}</span></span>
                     ))}
                   </div>
                 )}
                 {isSuggestion && (
                   <div className="note" data-testid="suggest-note">
-                    {t('suggest.note', { single: stage.cov.singlePct, mix: stage.cov.mixPct })}
+                    {t('suggest.note', { single: stage.cov.singlePct, mix: stage.cov.mixPct, bad: stage.cov.unprintablePct, must: MUST_COVER_PCT })}
                     {sel === 'ideal' ? t('suggest.noteIdeal') : t('suggest.noteInv')}
                   </div>
                 )}
