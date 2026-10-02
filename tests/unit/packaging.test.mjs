@@ -37,4 +37,15 @@ describe('packaging config', () => {
     expect(build.deb).toEqual({ packageName: '3mfdeck', artifactName: '3mfdeck_${version}_${arch}.${ext}' });
     expect(build.linux.maintainer).toBe('Caspar Wei <6902864+MingShyanWei@users.noreply.github.com>');
   });
+
+  it('M28: file names carry the build stamp (${version} = extraMetadata.version from build-info), package.json version stays semver', () => {
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(build.dmg.artifactName).toBe('3mfDeck-${version}-${arch}.${ext}');
+    expect(build.nsis.artifactName).toBe('3mfDeck-${version}-win-${arch}-setup.${ext}');
+    expect(build.portable.artifactName).toBe('3mfDeck-${version}-win-${arch}-portable.${ext}');
+    expect(build.appImage.artifactName).toBe('3mfDeck-${version}-linux-x64.${ext}');
+    // the AppImage name says x64 literally (its ${arch} would be x86_64): only x64 is built
+    expect(build.linux.target.map((t) => t.arch)).toEqual([['x64'], ['x64']]);
+    for (const s of ['dist', 'dist:mac', 'dist:win', 'dist:linux']) expect([s, pkg.scripts[s]]).toEqual([s, expect.stringMatching(/^vite build && node scripts\/dist\.mjs /)]);
+  });
 });

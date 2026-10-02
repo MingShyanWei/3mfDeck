@@ -1189,13 +1189,16 @@ try {
   // 18) M22: build version + author / repository, bottom left of the sidebar
   {
     const version = (await page.textContent('[data-testid=app-version]')).trim();
-    assert.match(version, APP_PATH ? /^v1\.\d{10}$/ : /^v1\.\d{10} dev$/, `version label: ${version}`);
+    // M28: 1.<YYMM>.<DHHMM>, day not zero-padded (strict semver)
+    assert.match(version, APP_PATH ? /^v1\.\d{4}\.[1-9]\d{4,5}$/ : /^v1\.\d{4}\.[1-9]\d{4,5} dev$/, `version label: ${version}`);
     assert.ok(await page.isVisible('[data-testid=app-version]'));
     const tooltip = await page.getAttribute('[data-testid=app-version]', 'title');
     assert.match(tooltip, /^建置時間 \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} · git ([0-9a-f]{7,}(\+dirty)?|unknown)/);
     // the label is the build time in the tooltip, minutes precision
     const [, y, mo, d, h, mi] = /(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/.exec(tooltip);
-    assert.equal(version.split(' ')[0], `v1.${y.slice(2)}${mo}${d}${h}${mi}`);
+    assert.equal(version.split(' ')[0], `v1.${y.slice(2)}${mo}.${Number(d)}${h}${mi}`);
+    // installed app: the sidebar string is the packaged app version, i.e. the one in the file names
+    if (APP_PATH) assert.equal(version, `v${await app.evaluate(({ app: a }) => a.getVersion())}`);
     if (!APP_PATH) {
       const built = JSON.parse(await fs.readFile(path.join(ROOT, 'dist', 'build-info.json'), 'utf8'));
       assert.match(tooltip, new RegExp(`git ${built.commit.replace('+', '\\+')}`));
@@ -1220,8 +1223,11 @@ try {
     const cards = () => page.$$eval('[data-testid=model-card] .name', (n) => n.map((x) => x.textContent));
     const search = async (q, name) => {
       await page.fill('[data-testid=search]', q);
-      await page.waitForFunction((n) => [...document.querySelectorAll('[data-testid=model-card] .name')].some((x) => x.textContent === n), name);
-      assert.ok(!(await cards()).includes('m17-painted'), `「${q}」 does not match the CMYK file`);
+      // wait for the filtered list (m17-materials is already listed before the query applies)
+      const settled = await page
+        .waitForFunction((n) => { const names = [...document.querySelectorAll('[data-testid=model-card] .name')].map((x) => x.textContent); return names.includes(n) && !names.includes('m17-painted'); }, name, { timeout: 10000 })
+        .then(() => true, () => false);
+      assert.ok(settled, `「${q}」 lists ${name} and not the CMYK file: ${await cards()}`);
     };
     const setLanguage = async (lang, marker) => {
       await page.click('[data-testid=settings-button]');

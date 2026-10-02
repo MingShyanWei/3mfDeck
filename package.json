@@ -21,10 +21,10 @@
     "fixtures": "node scripts/make-fixtures.mjs",
     "test": "vitest run",
     "smoke": "vite build && node tests/smoke/smoke.mjs",
-    "dist": "vite build && electron-builder --mac dmg",
-    "dist:mac": "vite build && electron-builder --mac dmg --arm64",
-    "dist:win": "vite build && electron-builder --win nsis portable --x64",
-    "dist:linux": "vite build && electron-builder --linux AppImage deb --x64",
+    "dist": "vite build && node scripts/dist.mjs --mac dmg",
+    "dist:mac": "vite build && node scripts/dist.mjs --mac dmg --arm64",
+    "dist:win": "vite build && node scripts/dist.mjs --win nsis portable --x64",
+    "dist:linux": "vite build && node scripts/dist.mjs --linux AppImage deb --x64",
     "realfiles": "vite build && node tests/smoke/realfiles.mjs",
     "orcacompare": "vite build && node tests/smoke/orcacompare.mjs"
   },
@@ -92,11 +92,21 @@
         "!node_modules/better-sqlite3/prebuilds/{darwin,linux,linuxmusl}*"
       ]
     },
+    "dmg": {
+      "artifactName": "3mfDeck-${version}-${arch}.${ext}"
+    },
     "deb": {
       "packageName": "3mfdeck",
       "artifactName": "3mfdeck_${version}_${arch}.${ext}"
     },
+    "appImage": {
+      "artifactName": "3mfDeck-${version}-linux-x64.${ext}"
+    },
+    "portable": {
+      "artifactName": "3mfDeck-${version}-win-${arch}-portable.${ext}"
+    },
     "nsis": {
+      "artifactName": "3mfDeck-${version}-win-${arch}-setup.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     },
