@@ -17,14 +17,19 @@ const FIX = path.join(ROOT, 'tests', 'fixtures');
 const WINE = process.env.MF_WINE_3MF || path.join(os.homedir(), 'Library/Mobile Documents/com~apple~CloudDocs/3mf/Wine-U1.3mf');
 
 const base = await fs.mkdtemp(path.join(os.tmpdir(), 'mfcab-smoke-'));
-// M30: a stand-in for the GitHub Releases API that counts every request. Every
-// launch points the app at it (MF_UPDATE_API_URL); with the update check off
-// (the default) it must never be hit.
+// M30/M32: a stand-in for the GitHub Releases API that counts every request.
+// Every launch points the app at it (MF_UPDATE_API_URL). The check is on by
+// default and throttled to once per 24 h, so the whole run hits it once (the
+// first launch) until the M32 step makes checks due on purpose. It answers
+// with an OLDER build by default, so no update notice disturbs other steps.
 const updateHits = [];
+const updateRelease = { version: '1.0.0', delayMs: 0 };
 const updateServer = http.createServer((req, res) => {
   updateHits.push(req.url);
-  res.setHeader('content-type', 'application/json');
-  res.end(JSON.stringify({ body: 'Smoke release\n<!-- build: 9.9999.99999 -->', html_url: 'https://github.com/MingShyanWei/3mfDeck/releases/tag/v-smoke' }));
+  setTimeout(() => {
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ body: `Smoke release\n<!-- build: ${updateRelease.version} -->`, html_url: 'https://github.com/MingShyanWei/3mfDeck/releases/tag/v-smoke' }));
+  }, updateRelease.delayMs);
 });
 await new Promise((r) => updateServer.listen(0, '127.0.0.1', r));
 const UPDATE_API = `http://127.0.0.1:${updateServer.address().port}/repos/MingShyanWei/3mfDeck/releases/latest`;
@@ -1273,89 +1278,115 @@ try {
     await page.fill('[data-testid=search]', '');
   }
 
-  // 16c) M30 (SPEC 3.13): update notification — off by default and then silent; on: one request, a non-blocking notice
+  // 16c) M30/M32 (SPEC 3.13): update check — on by default, once per 24 h, in the background; off -> no request
   let hitsWhenDisabled;
   {
     const settings = () => page.evaluate(() => window.api.getSettings());
-    const config = async () => JSON.parse(await fs.readFile(path.join(base, 'userData', 'config.json'), 'utf8'));
+    const cfgFile = path.join(base, 'userData', 'config.json');
+    const config = async () => JSON.parse(await fs.readFile(cfgFile, 'utf8'));
+    const editConfig = async (patch) => fs.writeFile(cfgFile, JSON.stringify({ ...(await config()), ...patch }, null, 2));
+    const DAY_AGO = () => new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
     // the setting is saved by main over IPC after the click: wait for it
     const configHas = async (key, value) => {
       for (let i = 0; i < 50 && (await config())[key] !== value; i++) await new Promise((r) => setTimeout(r, 100));
       assert.equal((await config())[key], value, `config.json ${key}`);
     };
-    // every launch so far (several restarts) ran with the check off: not one request
-    assert.deepEqual(updateHits, [], 'update API hit while the check is off');
-    assert.equal((await settings()).updateCheck, false);
-    // record every http(s) request the app makes from here on (main's net.fetch goes through the session too)
-    const watchRequests = () => app.evaluate(({ session }) => {
+    const waitHits = async (n) => {
+      for (let i = 0; i < 100 && updateHits.length < n; i++) await new Promise((r) => setTimeout(r, 100));
+      assert.equal(updateHits.length, n, `update API requests: ${updateHits.length}`);
+    };
+    const current = (await page.textContent('[data-testid=app-version]')).trim().replace(/^v/, '').replace(/ dev$/, '');
+    // default ON: the first launch checked (never switched on by anyone)...
+    const cfg0 = await config();
+    assert.equal('updateCheck' in cfg0, false, 'nobody set updateCheck: this is the default');
+    assert.equal((await settings()).updateCheck, true);
+    assert.ok(cfg0.lastUpdateCheck, 'the default check ran and recorded its time');
+    assert.deepEqual(cfg0.updateLatest, { version: '1.0.0', url: 'https://github.com/MingShyanWei/3mfDeck/releases/tag/v-smoke' });
+    // ...and the many restarts since then (all within 24 h) did not check again
+    assert.deepEqual(updateHits.length, 1, `throttle: ${updateHits.length} requests over the run so far`);
+    assert.equal(await page.$('[data-testid=update-notice]'), null, 'older release: no notice');
+    // layer 1 + disclosure in Settings
+    const stubBrowser = () => app.evaluate(({ shell }) => {
+      shell.openExternal = async (url) => {
+        globalThis.__openedExternal = url; // no browser in tests
+      };
+    });
+    await stubBrowser();
+    await page.click('[data-testid=settings-button]');
+    await page.waitForSelector('[data-testid=updates-section]');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=settings-version]').textContent.includes('…'));
+    const shownVersion = (await page.textContent('[data-testid=settings-version]')).trim();
+    assert.equal(shownVersion, `目前版本 ${(await page.textContent('[data-testid=app-version]')).trim().replace(/^v/, '')}`);
+    assert.equal(await page.isChecked('[data-testid=settings-update-check]'), true, 'checkbox on by default');
+    const note = await page.textContent('[data-testid=update-check-note]');
+    for (const s of ['預設開啟', '每 24 小時最多一次', '全 App 唯一的網路行為', 'GitHub 看到你的 IP', '關閉後 App 完全不發出任何網路請求']) assert.ok(note.includes(s), `note mentions ${s}: ${note}`);
+    assert.match(await page.textContent('[data-testid=update-manual-note]'), /更新一律手動下載安裝/);
+    await page.click('[data-testid=settings-open-releases]');
+    assert.equal(await app.evaluate(() => globalThis.__openedExternal), 'https://github.com/MingShyanWei/3mfDeck/releases');
+    await page.click('[data-testid=settings-done]');
+    // a newer release, the last check over 24 h ago, a slow API: the UI comes up first, the notice later
+    await app.close();
+    Object.assign(updateRelease, { version: '9.9999.99999', delayMs: 3000 });
+    await editConfig({ lastUpdateCheck: DAY_AGO() });
+    [app, page] = await launch(); // returns once the toolbar is up
+    await waitHits(2);
+    assert.equal(await page.$('[data-testid=update-notice]'), null, 'the reply is still pending');
+    await page.click('[data-testid=view-list]'); // the UI is usable while the check runs
+    await page.click('[data-testid=view-grid]');
+    await page.waitForSelector('[data-testid=update-notice][data-version="9.9999.99999"]', { timeout: 15000 });
+    updateRelease.delayMs = 0;
+    await stubBrowser(); // a new app instance
+    assert.match(await page.textContent('[data-testid=update-notice]'), /有新版本 9\.9999\.99999.*請手動下載並安裝/s);
+    await page.click('[data-testid=update-open]');
+    assert.equal(await app.evaluate(() => globalThis.__openedExternal), 'https://github.com/MingShyanWei/3mfDeck/releases/tag/v-smoke');
+    await page.click('[data-testid=update-close]'); // closed for this session only
+    assert.equal(await page.$('[data-testid=update-notice]'), null);
+    // restart within 24 h: no request, the stored release is offered again; skip it
+    await app.close();
+    [app, page] = await launch();
+    await page.waitForSelector('[data-testid=update-notice][data-version="9.9999.99999"]');
+    assert.equal(updateHits.length, 2, 'within 24 h: no new request');
+    await page.click('[data-testid=update-skip]');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=update-notice]'));
+    await configHas('skippedUpdate', '9.9999.99999');
+    await app.close();
+    [app, page] = await launch();
+    await new Promise((r) => setTimeout(r, 1000));
+    assert.equal(await page.$('[data-testid=update-notice]'), null, 'skipped version offered again');
+    assert.equal(updateHits.length, 2);
+    // GitHub has exactly this build: checked (due), no notice
+    await app.close();
+    updateRelease.version = current;
+    await editConfig({ lastUpdateCheck: DAY_AGO() });
+    [app, page] = await launch();
+    await waitHits(3);
+    await configHas('lastUpdateCheck', (await config()).lastUpdateCheck); // settle
+    for (let i = 0; i < 50 && (await config()).updateLatest?.version !== current; i++) await new Promise((r) => setTimeout(r, 100));
+    assert.equal((await config()).updateLatest.version, current);
+    assert.equal(await page.$('[data-testid=update-notice]'), null, 'same version: no notice');
+    // switched off: no request even when due (and after more restarts, checked at the end of the run)
+    await page.click('[data-testid=settings-button]');
+    await page.uncheck('[data-testid=settings-update-check]');
+    await page.click('[data-testid=settings-done]');
+    await configHas('updateCheck', false);
+    await app.close();
+    await editConfig({ lastUpdateCheck: DAY_AGO() });
+    [app, page] = await launch();
+    await app.evaluate(({ session }) => {
       globalThis.__requests = [];
       session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (d, cb) => {
         globalThis.__requests.push(d.url);
         cb({});
       });
     });
-    const requests = () => app.evaluate(() => globalThis.__requests);
-    await watchRequests();
-    await app.evaluate(({ shell }) => {
-      shell.openExternal = async (url) => {
-        globalThis.__openedExternal = url; // no browser in tests
-      };
-    });
-    // layer 1: version + Releases page via the system browser; layer 3 stated
     await page.click('[data-testid=settings-button]');
-    await page.waitForSelector('[data-testid=updates-section]');
-    await page.waitForFunction(() => !document.querySelector('[data-testid=settings-version]').textContent.includes('…'));
-    const shownVersion = (await page.textContent('[data-testid=settings-version]')).trim();
-    const sidebarVersion = (await page.textContent('[data-testid=app-version]')).trim().replace(/^v/, '');
-    assert.equal(shownVersion, `目前版本 ${sidebarVersion}`);
     assert.equal(await page.isChecked('[data-testid=settings-update-check]'), false);
-    assert.match(await page.textContent('[data-testid=settings-update-check] + span'), /自動檢查更新（會連線 GitHub）/);
-    assert.match(await page.textContent('[data-testid=update-manual-note]'), /更新一律手動下載安裝/);
-    await page.click('[data-testid=settings-open-releases]');
-    assert.equal(await app.evaluate(() => globalThis.__openedExternal), 'https://github.com/MingShyanWei/3mfDeck/releases');
     await page.click('[data-testid=settings-done]');
-    await new Promise((r) => setTimeout(r, 1500));
-    assert.deepEqual(updateHits, [], 'opening settings / the Releases button made a request');
-    assert.deepEqual(await requests(), [], 'the app made an http(s) request with the check off');
-    // layer 2 on: one request, a newer build -> non-blocking notice
-    await page.click('[data-testid=settings-button]');
-    await page.check('[data-testid=settings-update-check]');
-    await page.click('[data-testid=settings-done]');
-    await page.waitForSelector('[data-testid=update-notice][data-version="9.9999.99999"]');
-    assert.equal(updateHits.length, 1);
-    assert.deepEqual(await requests(), [UPDATE_API]);
-    await configHas('updateCheck', true);
-    assert.match(await page.textContent('[data-testid=update-notice]'), /有新版本 9\.9999\.99999.*請手動下載並安裝/s);
-    await page.click('[data-testid=update-open]');
-    assert.equal(await app.evaluate(() => globalThis.__openedExternal), 'https://github.com/MingShyanWei/3mfDeck/releases/tag/v-smoke');
-    await page.click('[data-testid=update-close]'); // closed for this session only
-    assert.equal(await page.$('[data-testid=update-notice]'), null);
-    // restart: checked at startup, offered again; skip this version
-    await app.close();
-    [app, page] = await launch();
-    await page.waitForSelector('[data-testid=update-notice][data-version="9.9999.99999"]');
-    assert.equal(updateHits.length, 2);
-    await page.click('[data-testid=update-skip]');
-    await page.waitForFunction(() => !document.querySelector('[data-testid=update-notice]'));
-    await configHas('skippedUpdate', '9.9999.99999');
-    // restart: checked, but the skipped version is not offered
-    await app.close();
-    [app, page] = await launch();
-    for (let i = 0; i < 50 && updateHits.length < 3; i++) await new Promise((r) => setTimeout(r, 100));
-    assert.equal(updateHits.length, 3);
-    await new Promise((r) => setTimeout(r, 800));
-    assert.equal(await page.$('[data-testid=update-notice]'), null, 'skipped version offered again');
-    // off again: no request from now on (checked at the end of the run, after more restarts)
-    await page.click('[data-testid=settings-button]');
-    await page.uncheck('[data-testid=settings-update-check]');
-    await page.click('[data-testid=settings-done]');
-    await configHas('updateCheck', false);
-    await app.close();
-    [app, page] = await launch();
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 2000));
     hitsWhenDisabled = updateHits.length;
-    assert.equal(hitsWhenDisabled, 3, 'switched off: no request at startup');
-    step(`M30 更新通知: 預設關閉，前面所有啟動（含多次重啟）對更新 API 0 次請求、App http(s) 請求 0；設定頁顯示「${shownVersion}」＋開啟 Releases（系統瀏覽器）；開啟後 1 次請求、側欄提示 9.9999.99999（前往下載／關閉／略過）；重啟再查、略過後不再提示；關閉後重啟 0 次請求`);
+    assert.equal(hitsWhenDisabled, 3, 'switched off: no request at startup although due');
+    assert.deepEqual(await app.evaluate(() => globalThis.__requests), [], 'switched off: no http(s) request at all');
+    step(`M32 更新檢查: 未設定即預設開啟（config 無 updateCheck、勾選框為開）；首次啟動查 1 次，之後多次重啟（24h 內）0 次；說明文字揭露「唯一網路行為／GitHub 看到 IP／可關閉」；過 24h＋新版：UI 先可操作、慢回應 3s 後才出提示；24h 內重啟不再請求但沿用已知新版提示→略過後不再提示；同版：有查、不提示；關閉後即使到期 0 次請求、0 個 http(s)`);
   }
 
   // 17) M24: UI language — settings switch (en / zh-CN / zh-TW), menu, Intl, cross-language colour search, remembered

@@ -257,7 +257,7 @@ export default {
   "settings.spools": "料卷颜色（实际装的耗材）",
   "settings.spoolsSaved": "已保存：耗材映射、混色配方与量化导出改用这组料卷颜色。",
   "settings.updateCheck": "自动检查更新（会连接 GitHub）",
-  "settings.updateCheckNote": "默认关闭。关闭时 App 完全不发出任何网络请求；开启后只在启动时向 GitHub Releases API 查询最新版本，有新版时在侧栏提示。",
+  "settings.updateCheckNote": "默认开启。App 启动后会在后台向 GitHub Releases API 查询最新版本（每 24 小时最多一次），有新版时在侧栏提示。这是全 App 唯一的网络行为，查询会让 GitHub 看到你的 IP。关闭后 App 完全不发出任何网络请求。",
   "settings.updates": "版本与更新",
   "side.all": "全部",
   "side.clear": "清除",

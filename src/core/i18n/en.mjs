@@ -257,7 +257,7 @@ export default {
   "settings.spools": "Spool colours (the filaments loaded)",
   "settings.spoolsSaved": "Saved: filament mapping, mixing recipes and quantized export now use these spools.",
   "settings.updateCheck": "Check for updates automatically (connects to GitHub)",
-  "settings.updateCheckNote": "Off by default. While off, the app makes no network request at all. When on, it asks the GitHub Releases API for the newest version at startup and shows a notice in the sidebar.",
+  "settings.updateCheckNote": "On by default. After the app starts it asks the GitHub Releases API for the newest version in the background — at most once every 24 hours — and shows a notice in the sidebar when there is a newer one. This is the only network activity of the whole app, and it lets GitHub see your IP address. Switch it off and the app makes no network request at all.",
   "settings.updates": "Version & updates",
   "side.all": "All",
   "side.clear": "Clear",

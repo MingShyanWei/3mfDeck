@@ -54,8 +54,10 @@ Downloading models is easy; the trouble starts afterwards:
 **UI language**
 - English / 繁體中文 / 简体中文; follows the system language by default, can be switched in Settings and is remembered; dates and numbers are formatted for the language
 
-**Offline guarantee**
-- By default the app **makes no network requests** (no account, no cloud, no printer connection). Fixed links (author, Releases page, 3dfilamentprofiles.com My Spools) are handed to the system browser. The only request the app itself can make is the optional update check, which is off until you turn it on (see [Updates](#updates)).
+**Network**
+- Everything works offline: no account, no cloud, no printer connection; your files never leave your disk.
+- **The only network activity of the whole app is the update check**: on by default, after startup, at most once every 24 hours, it asks the GitHub Releases API for the newest version — **which lets GitHub see your IP address**. Switch it off in Settings › Version & updates and the app makes no network request at all (see [Updates](#updates)).
+- Links (author, Releases page, 3dfilamentprofiles.com My Spools) are only opened in your browser when you click them.
 - The bottom of the sidebar shows the version `1.<YYMM>.<DHHMM>` (build time, e.g. `1.2610.21122`; the release file names carry the same string); hover for the full time and commit.
 
 ---
@@ -104,7 +106,8 @@ Opening without this warning would need Apple Developer Program signing and nota
 3mfDeck never downloads or installs updates itself — **updates are always downloaded and installed by hand** from [Releases](https://github.com/MingShyanWei/3mfDeck/releases) (in-app auto-update on macOS would need a Developer ID signature; this build is ad-hoc signed).
 
 - **Settings › Version & updates** shows the current version and a button that opens the Releases page in your browser (no request from the app).
-- **Check for updates automatically (connects to GitHub)** — optional, **off by default**. While off, the app sends no request at all. When on, it asks the GitHub Releases API for the newest release at startup and compares the build marker in the release notes (`<!-- build: 1.YYMM.DHHMM -->`) with your version; a newer one shows a small notice in the sidebar (go to download, skip this version, or close). Failures (offline, rate limit) are ignored silently.
+- **Check for updates automatically (connects to GitHub)** — **on by default**. In the background after startup, at most once every 24 hours, the app asks the GitHub Releases API for the newest release and compares the build marker in its notes (`<!-- build: 1.YYMM.DHHMM -->`) with your version. A newer one shows a small notice in the sidebar (go to download, skip this version, or close); the same version shows nothing. Startup never waits for it, and failures (offline, rate limit) are ignored silently.
+- This request is the app's only network activity and lets GitHub see your IP address. **Switch it off and the app makes no network request at all.**
 
 ## Development
 
@@ -152,7 +155,7 @@ SPEC.md            Full functional specification (final)
 2. **Deleting never really deletes**: everything goes to `.trash/` and can be restored.
 3. **Originals are never touched**: exports and conversions always create new files.
 4. **Import means move**: one managed library; files are moved in on import.
-5. **Offline**: no feature needs the network.
+5. **Works offline**: no feature needs the network; the update check is the only network activity and can be switched off.
 
 ## Known limitations
 

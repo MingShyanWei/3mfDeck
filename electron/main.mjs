@@ -22,7 +22,7 @@ import { import3dfpInventory, FILAMENT_PROFILES_URL } from '../src/core/inventor
 import { slotsFromColours } from '../src/core/filament.mjs';
 import { SUPPORTED_EXTS } from '../src/core/parse/index.mjs';
 import { t, setLang, getLang, pickLang, LANGS } from '../src/core/i18n/index.mjs';
-import { checkForUpdate, RELEASES_URL, LATEST_RELEASE_API } from '../src/core/updateCheck.mjs';
+import { runUpdateCycle, RELEASES_URL, LATEST_RELEASE_API } from '../src/core/updateCheck.mjs';
 
 // Test hooks: isolate userData / library root (used by the smoke test)
 if (process.env.MF_USER_DATA) app.setPath('userData', process.env.MF_USER_DATA);
@@ -88,22 +88,24 @@ function appInfo() {
   return { ...versionLabel(info, app.isPackaged), buildVersion: versionLabel(info, true).version, commit: info.commit, author: AUTHOR, repo: REPO };
 }
 
-// M30 (SPEC 3.13): the optional update check (layer 2). Runs only when the
-// user turned it on in Settings (off by default): at startup and when it is
-// switched on. checkForUpdate makes no request when disabled. Tests point it
-// at a local server with MF_UPDATE_API_URL.
+// M30/M32 (SPEC 3.13): the update check (layer 2), ON by default. Runs in
+// the background once the window has loaded, at most once per 24 h (the
+// time and the release found are kept in config.json), and right away when
+// the user switches it back on. Switched off: runUpdateCycle makes no
+// request. Tests point it at a local server with MF_UPDATE_API_URL.
 let updateNotice = null; // { version, url } of a newer release, or null
-async function runUpdateCheck() {
-  const s = loadSettings(app.getPath('userData'), root);
-  const found = await checkForUpdate({
-    enabled: s.updateCheck,
+async function runUpdateCheck({ force = false } = {}) {
+  const { notice, save } = await runUpdateCycle({
+    settings: loadSettings(app.getPath('userData'), root),
     current: appInfo().buildVersion,
-    skipped: s.skippedUpdate,
     fetch: (url, opts) => net.fetch(url, opts),
     url: process.env.MF_UPDATE_API_URL || LATEST_RELEASE_API,
+    force,
   });
   // the setting may have been switched off while the request was in flight
-  updateNotice = loadSettings(app.getPath('userData'), root).updateCheck ? found : null;
+  const on = loadSettings(app.getPath('userData'), root).updateCheck;
+  if (on && save) saveSettings(app.getPath('userData'), save);
+  updateNotice = on ? notice : null;
   win?.webContents.send('ui:update', updateNotice);
   return updateNotice;
 }
@@ -138,7 +140,7 @@ function registerIpc() {
   });
   ipcMain.handle('settings:setUpdateCheck', (_e, on) => {
     saveSettings(app.getPath('userData'), { updateCheck: on === true });
-    if (on === true) return runUpdateCheck();
+    if (on === true) return runUpdateCheck({ force: true }); // switched back on: check now
     updateNotice = null;
     win?.webContents.send('ui:update', null);
     return null;
@@ -438,7 +440,8 @@ app.whenReady().then(() => {
   // Dropping a file outside the drop zone must not navigate the window away
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.loadFile(path.join(import.meta.dirname, '..', 'dist', 'index.html'));
-  runUpdateCheck(); // no-op (and no request) unless the user turned the check on
+  // after the UI is up, in the background; failures are silent (runUpdateCycle never throws)
+  win.webContents.once('did-finish-load', () => runUpdateCheck());
   backfillSourcePrinters();
 });
 

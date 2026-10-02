@@ -10,7 +10,7 @@ describe('settings storage (SPEC 3.8)', () => {
   it('defaults to the given root when no config exists', async () => {
     const userData = await tmpDir();
     expect(loadSettings(userData, '/Users/x/3mf-library')).toEqual({ libraryRoot: '/Users/x/3mf-library',
-      inventory: [], language: null, notifiedMissing: [], skippedUpdate: null, updateCheck: false, spools: ['#00FFFF', '#FF00FF', '#FFFF00', '#000000'] });
+      inventory: [], language: null, notifiedMissing: [], skippedUpdate: null, updateCheck: true, lastUpdateCheck: null, updateLatest: null, spools: ['#00FFFF', '#FF00FF', '#FFFF00', '#000000'] });
   });
 
   it('persists the root in userData/config.json', async () => {

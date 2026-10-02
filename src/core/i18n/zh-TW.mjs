@@ -257,7 +257,7 @@ export default {
   "settings.spools": "耗材捲色（實際裝的線材）",
   "settings.spoolsSaved": "已儲存：耗材映射、混色配方與量化匯出改用這組捲色。",
   "settings.updateCheck": "自動檢查更新（會連線 GitHub）",
-  "settings.updateCheckNote": "預設關閉。關閉時 App 完全不發出任何網路請求；開啟後只在啟動時向 GitHub Releases API 查詢最新版本，有新版時在側欄提示。",
+  "settings.updateCheckNote": "預設開啟。App 啟動後會在背景向 GitHub Releases API 查詢最新版本（每 24 小時最多一次），有新版時在側欄提示。這是全 App 唯一的網路行為，查詢會讓 GitHub 看到你的 IP。關閉後 App 完全不發出任何網路請求。",
   "settings.updates": "版本與更新",
   "side.all": "全部",
   "side.clear": "清除",
