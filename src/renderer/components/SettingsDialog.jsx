@@ -10,7 +10,7 @@ export default function SettingsDialog({ onClose, onRootChanged, onSpoolsChanged
   const [spoolMsg, setSpoolMsg] = useState('');
   const [inventory, setInventory] = useState(null); // draft filament inventory
   const [invMsg, setInvMsg] = useState('');
-  const [updateCheck, setUpdateCheck] = useState(false); // M30: off by default
+  const [updateCheck, setUpdateCheck] = useState(true); // M32: on by default (the saved value replaces it before the box is shown)
   const [version, setVersion] = useState(null);
 
   useEffect(() => {
@@ -136,15 +136,17 @@ export default function SettingsDialog({ onClose, onRootChanged, onSpoolsChanged
               <span className="grow" data-testid="settings-version">{t('settings.currentVersion', { version: version ?? '…' })}</span>
               <button data-testid="settings-open-releases" onClick={() => window.api.openReleases()}><i className="mdi mdi-open-in-new" /> {t('settings.openReleases')}</button>
             </div>
-            <label className="row check">
-              {/* disabled until the saved value is loaded: a click before that would act on the default (off) */}
-              <input type="checkbox" data-testid="settings-update-check" disabled={!settings} checked={updateCheck} onChange={async (e) => {
-                const on = e.target.checked;
-                setUpdateCheck(on);
-                await window.api.setUpdateCheck(on);
-              }} />
-              <span>{t('settings.updateCheck')}</span>
-            </label>
+            {/* shown once the saved value is loaded: before that it would show (and act on) a guess */}
+            {settings && (
+              <label className="row check">
+                <input type="checkbox" data-testid="settings-update-check" checked={updateCheck} onChange={async (e) => {
+                  const on = e.target.checked;
+                  setUpdateCheck(on);
+                  await window.api.setUpdateCheck(on);
+                }} />
+                <span>{t('settings.updateCheck')}</span>
+              </label>
+            )}
             <p className="small muted" data-testid="update-check-note">{t('settings.updateCheckNote')}</p>
             <p className="small muted" data-testid="update-manual-note">{t('settings.manualUpdateNote')}</p>
           </fieldset>
