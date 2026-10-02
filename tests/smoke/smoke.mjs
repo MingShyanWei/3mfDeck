@@ -1278,6 +1278,11 @@ try {
   {
     const settings = () => page.evaluate(() => window.api.getSettings());
     const config = async () => JSON.parse(await fs.readFile(path.join(base, 'userData', 'config.json'), 'utf8'));
+    // the setting is saved by main over IPC after the click: wait for it
+    const configHas = async (key, value) => {
+      for (let i = 0; i < 50 && (await config())[key] !== value; i++) await new Promise((r) => setTimeout(r, 100));
+      assert.equal((await config())[key], value, `config.json ${key}`);
+    };
     // every launch so far (several restarts) ran with the check off: not one request
     assert.deepEqual(updateHits, [], 'update API hit while the check is off');
     assert.equal((await settings()).updateCheck, false);
@@ -1319,7 +1324,7 @@ try {
     await page.waitForSelector('[data-testid=update-notice][data-version="9.9999.99999"]');
     assert.equal(updateHits.length, 1);
     assert.deepEqual(await requests(), [UPDATE_API]);
-    assert.equal((await config()).updateCheck, true);
+    await configHas('updateCheck', true);
     assert.match(await page.textContent('[data-testid=update-notice]'), /有新版本 9\.9999\.99999.*請手動下載並安裝/s);
     await page.click('[data-testid=update-open]');
     assert.equal(await app.evaluate(() => globalThis.__openedExternal), 'https://github.com/MingShyanWei/3mfDeck/releases/tag/v-smoke');
@@ -1332,7 +1337,7 @@ try {
     assert.equal(updateHits.length, 2);
     await page.click('[data-testid=update-skip]');
     await page.waitForFunction(() => !document.querySelector('[data-testid=update-notice]'));
-    assert.equal((await config()).skippedUpdate, '9.9999.99999');
+    await configHas('skippedUpdate', '9.9999.99999');
     // restart: checked, but the skipped version is not offered
     await app.close();
     [app, page] = await launch();
@@ -1344,7 +1349,7 @@ try {
     await page.click('[data-testid=settings-button]');
     await page.uncheck('[data-testid=settings-update-check]');
     await page.click('[data-testid=settings-done]');
-    assert.equal((await config()).updateCheck, false);
+    await configHas('updateCheck', false);
     await app.close();
     [app, page] = await launch();
     await new Promise((r) => setTimeout(r, 1500));
