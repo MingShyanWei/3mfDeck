@@ -1,10 +1,10 @@
-<!-- build: 1.2610.21310 -->
+<!-- build: 1.2610.21326 -->
 # 3mfDeck release manifest
 
 | | |
 |---|---|
-| Version | **1.2610.21310** — built 2026-10-02 13:10:49 (+08:00) |
-| Source commit | `29bbb7a` (clean tree; all five files come from this one build; includes M28 version format, M29 honest spool numbers, M30 update notification, M31 exhaustive inventory suggestion) |
+| Version | **1.2610.21326** — built 2026-10-02 13:26:04 (+08:00) |
+| Source commit | `33ebd14` (clean tree; all five files come from this one build; includes M28 version format, M29 honest spool numbers, M30 update notification, M31 exhaustive inventory suggestion, M32 update check on by default with a 24 h limit) |
 | Built on | macOS (arm64) with electron-builder 26; Windows and Linux files are cross-built on macOS |
 | Release type | Manual: files are uploaded to [GitHub Releases](https://github.com/MingShyanWei/3mfDeck/releases) by hand (no CI) |
 
@@ -24,15 +24,19 @@ The first line of this file and of every Release description is the machine-read
 
 | File | Platform | Architecture | Size (bytes) | SHA256 |
 |---|---|---|---:|---|
-| `3mfDeck-1.2610.21310-arm64.dmg` | macOS (Apple silicon) | arm64 | 132,661,824 | `1f4faca544cf0576f3ade481d6d2887de345a65ebfc95b742a2f9503a2ac5058` |
-| `3mfDeck-1.2610.21310-win-x64-setup.exe` | Windows installer (NSIS) | x64 | 115,596,846 | `23cc945233585701fd0de11ebdac05157eca36fb6265a601e48a8f47fadc09e9` |
-| `3mfDeck-1.2610.21310-win-x64-portable.exe` | Windows portable (no install) | x64 | 115,352,283 | `a4d8ae2f1d189260ce50ed0077bc452f2e8aa80a8a5df867f070777ec32e7e39` |
-| `3mfDeck-1.2610.21310-linux-x64.AppImage` | Linux (any distribution) | x64 | 133,362,988 | `c07d2fa2c8e49952b5f91d8d7b4282c29bf929c731fd1c2c0f0e6c9f831fda6a` |
-| `3mfdeck_1.2610.21310_amd64.deb` | Linux (Debian / Ubuntu) | x64 (amd64) | 105,976,456 | `4f58248666d74725dc737cf16da481e83c2810578e797edffd6e5e6b23b52b93` |
+| `3mfDeck-1.2610.21326-arm64.dmg` | macOS (Apple silicon) | arm64 | 132,659,338 | `8e5fd6ae9fda3a801fdd8a59a9c13147109724ea868a1be1db252357e26a8848` |
+| `3mfDeck-1.2610.21326-win-x64-setup.exe` | Windows installer (NSIS) | x64 | 115,597,744 | `0265f561b4829b26bce6adea042a5ee648c9fde00fbdd4e687c29dba2a356c42` |
+| `3mfDeck-1.2610.21326-win-x64-portable.exe` | Windows portable (no install) | x64 | 115,353,188 | `3d4644088f8c919db6ac0a0395f6a092692a20fb05ef9df913f0c25ebf245b57` |
+| `3mfDeck-1.2610.21326-linux-x64.AppImage` | Linux (any distribution) | x64 | 133,363,039 | `19eb5275d350797d0a7f2d5960a6199d46fddce0deef13fcabcd32991728a91f` |
+| `3mfdeck_1.2610.21326_amd64.deb` | Linux (Debian / Ubuntu) | x64 (amd64) | 105,977,448 | `987455966092c874643ea43818605c387fdd5a3e1169c7b0a17a76a49c624725` |
 
 Check a download: `shasum -a 256 <file>` (macOS / Linux) or `Get-FileHash <file> -Algorithm SHA256` (Windows PowerShell), and compare with the table.
 
 electron-builder also writes `*.blockmap` and `latest*.yml` next to these (auto-update metadata; they reference the same file names). 3mfDeck has no auto-update, so they are **not** part of a release and need not be uploaded.
+
+## Network
+
+The app's only network activity is the update check: **on by default**, after startup, in the background, at most once every 24 hours, it asks the GitHub Releases API for the newest release (GitHub sees the user's IP address). It can be switched off in Settings › Version & updates; then the app makes no network request at all. Updates are never downloaded or installed by the app.
 
 ## Signing
 
@@ -46,14 +50,14 @@ electron-builder also writes `*.blockmap` and `latest*.yml` next to these (auto-
 - right-click (Control-click) 3mfDeck in Applications → **Open** → **Open**; if macOS shows no Open button, go to **System Settings › Privacy & Security**, click **Open Anyway** next to the 3mfDeck message, and confirm with your password; or
 - run `xattr -dr com.apple.quarantine /Applications/3mfDeck.app` in Terminal, then open it normally.
 
-**Windows** — run `3mfDeck-1.2610.21310-win-x64-setup.exe` to install (you can choose the folder), or run `3mfDeck-1.2610.21310-win-x64-portable.exe` directly without installing. If SmartScreen says “Windows protected your PC”, click **More info → Run anyway**.
+**Windows** — run `3mfDeck-1.2610.21326-win-x64-setup.exe` to install (you can choose the folder), or run `3mfDeck-1.2610.21326-win-x64-portable.exe` directly without installing. If SmartScreen says “Windows protected your PC”, click **More info → Run anyway**.
 
-**Linux** — AppImage: `chmod +x 3mfDeck-1.2610.21310-linux-x64.AppImage && ./3mfDeck-1.2610.21310-linux-x64.AppImage`. Debian / Ubuntu: `sudo apt install ./3mfdeck_1.2610.21310_amd64.deb` (the package is named `3mfdeck`; remove it with `sudo apt remove 3mfdeck`).
+**Linux** — AppImage: `chmod +x 3mfDeck-1.2610.21326-linux-x64.AppImage && ./3mfDeck-1.2610.21326-linux-x64.AppImage`. Debian / Ubuntu: `sudo apt install ./3mfdeck_1.2610.21326_amd64.deb` (the package is named `3mfdeck`; remove it with `sudo apt remove 3mfdeck`).
 
 ## Verification status
 
-- macOS: the app in this dmg (identical to the unpacked build it was made from) passes the end-to-end smoke test; its sidebar shows `v1.2610.21310`, equal to the packaged app version.
-- All five: the packaged `package.json` version is `1.2610.21310`; Windows `FileVersion`/`ProductVersion` `1.2610.21310.0`; deb control `Package: 3mfdeck`, `Version: 1.2610.21310`, `Maintainer: Caspar Wei <6902864+MingShyanWei@users.noreply.github.com>`.
+- macOS: the app in this dmg (identical to the unpacked build it was made from) passes the end-to-end smoke test; its sidebar shows `v1.2610.21326`, equal to the packaged app version.
+- All five: the packaged `package.json` version is `1.2610.21326`; Windows `FileVersion`/`ProductVersion` `1.2610.21326.0`; deb control `Package: 3mfdeck`, `Version: 1.2610.21326`, `Maintainer: Caspar Wei <6902864+MingShyanWei@users.noreply.github.com>`.
 - Windows / Linux: built and inspected only (correct file types, x64 SQLite native module bundled, deb control metadata); **not run on a real Windows or Linux machine**.
 - Package contents: every `app.asar` holds only `dist/`, `electron/`, `src/core/`, `package.json` and the runtime `node_modules`.
 
@@ -62,10 +66,10 @@ electron-builder also writes `*.blockmap` and `latest*.yml` next to these (auto-
 ## 繁體中文：版本與下載
 
 - **版本格式**：`1.<YYMM>.<DHHMM>`（建置時間：年月．日時分），**日不補零**——semver 不允許前導零，`1.2610.020146` 不合法、`1.2610.20146` 合法。檔名、側欄顯示（開發版另加「dev」）與 App 版本是同一個字串；`package.json` 的 `version` 維持 `0.1.0`（合法 semver，不出現在檔名或 App 中）。
-- **macOS（arm64）**：`3mfDeck-1.2610.21310-arm64.dmg`，拖進「應用程式」。**此版未用 Developer ID 簽章（僅 ad-hoc）、未公證**，第一次開啟會被擋：
+- **macOS（arm64）**：`3mfDeck-1.2610.21326-arm64.dmg`，拖進「應用程式」。**此版未用 Developer ID 簽章（僅 ad-hoc）、未公證**，第一次開啟會被擋：
   - 在「應用程式」裡對 3mfDeck **右鍵 →「打開」→「打開」**；若沒有「打開」按鈕，到 **「系統設定 › 隱私權與安全性」** 按 3mfDeck 訊息旁的 **「強制打開」** 並輸入密碼；或
   - 在終端機執行 `xattr -dr com.apple.quarantine /Applications/3mfDeck.app` 後正常開啟。
   - 若之後要讓使用者下載後免警告，需加入 Apple Developer Program 做簽章＋公證（不在本版範圍）。
-- **Windows（x64）**：`3mfDeck-1.2610.21310-win-x64-setup.exe`（安裝版）或 `3mfDeck-1.2610.21310-win-x64-portable.exe`（免安裝版）。未做程式碼簽章，SmartScreen 若警告請按「其他資訊 → 仍要執行」。
-- **Linux（x64）**：`3mfDeck-1.2610.21310-linux-x64.AppImage`（`chmod +x` 後執行）或 `3mfdeck_1.2610.21310_amd64.deb`（`sudo apt install ./3mfdeck_1.2610.21310_amd64.deb`）。
+- **Windows（x64）**：`3mfDeck-1.2610.21326-win-x64-setup.exe`（安裝版）或 `3mfDeck-1.2610.21326-win-x64-portable.exe`（免安裝版）。未做程式碼簽章，SmartScreen 若警告請按「其他資訊 → 仍要執行」。
+- **Linux（x64）**：`3mfDeck-1.2610.21326-linux-x64.AppImage`（`chmod +x` 後執行）或 `3mfdeck_1.2610.21326_amd64.deb`（`sudo apt install ./3mfdeck_1.2610.21326_amd64.deb`）。
 - 檔案完整性：用上表的 SHA256 比對（`shasum -a 256 <檔名>`）。
