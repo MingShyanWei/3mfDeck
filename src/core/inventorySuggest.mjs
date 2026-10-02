@@ -1,5 +1,5 @@
 // M12: recommend spools FROM the user's own filament inventory.
-// Greedy pick (max weighted coverage gain) + local swap refinement; coverage
+// M31: every subset per k is scored (exhaustive; see bestSubset); coverage
 // counts a face as covered when a chosen spool prints it within threshold or
 // a mixable two-spool blend reaches it. Colours no inventory subset covers are
 // the "buy gap", fed back through the open-ended k-means (spoolSuggest.mjs)
@@ -13,64 +13,47 @@ import { coverageOf, compareCoverage, recommend, MUST_COVER_PCT } from './covera
 
 export { coverageOf };
 
-/**
- * Best k-spool subset of the inventory for the colour distribution, by
- * weighted coverage. Greedy by marginal gain, then local swaps until stable.
- * Returns { hexes, names, singlePct, mixPct, worst }.
- */
-function bestSubset(colorStats, inventory, k, threshold, mustCoverPct) {
-  let chosen = [];
-  let cov = null;
-  const cache = new Map();
-  const evalSubset = (hexes) => {
-    const key = hexes.join();
-    if (!cache.has(key)) cache.set(key, coverageOf(colorStats, hexes, { threshold, mustCoverPct }));
-    return cache.get(key);
-  };
-  for (let step = 0; step < k && step < inventory.length; step++) {
-    let best = null;
-    for (const f of inventory) {
-      if (chosen.some((c) => c.hex === f.hex)) continue;
-      const next = [...chosen, f];
-      const c = evalSubset(next.map((x) => x.hex));
-      if (!best || compareCoverage(c, best.c) < 0) best = { f, next, c };
-    }
-    if (!best || (cov && compareCoverage(best.c, cov) >= 0)) break;
-    chosen = best.next;
-    cov = best.c;
+/** Every k-element subset of `items`, in inventory order. */
+function* subsets(items, k, start = 0, acc = []) {
+  if (acc.length === k) {
+    yield acc;
+    return;
   }
-  // local swap refinement: replace one chosen with one outside if coverage improves
-  let improved = true;
-  let passes = 0;
-  while (improved && passes++ < 4) {
-    improved = false;
-    for (let i = 0; i < chosen.length; i++) {
-      for (const f of inventory) {
-        if (chosen.some((c) => c.hex === f.hex)) continue;
-        const cand = chosen.map((c, j) => (j === i ? f : c));
-        const c = evalSubset(cand.map((x) => x.hex));
-        if (compareCoverage(c, cov) < 0) {
-          chosen = cand;
-          cov = c;
-          improved = true;
-        }
-      }
-    }
-  }
-  return { hexes: chosen.map((c) => c.hex), names: chosen.map((c) => c.name), ...cov };
+  for (let i = start; i <= items.length - (k - acc.length); i++) yield* subsets(items, k, i + 1, [...acc, items[i]]);
 }
 
 /**
- * Inventory-based suggestion (SPEC 3.5d). Greedy subsets for k = 1..maxK with
+ * M31 (SPEC 3.5f): best k-spool subset of the inventory, by exhaustive search.
+ * The former greedy pick (add the best single spool, stop when one more
+ * spool does not help) could not see colours that only two spools TOGETHER
+ * can mix — black + red + yellow prints orange, but neither red nor yellow
+ * alone improves on black. An inventory is small (6 spools: 56 subsets for
+ * k <= 4), so every subset is scored with compareCoverage; the first best in
+ * inventory order wins ties. `cache` is shared across k.
+ * Returns { hexes, names, ...coverage }.
+ */
+function bestSubset(colorStats, inventory, k, threshold, mustCoverPct, cache) {
+  let best = null;
+  for (const set of subsets(inventory, k)) {
+    const key = set.map((f) => f.hex).join();
+    if (!cache.has(key)) cache.set(key, coverageOf(colorStats, set.map((f) => f.hex), { threshold, mustCoverPct }));
+    const cov = cache.get(key);
+    if (!best || compareCoverage(cov, best.cov) < 0) best = { set, cov };
+  }
+  return { hexes: best.set.map((f) => f.hex), names: best.set.map((f) => f.name), ...best.cov };
+}
+
+/**
+ * Inventory-based suggestion (SPEC 3.5d). Best subsets for k = 1..maxK with
  * per-k coverage, the smallest k reaching `target` recommended, and purchase
  * suggestions (ideal hexes, via k-means) for whatever the inventory cannot
  * cover at the recommended k.
  */
 export function suggestFromInventory(colorStats, inventory, maxK = 4, { threshold = MIX_DELTA_E, mustCoverPct = MUST_COVER_PCT } = {}) {
   const results = [];
+  const cache = new Map();
   for (let k = 1; k <= Math.min(maxK, inventory.length); k++) {
-    const { hexes, names, usage, ...cov } = bestSubset(colorStats, inventory, k, threshold, mustCoverPct);
-    if (results.length && hexes.length < k) break; // the inventory adds nothing more
+    const { names, usage, ...cov } = bestSubset(colorStats, inventory, k, threshold, mustCoverPct, cache);
     results.push({ k, spools: usage.map((u, i) => ({ ...u, name: names[i] })), ...cov });
   }
   const recommended = recommend(results);

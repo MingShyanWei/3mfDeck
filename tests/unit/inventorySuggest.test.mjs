@@ -1,7 +1,7 @@
 // M12: inventory-based spool suggestion.
 import { describe, it, expect } from 'vitest';
 import { coverageOf, suggestFromInventory } from '../../src/core/inventorySuggest.mjs';
-import { deltaE2000, rgbToLab, hexToRgb } from '../../src/core/filament.mjs';
+import { deltaE2000, rgbToLab, hexToRgb, printPlan, slotsFromColours } from '../../src/core/filament.mjs';
 
 const gecko = [
   { color: '#FFFFFF', faces: 830650, pct: 84.6 },
@@ -81,5 +81,54 @@ describe('suggestFromInventory', () => {
     const r = suggestFromInventory(gecko, [], 4);
     expect(r.results).toHaveLength(0);
     expect(r.recommended).toBeNull();
+  });
+});
+
+describe('M31 (SPEC 3.5f): exhaustive subsets find colours only two spools together can mix', () => {
+  // black 92.76 % + orange 7.24 %; the user's real inventory
+  const model = [{ color: '#000000', faces: 9276, pct: 92.76 }, { color: '#F98C36', faces: 724, pct: 7.24 }];
+  const inv = [
+    { name: 'C', hex: '#0086D6' }, { name: 'M', hex: '#EC008C' }, { name: 'K', hex: '#000000' },
+    { name: 'R', hex: '#FF0000' }, { name: 'W', hex: '#FFFFFF' }, { name: 'Y', hex: '#F5EC00' },
+  ];
+  const r = suggestFromInventory(model, inv, 4);
+
+  it('recommends k=3, everything printable, nothing to buy (the greedy search stopped at k=1 and suggested buying orange)', () => {
+    expect(r.recommended.k).toBe(3);
+    expect(r.recommended.complete).toBe(true);
+    expect(r.recommended.unprintablePct).toBe(0);
+    expect(r.recommended.mixPct).toBe(100);
+    expect(r.buy).toBeNull();
+  });
+
+  it('the recommended spools really print orange as a mix and black as a single spool', () => {
+    const slots = slotsFromColours(r.recommended.spools.map((s) => s.hex));
+    expect(r.recommended.spools.map((s) => s.hex)).toEqual(expect.arrayContaining(['#000000', '#F5EC00']));
+    const orange = printPlan('#F98C36', slots);
+    expect([orange.mode, orange.mixable]).toEqual(['mix', true]);
+    expect(printPlan('#000000', slots).mode).toBe('single');
+  });
+
+  it('every k is reported (no early stop), each the best subset of that size', () => {
+    expect(r.results.map((x) => x.k)).toEqual([1, 2, 3, 4]);
+    expect(r.results[0].spools.map((s) => s.hex)).toEqual(['#000000']);
+    expect(r.results[0].complete).toBe(false); // orange needs two spools
+  });
+
+  it('equally complete sets are decided by accuracy: magenta + yellow mixes this orange closer than red + yellow', () => {
+    // pigment model (what the export writes): M34 + Y66 -> ΔE 0.6; R27 + Y73 -> ΔE 2.1
+    const kmy = printPlan('#F98C36', slotsFromColours(['#EC008C', '#000000', '#F5EC00'])).recipe.deltaE;
+    const kry = printPlan('#F98C36', slotsFromColours(['#000000', '#FF0000', '#F5EC00'])).recipe.deltaE;
+    expect(kmy).toBeLessThan(kry);
+    expect(r.recommended.spools.map((s) => s.hex)).toEqual(['#EC008C', '#000000', '#F5EC00']);
+    expect(r.recommended.meanDeltaE).toBeLessThan(coverageOf(model, ['#000000', '#FF0000', '#F5EC00']).meanDeltaE);
+  });
+
+  it('a colour the inventory can mix is never in the purchase suggestion', () => {
+    const noYellow = suggestFromInventory(model, inv.filter((f) => f.hex !== '#F5EC00'), 4);
+    // without yellow orange cannot be mixed -> it is the gap to buy
+    expect(noYellow.recommended.complete).toBe(false);
+    expect(noYellow.recommended.uncovered.map((u) => u.color)).toEqual(['#F98C36']);
+    expect(noYellow.buy).not.toBeNull();
   });
 });

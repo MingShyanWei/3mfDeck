@@ -200,6 +200,22 @@ export const recipeText = (recipe) => recipe.weights.map((w) => `${slotName(w)} 
 // ΔE 8.3 — was quantized to one spool and no Mix was written).
 // ---------------------------------------------------------------------------
 const pigmentCache = new Map();
+// M31: best blend of one ordered spool pair for one colour, keyed by the
+// colours (not slot numbers), so subsets sharing a pair reuse it
+const pairCache = new Map();
+function bestPairMix(hex, target, aHex, bHex) {
+  const key = `${hex}|${aHex}|${bHex}`;
+  let best = pairCache.get(key);
+  if (!best) {
+    for (let b = 0; b <= 100; b++) {
+      const mixHex = mixFilamentHex(aHex, bHex, 1 - b / 100);
+      const d = deltaE2000(target, rgbToLab(hexToRgb(mixHex)));
+      if (!best || d < best.deltaE) best = { mixB: b, mixHex, deltaE: d };
+    }
+    pairCache.set(key, best);
+  }
+  return best;
+}
 
 /**
  * Best two-spool pigment mix for a colour: ordered spool pairs x mix_b_percent
@@ -215,11 +231,8 @@ export function bestMix(hex, slots) {
   for (const A of slots) {
     for (const B of slots) {
       if (A.slot === B.slot) continue;
-      for (let b = 0; b <= 100; b++) {
-        const mixHex = mixFilamentHex(A.hex, B.hex, 1 - b / 100);
-        const d = deltaE2000(target, rgbToLab(hexToRgb(mixHex)));
-        if (!best || d < best.deltaE) best = { compA: A.slot, compB: B.slot, mixB: b, mixHex, deltaE: d };
-      }
+      const p = bestPairMix(hex, target, A.hex, B.hex);
+      if (!best || p.deltaE < best.deltaE) best = { compA: A.slot, compB: B.slot, mixB: p.mixB, mixHex: p.mixHex, deltaE: p.deltaE };
     }
   }
   best.deltaE = Math.round(best.deltaE * 10) / 10;
