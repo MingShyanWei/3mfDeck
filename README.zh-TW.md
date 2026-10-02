@@ -56,7 +56,7 @@
 
 **離線保證**
 - App 本身**不發任何網路請求**（無帳號、無雲端、不連印表機）。唯一的外部呼叫是兩個固定連結交給系統瀏覽器開啟：側欄作者連結、設定頁的 3dfilamentprofiles.com My Spools 頁。
-- 側欄左下顯示版本號 `1.<YYMMDDHHMM>`（建置時間），滑過去可看完整時間與 commit。
+- 側欄左下顯示版本號 `1.<YYMM>.<DHHMM>`（建置時間，例如 `1.2610.21122`；發行檔名帶同一字串），滑過去可看完整時間與 commit。
 
 ---
 
@@ -81,15 +81,15 @@
 
 ### 從 Releases 下載
 
-到 [GitHub Releases](https://github.com/MingShyanWei/3mfDeck/releases) 下載對應平台的檔案（下表檔名中的 `0.1.0` 是套件版本；側欄顯示的是建置版本 `1.<YYMMDDHHMM>`）。各版檔案的 SHA256 見 [docs/release-manifest.md](docs/release-manifest.md)。
+到 [GitHub Releases](https://github.com/MingShyanWei/3mfDeck/releases) 下載對應平台的檔案（`<version>` 是建置版本 `1.<YYMM>.<DHHMM>`，例如 `1.2610.21122` = 2026-10-02 11:22，與 App 側欄左下顯示的字串相同；日不補零是因為 semver 不允許前導零）。各版檔案的 SHA256 見 [docs/release-manifest.md](docs/release-manifest.md)。
 
 | 平台 | 檔案 | 說明 |
 |---|---|---|
-| macOS（Apple 晶片） | `3mfDeck-0.1.0-arm64.dmg` | 打開後把 3mfDeck 拖進「應用程式」 |
-| Windows x64 | `3mfDeck Setup 0.1.0.exe` | 安裝版（可選安裝位置） |
-| Windows x64 | `3mfDeck 0.1.0.exe` | 免安裝版，直接執行 |
-| Linux x64 | `3mfDeck-0.1.0.AppImage` | `chmod +x` 後直接執行 |
-| Linux x64（Debian／Ubuntu） | `3mfdeck_0.1.0_amd64.deb` | `sudo apt install ./3mfdeck_0.1.0_amd64.deb` |
+| macOS（Apple 晶片） | `3mfDeck-<version>-arm64.dmg` | 打開後把 3mfDeck 拖進「應用程式」 |
+| Windows x64 | `3mfDeck-<version>-win-x64-setup.exe` | 安裝版（可選安裝位置） |
+| Windows x64 | `3mfDeck-<version>-win-x64-portable.exe` | 免安裝版，直接執行 |
+| Linux x64 | `3mfDeck-<version>-linux-x64.AppImage` | `chmod +x` 後直接執行 |
+| Linux x64（Debian／Ubuntu） | `3mfdeck_<version>_amd64.deb` | `sudo apt install ./3mfdeck_<version>_amd64.deb` |
 
 **macOS：此版未簽章（僅 ad-hoc 簽章，未用 Developer ID、未公證）**，第一次開啟會被 Gatekeeper 擋下，請擇一：
 - 在「應用程式」裡對 3mfDeck **右鍵 →「打開」→「打開」**；若沒有「打開」按鈕，到 **「系統設定 › 隱私權與安全性」**，按 3mfDeck 訊息旁的 **「強制打開」**；或
