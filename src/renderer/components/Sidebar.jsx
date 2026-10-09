@@ -74,6 +74,7 @@ export default function Sidebar({ counts, filter, onFilter, colors = [], onToggl
         <Item id="all" filter={filter} onFilter={onFilter} icon="mdi-cube-outline" label={t('side.all')} count={counts.all} />
         <Item id="unlabeled" filter={filter} onFilter={onFilter} icon="mdi-help-circle-outline" label={t('prov.unknown')} count={counts.unlabeled} warn />
         <Item id="nonu1" filter={filter} onFilter={onFilter} icon="mdi-printer-3d-off" label={t('badge.nonU1')} count={counts.nonU1} warn />
+        <Item id="duplicates" filter={filter} onFilter={onFilter} icon="mdi-content-duplicate" label={t('side.duplicates')} count={counts.duplicates} warn />
       </ul>
       <h3>{t('side.sources')}</h3>
       <ul>

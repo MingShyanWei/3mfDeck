@@ -62,7 +62,12 @@ describe('findByFilename', () => {
   });
 
   it('one file wanted by two missing records is ambiguous for both', async () => {
-    const [second] = (await importPaths(db, rootA, [await stage(path.join(base, 'in2'), 'cube.stl')], NOW)).ids; // rootA/2026/cube-2.stl
+    // a second cube.stl with other bytes (binary STL header byte), so it is not skipped as a duplicate (M33)
+    const other = await stage(path.join(base, 'in2'), 'cube.stl');
+    const bytes = await fs.readFile(other);
+    bytes[0] ^= 0xff;
+    await fs.writeFile(other, bytes);
+    const [second] = (await importPaths(db, rootA, [other], NOW)).ids; // rootA/2026/cube-2.stl
     await fs.rename(path.join(rootA, '2026', 'cube-2.stl'), path.join(rootA, '2026', 'tmp.stl'));
     db.prepare('UPDATE models SET rel_path = ? WHERE id = ?').run(path.join('2025', 'cube.stl'), second); // same file name, other folder
     await stage(path.join(rootB, 'z'), 'cube.stl');

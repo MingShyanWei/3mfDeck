@@ -1100,6 +1100,73 @@ try {
     step(`M18 U1: m18-p1s 非 U1 徽章/過濾/警示 -> 轉換 ${outFile}（${out.print_settings_id}，2 盤搬到 U1 盤面、盤 3 保持原位），原檔未動`);
   }
 
+  // 14b) M33 (SPEC 3.1b): identical contents are not imported twice; 重複 filter; convert-again reminder
+  {
+    const JSZipM33 = (await import('jszip')).default;
+    const curRoot = (await page.evaluate(() => window.api.getSettings())).libraryRoot;
+    const list = () => page.evaluate(() => window.api.list({}));
+    const importNoDialog = (files) => app.evaluate(({ dialog, Menu }, f) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: f }); Menu.getApplicationMenu().getMenuItemById('import').click(); }, files);
+    // files with contents of their own (earlier steps imported the plain fixtures)
+    const own3mf = await JSZipM33.loadAsync(await fs.readFile(path.join(FIX, 'painted.3mf')));
+    own3mf.file('Metadata/m33.txt', 'M33 smoke');
+    const ownBytes = await own3mf.generateAsync({ type: 'nodebuffer' });
+    const orig = path.join(inbox, 'm33-orig.3mf');
+    await fs.writeFile(orig, ownBytes);
+    await importViaMenu([orig]);
+    await page.click('[data-testid=import-skip-all]');
+    const before = (await list()).length;
+    // the same bytes under another name: skipped, the source stays, the notice links to the record
+    const again = path.join(inbox, 'm33-again.3mf');
+    await fs.writeFile(again, ownBytes);
+    await importNoDialog([again]);
+    await page.waitForSelector('[data-testid=dup-notice]');
+    assert.match(await page.textContent('[data-testid=dup-item]'), new RegExp(`「m33-again\\.3mf」與檔案櫃中的 ${year}/m33-orig\\.3mf 內容完全相同，已略過（原檔未搬動）`));
+    assert.equal((await list()).length, before);
+    assert.deepEqual(await fs.readFile(again), ownBytes, 'source left where it was, unchanged');
+    await page.click('[data-testid=dup-view]');
+    await page.waitForFunction(() => document.querySelector('[data-testid=detail-panel] h2')?.textContent === 'm33-orig');
+    await page.click('[data-testid=dup-notice-close]');
+    // the identical file is in the trash: skipped, the notice offers the trash
+    const stl = await fs.readFile(path.join(FIX, 'cube.stl'));
+    stl[1] ^= 0x33; // binary STL header byte: an own copy of the cube
+    const cubeA = path.join(inbox, 'm33-cube.stl');
+    await fs.writeFile(cubeA, stl);
+    await importViaMenu([cubeA]);
+    await page.click('[data-testid=import-skip-all]');
+    const cubeId = (await list()).find((m) => m.name === 'm33-cube').id;
+    await page.evaluate((id) => window.api.trash(id), cubeId);
+    const cubeB = path.join(inbox, 'm33-cube-again.stl');
+    await fs.writeFile(cubeB, stl);
+    await importNoDialog([cubeB]);
+    await page.waitForSelector('[data-testid=dup-item][data-trashed="1"]');
+    assert.match(await page.textContent('[data-testid=dup-item]'), /與回收桶中的檔案內容完全相同，已略過（原檔未搬動）；可以從回收桶還原/);
+    await page.click('[data-testid=dup-notice-close]');
+    // an identical copy indexed without a fingerprint -> filled in the background at start -> 重複 filter
+    await fs.mkdir(path.join(curRoot, 'm33-folder'), { recursive: true });
+    await fs.writeFile(path.join(curRoot, 'm33-folder', 'm33-copy.3mf'), ownBytes);
+    await page.evaluate(() => window.api.rebuildIndex());
+    await app.close();
+    [app, page] = await launch();
+    await page.waitForFunction(async () => (await window.api.sidebar()).hashPending === 0, null, { timeout: 60000 });
+    await page.click('[data-testid=filter-duplicates]');
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=dup-badge]').length >= 2);
+    const dupPaths = await page.$$eval('[data-testid=model-card]', (cards) => cards.map((c) => c.querySelector('.name').textContent));
+    assert.ok(dupPaths.includes('m33-orig') && dupPaths.includes('m33-copy'), JSON.stringify(dupPaths));
+    assert.match(await page.textContent('[data-testid=dup-note]'), /內容完全相同的檔案依組列出（不含回收桶）/);
+    await page.click('[data-testid=filter-all]');
+    // U1 conversion of m18-p1s again: asked first, cancel makes nothing
+    const p1sId = (await list()).find((m) => m.name === 'm18-p1s').id;
+    await app.evaluate(({ dialog }) => {
+      globalThis.__asked = [];
+      dialog.showMessageBox = async (_w, o) => { globalThis.__asked.push(`${o.message} | ${o.detail}`); return { response: 0 }; }; // cancel
+    });
+    assert.deepEqual(await page.evaluate((id) => window.api.convertU1(id), p1sId), { cancelled: true });
+    const asked = await app.evaluate(() => globalThis.__asked);
+    assert.match(asked[0], /已經轉換過：「m18-p1s-U1」 \| 這個檔案之前已轉換過（\d{4}\/m18-p1s-U1\.3mf）。仍要再轉一次嗎？/);
+    assert.equal((await list()).filter((m) => m.name.startsWith('m18-p1s-U1')).length, 1, 'cancel: no -U1-2');
+    step('M33 重複: 同內容改名匯入 -> 略過、原檔未動、提示可檢視；回收桶中的重複 -> 提示可還原；舊記錄啟動時補指紋 -> 「重複」篩選分組；再轉 U1 先詢問、取消不產生 -U1-2');
+  }
+
   // 15) M19: embedded product images — 3D / 原檔圖 switch, thumbnail strip, plate switcher link
   {
     const JSZipM19 = (await import('jszip')).default;

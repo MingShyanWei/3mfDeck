@@ -6,7 +6,8 @@ import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { TRASH_DIR, moveIntoLibrary, moveWithinRoot, listLibraryFiles } from './library.mjs';
-import { getModel, listModels, setRelPath, deleteModels, knownRelPaths, replaceDerived } from './db.mjs';
+import { getModel, listModels, setRelPath, deleteModels, knownRelPaths, replaceDerived, setContentHash } from './db.mjs';
+import { hashFile } from './contentHash.mjs';
 import { parseFile, SUPPORTED_EXTS } from './parse/index.mjs';
 import { loadSettings, saveSettings } from './settings.mjs';
 import { untrackedFiles } from './importer.mjs';
@@ -69,9 +70,11 @@ export async function relocateModel(db, root, id, absPath, now = new Date()) {
 
 async function apply(db, root, id, rel) {
   const parsed = await parseFile(path.join(root, rel));
+  const hash = await hashFile(path.join(root, rel)); // M33: the file found need not be byte-identical to the lost one
   db.transaction(() => {
     setRelPath(db, id, rel);
     replaceDerived(db, id, parsed);
+    setContentHash(db, id, hash);
   })();
 }
 
@@ -176,5 +179,6 @@ export async function restoreMissingFromTrash(db, root, id) {
   if (!found) throw new Error(t('missing.err.notInTrash', { rel: m.rel_path }));
   const rel = await moveWithinRoot(root, found, m.rel_path);
   setRelPath(db, id, rel);
+  setContentHash(db, id, await hashFile(path.join(root, rel))); // M33: fingerprint of the file actually restored
   return rel;
 }

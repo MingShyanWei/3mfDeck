@@ -1,5 +1,5 @@
 // Card grid and list (table) views of the library.
-import { ProvenanceBadge, ColorBadge, MissingBadge, PlateBadge, ColorLabels, U1Badge } from './Badges.jsx';
+import { ProvenanceBadge, ColorBadge, MissingBadge, PlateBadge, ColorLabels, U1Badge, DupBadge } from './Badges.jsx';
 import { isUnlabeled, formatBytes, formatInt, formatDate } from '../format.js';
 import { thumbOf } from '../thumbSource.js';
 import { t } from '../../core/i18n/index.mjs';
@@ -45,6 +45,7 @@ export function ModelGrid({ models, selectedId, onSelect, picked = null, onPick 
             <ProvenanceBadge model={m} />
             <PlateBadge model={m} />
             <U1Badge model={m} />
+            <DupBadge model={m} />
           </div>
           <div className="card-body">
             <div className="name" title={m.name}>{m.name}</div>
@@ -99,7 +100,10 @@ export function ModelList({ models, selectedId, onSelect, picked = null, onPick 
                 <i className="mdi mdi-cube-outline" data-testid="row-thumb-icon" />
               )}
             </td>
-            <td className="name">{m.name} <MissingBadge model={m} /></td>
+            <td className="name">
+              {m.name} <MissingBadge model={m} /> <DupBadge model={m} />
+              {m.dupGroup && <div className="small muted mono" data-testid="dup-path">{m.rel_path}</div>}
+            </td>
             <td className="mono">{m.format}</td>
             <td><ProvenanceBadge model={m} /></td>
             <td>

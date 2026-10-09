@@ -53,4 +53,5 @@ contextBridge.exposeInMainWorld('api', {
   onImported: on('lib:imported'),
   onOpenSettings: on('ui:openSettings'),
   onUpdate: on('ui:update'),
+  onHashesUpdated: on('lib:hashesUpdated'),
 });

@@ -50,6 +50,7 @@ export default function App() {
   const slots = useMemo(() => slotsFromColours(spools), [spools, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   const [dragging, setDragging] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [dupNotice, setDupNotice] = useState([]); // M33: files skipped at import as already in the library
   const [consistency, setConsistency] = useState(null);
   // The "newly missing" notice shows once per occurrence; closing it is final
   const [missingToastClosed, setMissingToastClosed] = useState(false);
@@ -73,6 +74,12 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     const [list, c] = await Promise.all([window.api.list({ q, filter, sort, colors }), window.api.sidebar()]);
+    // M33: number the groups of identical files in the 重複 filter (the list arrives grouped)
+    if (filter === 'duplicates') {
+      const group = new Map();
+      for (const m of list) if (!group.has(m.content_hash)) group.set(m.content_hash, group.size + 1);
+      for (const m of list) m.dupGroup = group.get(m.content_hash);
+    }
     setModels(list);
     setCounts(c);
   }, [q, filter, sort, colors]);
@@ -127,9 +134,12 @@ export default function App() {
           ...(res.skipped.length ? [t('app.skippedFiles', { n: res.skipped.length })] : []),
         ];
         setNotice(problems.length ? problems.join('\n') : null);
+        setDupNotice(res.duplicates || []);
       }),
     [refresh, thumbs],
   );
+  // M33: background fingerprints of older records change the 重複 counts
+  useEffect(() => window.api.onHashesUpdated(() => refresh()), [refresh]);
   useEffect(() => window.api.onOpenSettings(() => setSettingsOpen(true)), []);
 
   const onDrop = async (e) => {
@@ -191,6 +201,42 @@ export default function App() {
           <div className="callout warn notice">
             <i className="mdi mdi-alert-outline" /> <pre>{notice}</pre>
             <button className="icon" onClick={() => setNotice(null)}><i className="mdi mdi-close" /></button>
+          </div>
+        )}
+        {dupNotice.length > 0 && (
+          <div className="callout note dup-notice" data-testid="dup-notice">
+            <i className="mdi mdi-content-duplicate" />
+            <div className="grow">
+              {dupNotice.map((d) => (
+                <div key={d.file} className="row" data-testid="dup-item" data-trashed={d.trashed ? '1' : '0'}>
+                  <span className="grow">
+                    {d.trashed
+                      ? t('app.dupInTrash', { file: d.file.split('/').pop() })
+                      : t('app.dupSkipped', { file: d.file.split('/').pop(), rel: d.relPath })}
+                  </span>
+                  <button
+                    className="small"
+                    data-testid="dup-view"
+                    onClick={() => {
+                      setFilter(d.trashed ? 'trash' : 'all');
+                      setSelectedId(d.id);
+                    }}
+                  >
+                    {d.trashed ? t('app.dupViewTrash') : t('app.dupView')}
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button className="icon" data-testid="dup-notice-close" onClick={() => setDupNotice([])} title={t('common.close')}><i className="mdi mdi-close" /></button>
+          </div>
+        )}
+        {filter === 'duplicates' && (
+          <div className="callout note" data-testid="dup-note">
+            <i className="mdi mdi-content-duplicate" />
+            <span className="grow">
+              {t('app.dupNote')}
+              {counts?.hashPending > 0 && <span className="muted" data-testid="dup-pending"> {t('app.dupPending', { n: counts.hashPending })}</span>}
+            </span>
           </div>
         )}
         {consistency?.untracked.length > 0 && (

@@ -421,3 +421,6 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
 .spool-editor label.check input { width: auto; flex: none; margin: 0; }
 .spool-editor label.check > span { font-size: 13px; color: var(--text); }
 .spool-editor p { margin: 0; }
+/* M33: import notice for files skipped as already in the library */
+.dup-notice .row { display: flex; align-items: center; gap: 8px; }
+.dup-notice .row + .row { margin-top: 6px; }

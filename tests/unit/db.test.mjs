@@ -21,6 +21,7 @@ describe('schema', () => {
       'source_printer', 'source_process', // M18 (SPEC 3.9)
       'embedded_images', 'cover', // M19 (SPEC 3.4b)
       'thumb_dark', // M21 (SPEC 3.4c)
+      'content_hash', 'converted_from', // M33 (SPEC 3.1b)
     ]);
     expect(cols('tags')).toEqual(['id', 'name']);
     expect(cols('model_tags')).toEqual(['model_id', 'tag_id']);

@@ -85,6 +85,7 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
     setActionError('');
     const r = await window.api.convertU1(id);
     setConverting(false);
+    if (r.cancelled) return; // M33: already converted, the user chose not to convert again
     if (r.error) return setActionError(r.error);
     setConverted(r);
     onConverted();

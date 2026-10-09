@@ -71,3 +71,13 @@ export function U1Badge({ model }) {
     </span>
   );
 }
+
+// M33 (SPEC 3.1b): in the 重複 filter, which group of identical files a model belongs to (and where it lives)
+export function DupBadge({ model }) {
+  if (!model.dupGroup) return null;
+  return (
+    <span className="badge badge-warn" data-testid="dup-badge" data-group={model.dupGroup} title={model.rel_path}>
+      <i className="mdi mdi-content-duplicate" /> {t('badge.dupGroup', { n: model.dupGroup })}
+    </span>
+  );
+}

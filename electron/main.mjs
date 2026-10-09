@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { isNearlyBlack } from '../src/core/thumbCheck.mjs';
-import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb, cabinetColorRows, idsNeedingSourcePrinter, setSourcePrinter, idsNeedingEmbedded, setEmbedded, getCover, thumbsToCheck, setThumb } from '../src/core/db.mjs';
+import { hashFile, isDataless } from '../src/core/contentHash.mjs';
+import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb, cabinetColorRows, idsNeedingSourcePrinter, setSourcePrinter, idsNeedingEmbedded, setEmbedded, getCover, thumbsToCheck, setThumb, idsNeedingHash, setContentHash, conversionsOf, setConvertedFrom } from '../src/core/db.mjs';
 import JSZip from 'jszip';
 import { listEmbeddedImages, mimeOf } from '../src/core/embeddedImages.mjs';
 import { convertToU1, readSourcePrinter } from '../src/core/u1Convert.mjs';
@@ -163,13 +164,28 @@ function registerIpc() {
   // give it the source record's provenance, notes and tags
   ipcMain.handle('lib:convertU1', async (_e, id) => {
     const src = getModel(db, id);
+    // M33 (SPEC 3.1b): already converted once -> ask before making another "-U1-2"
+    const earlier = conversionsOf(db, id);
+    if (earlier.length) {
+      const { response } = await dialog.showMessageBox(win, {
+        type: 'question',
+        message: t('dlg.alreadyConverted', { name: earlier[0].name }),
+        detail: t('dlg.alreadyConvertedDetail', { rel: earlier[0].rel_path }),
+        buttons: [t('dlg.cancel'), t('dlg.convertAgain')],
+        defaultId: 0,
+        cancelId: 0,
+      });
+      if (response !== 1) return { cancelled: true };
+    }
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mfcab-u1-'));
     try {
       const dest = path.join(tmp, `${path.basename(src.rel_path, path.extname(src.rel_path))}-U1.3mf`);
       const report = await convertToU1(modelPath(db, root, id), dest, loadU1Profiles(process.env.MF_ORCA_PROFILES || DEFAULT_PROFILES_DIR));
       const res = await importPaths(db, root, [dest]);
       const newId = res.ids[0];
+      if (!newId && res.duplicates[0]) throw new Error(t('u1.err.duplicate', { rel: res.duplicates[0].relPath }));
       if (!newId) throw new Error(res.errors[0]?.error || t('u1.err.importFailed'));
+      setConvertedFrom(db, newId, id);
       const { provenance_type, platform, url, prompt, retrieved_at, notes } = src;
       updateModel(db, newId, { name: `${src.name}-U1`, provenance_type, platform, url, prompt, retrieved_at, notes });
       setTags(db, newId, src.tags);
@@ -442,7 +458,7 @@ app.whenReady().then(() => {
   win.loadFile(path.join(import.meta.dirname, '..', 'dist', 'index.html'));
   // after the UI is up, in the background; failures are silent (runUpdateCycle never throws)
   win.webContents.once('did-finish-load', () => runUpdateCheck());
-  backfillSourcePrinters();
+  backfillSourcePrinters().then(backfillHashes);
 });
 
 // M18 / M19: one-time fill of source_printer and embedded images for 3MF records
@@ -465,6 +481,25 @@ async function backfillSourcePrinters() {
       // missing or unreadable file
     }
   }
+}
+
+// M33 (SPEC 3.1b): fingerprints for records indexed before M33, in the
+// background, one file at a time. iCloud files whose contents are not on this
+// Mac are skipped (reading them would download them); they get a fingerprint
+// on a later start once downloaded. Missing / unreadable files are skipped too.
+async function backfillHashes() {
+  let done = 0;
+  for (const id of idsNeedingHash(db)) {
+    try {
+      const file = modelPath(db, root, id);
+      if (!fs.existsSync(file) || (await isDataless(file))) continue;
+      setContentHash(db, id, await hashFile(file));
+      done++;
+    } catch {
+      // missing or unreadable file: try again next start
+    }
+  }
+  if (done) win?.webContents.send('lib:hashesUpdated', { done });
 }
 
 /** Decode a PNG thumbnail (BGRA bitmap) and test it for a black blob. */

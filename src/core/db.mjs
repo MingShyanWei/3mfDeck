@@ -92,6 +92,10 @@ export function openDb(file) {
   addColumn('models', 'embedded_images');
   addColumn('models', 'cover', 'BLOB');
   addColumn('models', 'thumb_dark', 'INTEGER');
+  // M33 (SPEC 3.1b): content fingerprint (SHA-256 hex; NULL = not computed yet) and the U1 conversion source
+  addColumn('models', 'content_hash');
+  addColumn('models', 'converted_from', 'INTEGER');
+  db.exec('CREATE INDEX IF NOT EXISTS models_content_hash ON models(content_hash)');
   migrateLegacyLabels(db);
   backfillColorLabels(db);
   return db;
@@ -239,7 +243,7 @@ export function setTags(db, modelId, names) {
 
 const LIST_COLUMNS = `m.id, m.name, m.rel_path, m.format, m.size_bytes, m.tri_count, m.bbox_mm, m.color_count,
   m.provenance_type, m.platform, m.url, m.prompt, m.retrieved_at, m.notes, m.imported_at, m.updated_at,
-  m.source_printer, m.source_process, m.embedded_images,
+  m.source_printer, m.source_process, m.embedded_images, m.content_hash, m.converted_from,
   m.thumb IS NOT NULL AS has_thumb, m.cover IS NOT NULL AS has_cover, m.thumb_dark,
   (SELECT COUNT(*) FROM plates p WHERE p.model_id = m.id) AS plate_count,
   (SELECT cm.full_spectrum FROM color_mixing cm WHERE cm.model_id = m.id) AS full_spectrum,
@@ -278,11 +282,15 @@ const NON_U1 = `(m.source_printer IS NOT NULL AND m.source_printer != '' AND m.s
 // lives under <root>/.trash/, so rel_path tells them apart.
 const TRASHED = `m.rel_path LIKE '.trash/%'`;
 
+// M33: a live model whose content fingerprint another live model shares (the trash is not counted)
+const DUPLICATE = `(m.content_hash IS NOT NULL AND EXISTS (SELECT 1 FROM models d WHERE d.content_hash = m.content_hash AND d.id != m.id AND d.rel_path NOT LIKE '.trash/%'))`;
+
 /**
  * List models.
  * - q: substring match on name, notes, tags (case-insensitive); a colour name
  *   (「紅」/「紅色」) also matches models carrying that colour label
  * - filter: 'all' | 'unlabeled' | 'type:<provenance_type>' | 'platform:<name>' | 'tag:<name>' | 'trash'
+ *   | 'duplicates' (M33: live models sharing a content fingerprint, grouped)
  *   (every filter except 'trash' excludes trashed models)
  * - colors: colour labels; a model must carry every one of them (M17)
  * - sort: 'imported' | 'name' | 'colors'
@@ -303,6 +311,7 @@ export function listModels(db, { q = '', filter = 'all', sort = 'imported', colo
   });
   if (filter === 'unlabeled') where.push(`(m.provenance_type IS NULL OR m.provenance_type = 'unknown')`);
   else if (filter === 'nonu1') where.push(NON_U1);
+  else if (filter === 'duplicates') where.push(DUPLICATE);
   else if (filter.startsWith('type:')) {
     where.push('m.provenance_type = @ftype');
     params.ftype = filter.slice(5);
@@ -313,8 +322,10 @@ export function listModels(db, { q = '', filter = 'all', sort = 'imported', colo
     where.push('EXISTS (SELECT 1 FROM model_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.model_id = m.id AND t.name = @ftag)');
     params.ftag = filter.slice(4);
   }
+  // duplicates: each group together, then the chosen order inside it
+  const order = filter === 'duplicates' ? `m.content_hash, ${SORTS[sort] || SORTS.imported}` : SORTS[sort] || SORTS.imported;
   const sql = `SELECT ${LIST_COLUMNS} FROM models m WHERE ${where.join(' AND ')}
-    ORDER BY ${SORTS[sort] || SORTS.imported}`;
+    ORDER BY ${order}`;
   return db.prepare(sql).all(params).map(rowOut);
 }
 
@@ -338,6 +349,8 @@ export function sidebarCounts(db) {
     all: one(`SELECT COUNT(*) FROM models m WHERE ${live}`),
     unlabeled: one(`SELECT COUNT(*) FROM models m WHERE ${live} AND (provenance_type IS NULL OR provenance_type = 'unknown')`),
     nonU1: one(`SELECT COUNT(*) FROM models m WHERE ${live} AND ${NON_U1}`),
+    duplicates: one(`SELECT COUNT(*) FROM models m WHERE ${live} AND ${DUPLICATE}`),
+    hashPending: one(`SELECT COUNT(*) FROM models m WHERE ${live} AND m.content_hash IS NULL`),
     types: Object.fromEntries(
       db.prepare(`SELECT provenance_type AS k, COUNT(*) AS n FROM models m WHERE ${live} GROUP BY provenance_type`).all().map((r) => [r.k, r.n]),
     ),
@@ -385,6 +398,29 @@ export function setSourcePrinter(db, id, info) {
 /** Colour rows of every live model, for the cabinet-wide colour summary (M17). */
 export function cabinetColorRows(db) {
   return db.prepare(`SELECT cs.model_id, cs.color, cs.pct, cs.label FROM color_stats cs JOIN models m ON m.id = cs.model_id WHERE NOT ${TRASHED}`).all();
+}
+
+// M33 (SPEC 3.1b): content fingerprints
+/** Models (live and trashed) whose fingerprint is still unknown, oldest first. */
+export function idsNeedingHash(db) {
+  return db.prepare('SELECT id FROM models WHERE content_hash IS NULL ORDER BY id').pluck().all();
+}
+export function setContentHash(db, id, hash) {
+  db.prepare('UPDATE models SET content_hash = ? WHERE id = ?').run(hash, id);
+}
+/** Records with this fingerprint: [{id, name, rel_path, trashed}], live ones first. */
+export function modelsWithHash(db, hash) {
+  return db
+    .prepare(`SELECT id, name, rel_path, (rel_path LIKE '.trash/%') AS trashed FROM models WHERE content_hash = ? ORDER BY trashed, id`)
+    .all(hash)
+    .map((r) => ({ ...r, trashed: Boolean(r.trashed) }));
+}
+/** Live U1 conversions made from this record (M33: converted_from). */
+export function conversionsOf(db, id) {
+  return db.prepare(`SELECT id, name, rel_path FROM models WHERE converted_from = ? AND rel_path NOT LIKE '.trash/%' ORDER BY id`).all(id);
+}
+export function setConvertedFrom(db, id, sourceId) {
+  db.prepare('UPDATE models SET converted_from = ? WHERE id = ?').run(sourceId, id);
 }
 
 export function setRelPath(db, id, relPath) {
