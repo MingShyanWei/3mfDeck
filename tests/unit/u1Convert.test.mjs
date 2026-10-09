@@ -179,6 +179,47 @@ describe('convertToU1', () => {
     expect(r.plates[0].reason).toMatch(/超過 U1 270×270 mm/);
   });
 
+  it('a huge root model with inline meshes is never read as one string; only <build> changes', async () => {
+    // 兔子警官拆件单色.3mf: 1.16 GB of mesh XML in 3D/3dmodel.model itself (no Objects/ files)
+    // failed with "Invalid string length" (V8's maximum string length).
+    const dir = await tmpDir();
+    const cube = (id, x, y) => {
+      const v = [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0], [0, 0, 10], [10, 0, 10], [10, 10, 10], [0, 10, 10]];
+      return `<object id="${id}" type="model"><mesh><vertices>${v.map(([a, b, c]) => `<vertex x="${a + x}" y="${b + y}" z="${c}"/>`).join('')}</vertices><triangles><triangle v1="0" v2="1" v3="2"/></triangles></mesh></object>`;
+    };
+    const model = `<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources>${cube(1, 0, 0)}${cube(2, 0, 0)}</resources>`
+      + `<build><item objectid="1" transform="1 0 0 0 1 0 0 0 1 120 120 0"/><item objectid="2" transform="1 0 0 0 1 0 0 0 1 444 120 0"/></build></model>`;
+    const plates = [1, 2].map((p) => `<plate><metadata key="plater_id" value="${p}"/><model_instance><metadata key="object_id" value="${p}"/><metadata key="instance_id" value="0"/></model_instance></plate>`).join('');
+    const zip = new JSZip();
+    zip.file('_rels/.rels', '<Relationships><Relationship Target="/3D/3dmodel.model"/></Relationships>');
+    zip.file('3D/3dmodel.model', model);
+    zip.file('Metadata/model_settings.config', `<config>${plates}</config>`);
+    zip.file('Metadata/project_settings.config', JSON.stringify(p1s()));
+    const src = path.join(dir, 'inline.3mf');
+    await fs.writeFile(src, await zip.generateAsync({ type: 'nodebuffer' }));
+    // any whole-string read of the root model fails, as it does for a 1.16 GB file
+    const proto = Object.getPrototypeOf(zip.file('3D/3dmodel.model'));
+    const original = proto.async;
+    proto.async = function (type, ...rest) {
+      if (type === 'string' && this.name === '3D/3dmodel.model') throw new RangeError('Invalid string length');
+      return original.call(this, type, ...rest);
+    };
+    let r;
+    try {
+      r = await convertToU1(src, path.join(dir, 'inline-U1.3mf'), profiles);
+    } finally {
+      proto.async = original;
+    }
+    expect(r.plates).toEqual([
+      { plate: 1, status: 'moved', dx: 7.5, dy: 8 },
+      { plate: 2, status: 'moved', dx: 24.3, dy: 8 },
+    ]);
+    const out = await (await JSZip.loadAsync(await fs.readFile(path.join(dir, 'inline-U1.3mf')))).file('3D/3dmodel.model').async('string');
+    const at = model.lastIndexOf('<build');
+    expect(out.slice(0, out.lastIndexOf('<build'))).toBe(model.slice(0, at)); // meshes byte-identical
+    expect([...out.matchAll(/transform="([^"]+)"/g)].map((m) => m[1].split(' ').slice(9, 11).map(Number))).toEqual([[127.5, 128], [468.3, 128]]);
+  });
+
   it('refuses U1 projects, projects without settings and missing profiles', async () => {
     const dir = await tmpDir();
     await expect(convertToU1(await p1sProject(dir, { printer_model: 'Snapmaker U1' }), path.join(dir, 'a.3mf'), profiles)).rejects.toThrow(/已經是 Snapmaker U1/);

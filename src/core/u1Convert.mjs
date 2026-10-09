@@ -6,6 +6,7 @@
 // locally installed Snapmaker Orca profiles (orcaProfiles.mjs).
 import fs from 'node:fs';
 import { StringDecoder } from 'node:string_decoder';
+import { Readable } from 'node:stream';
 import JSZip from 'jszip';
 import { U1_MODEL } from './orcaProfiles.mjs';
 import { t } from './i18n/index.mjs';
@@ -190,20 +191,30 @@ const union = (a, b) => (!a ? b : !b ? a : { min: a.min.map((v, k) => Math.min(v
 const attr = (tag, name) => new RegExp(`\\s${name}="([^"]*)"`).exec(tag)?.[1];
 
 /**
- * Vertex bounding box of every <object> with a mesh in one model file. Read
- * as a stream: object files of big models exceed V8's maximum string length
- * (one real file holds 541 MB of XML).
+ * Scan model XML piece by piece: the vertex bounding box of every <object>
+ * with a mesh, and the <component> tags of every <object>. Never one string
+ * for the whole file: model files of big projects exceed V8's maximum string
+ * length (one real object file holds 541 MB of XML; a real root model with
+ * inline meshes 1.16 GB).
  */
-async function meshBoxes(zipFile) {
+function modelScanner() {
   const boxes = new Map();
+  const components = new Map(); // object id -> [<component .../> tags]
   let cur = null;
-  const re = /<object\b[^>]*?\sid="(\d+)"|<vertex\b([^>]*)\/>/g;
+  let curId = null;
+  const re = /<object\b[^>]*?\sid="(\d+)"|<vertex\b([^>]*)\/>|<component\b[^>]*\/>/g;
   const scan = (text) => {
     re.lastIndex = 0;
     for (let m; (m = re.exec(text)); ) {
       if (m[1] !== undefined) {
         cur = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] };
-        boxes.set(m[1], cur);
+        curId = m[1];
+        boxes.set(curId, cur);
+        components.set(curId, []);
+        continue;
+      }
+      if (m[0].startsWith('<component')) {
+        components.get(curId)?.push(m[0]);
         continue;
       }
       if (!cur) continue;
@@ -217,24 +228,51 @@ async function meshBoxes(zipFile) {
   };
   const decoder = new StringDecoder('utf8');
   let rest = '';
+  return {
+    write(chunk) {
+      const text = rest + decoder.write(chunk);
+      const cut = text.lastIndexOf('<'); // keep a tag split across chunks for the next round
+      scan(text.slice(0, cut));
+      rest = text.slice(cut);
+    },
+    end() {
+      scan(rest + decoder.end());
+      for (const [id, b] of boxes) if (b.min[0] === Infinity) boxes.delete(id);
+      return { boxes, components };
+    },
+  };
+}
+
+/** modelScanner over a zip entry, as a stream. */
+async function meshBoxes(zipFile) {
+  const s = modelScanner();
   await new Promise((resolve, reject) => {
     zipFile
       .internalStream('uint8array')
-      .on('data', (chunk) => {
-        const text = rest + decoder.write(Buffer.from(chunk));
-        const cut = text.lastIndexOf('<'); // keep a tag split across chunks for the next round
-        scan(text.slice(0, cut));
-        rest = text.slice(cut);
-      })
+      .on('data', (chunk) => s.write(Buffer.from(chunk.buffer, chunk.byteOffset, chunk.length)))
       .on('error', reject)
-      .on('end', () => {
-        scan(rest + decoder.end());
-        resolve();
-      })
+      .on('end', resolve)
       .resume();
   });
-  for (const [id, b] of boxes) if (b.min[0] === Infinity) boxes.delete(id);
-  return boxes;
+  return s.end().boxes;
+}
+
+const CHUNK = 16 * 1024 * 1024;
+
+/** modelScanner over bytes already in memory, in CHUNK slices. */
+function scanBytes(bytes) {
+  const s = modelScanner();
+  for (let o = 0; o < bytes.length; o += CHUNK) s.write(bytes.subarray(o, o + CHUNK));
+  return s.end();
+}
+
+/** Byte offset of the root model's <build> element (the last one), or -1. */
+function buildOffset(bytes) {
+  for (let at = bytes.lastIndexOf('<build'); at >= 0; at = at ? bytes.lastIndexOf('<build', at - 1) : -1) {
+    const next = bytes[at + 6];
+    if (next === 0x3e || next === 0x20 || next === 0x09 || next === 0x0a || next === 0x0d) return at; // '>' or whitespace
+  }
+  return -1;
 }
 
 /**
@@ -263,11 +301,18 @@ function plateOfInstances(text) {
  * re-centred from the source bed centre to the U1 bed centre, then nudged
  * inside the U1 printable area if needed. A plate is left as it is when its
  * objects do not sit on the plate the grid says (inconsistent data) or do not
- * fit on 270 x 270. Returns { xml, plates: [{plate, status, dx, dy, reason}] }.
+ * fit on 270 x 270. Returns { head, build, plates: [{plate, status, dx, dy, reason}], count }:
+ * the root model is `head` (bytes, unchanged) + `build` (the rewritten <build>
+ * section) — only item transforms change, and they all live in <build>, so a
+ * 1 GB model is never turned into one string.
  */
 export async function convertPlates(zip, rootPath, srcBed, u1Bed) {
-  let xml = await zip.file(rootPath).async('string');
-  const rootBoxes = await meshBoxes(zip.file(rootPath));
+  const raw = await zip.file(rootPath).async('uint8array');
+  const bytes = Buffer.from(raw.buffer, raw.byteOffset, raw.length);
+  const at = buildOffset(bytes);
+  const head = at >= 0 ? bytes.subarray(0, at) : bytes;
+  let xml = at >= 0 ? bytes.subarray(at).toString('utf8') : '';
+  const { boxes: rootBoxes, components } = scanBytes(head);
   const subBoxes = new Map();
   const boxOf = async (pathName, id) => {
     if (!pathName || pathName === `/${rootPath}`) return rootBoxes.get(id);
@@ -277,9 +322,9 @@ export async function convertPlates(zip, rootPath, srcBed, u1Bed) {
   };
   // object id -> local bounding box (own mesh, or its components)
   const objectBox = new Map();
-  for (const [, id, body] of xml.matchAll(/<object\b[^>]*?\sid="(\d+)"[^>]*>([\s\S]*?)<\/object>/g)) {
+  for (const [id, tags] of components) {
     let box = rootBoxes.get(id) || null;
-    for (const [c] of body.matchAll(/<component\b[^>]*\/>/g)) {
+    for (const c of tags) {
       const b = await boxOf(attr(c, 'p:path'), attr(c, 'objectid'));
       box = union(box, boxTransform(b, parseTransform(attr(c, 'transform'))));
     }
@@ -344,7 +389,15 @@ export async function convertPlates(zip, rootPath, srcBed, u1Bed) {
     const tag = /\stransform="[^"]*"/.test(it.tag) ? it.tag.replace(/\stransform="[^"]*"/, ` transform="${tf}"`) : it.tag.replace(/\s*\/>$/, ` transform="${tf}"/>`);
     xml = xml.slice(0, it.index) + tag + xml.slice(it.index + it.tag.length);
   }
-  return { xml, plates: report, count };
+  return { head, build: xml, plates: report, count };
+}
+
+/** The converted root model as a stream (head bytes in CHUNK slices, then the rewritten <build>). */
+function modelStream({ head, build }) {
+  return Readable.from((function* () {
+    for (let o = 0; o < head.length; o += CHUNK) yield head.subarray(o, o + CHUNK);
+    yield Buffer.from(build, 'utf8');
+  })());
 }
 
 // Slicer output and source-printer presets that must not travel with the converted project
@@ -371,7 +424,7 @@ export async function convertToU1(srcPath, destPath, profiles) {
   const rootPath = /Target="\/?([^"]+\.model)"/.exec((await zip.file('_rels/.rels')?.async('string')) || '')?.[1] || '3D/3dmodel.model';
   const plates = await convertPlates(zip, rootPath, bedRect(srcArea), bedRect(u1Area));
 
-  zip.file(rootPath, plates.xml);
+  zip.file(rootPath, modelStream(plates));
   zip.file('Metadata/project_settings.config', JSON.stringify(conv.settings, null, 4));
   for (const name of Object.keys(zip.files)) if (DROP.test(name)) zip.remove(name);
   await new Promise((resolve, reject) => {
