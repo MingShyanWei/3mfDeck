@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { DEFAULT_SPOOLS } from '../../core/filament.mjs';
 import { t, LANGS, LANG_NAMES } from '../../core/i18n/index.mjs';
+import { NOZZLES } from '../../core/nozzle.mjs';
 import { FILAMENT_PROFILES_URL } from '../../core/inventoryImport.mjs';
 
 export default function SettingsDialog({ onClose, onRootChanged, onSpoolsChanged, language, onLanguage }) {
@@ -48,6 +49,17 @@ export default function SettingsDialog({ onClose, onRootChanged, onSpoolsChanged
           <h2><i className="mdi mdi-cog-outline" /> {t('app.settings')}</h2>
         </header>
         <div className="form">
+          {settings && (
+            <label>
+              <span>{t('settings.nozzle')}</span>
+              <select data-testid="settings-nozzle" value={settings.nozzle} onChange={async (e) => {
+                const r = await window.api.setNozzle(Number(e.target.value));
+                if (!r.error) setSettings({ ...settings, nozzle: r.nozzle });
+              }}>
+                {NOZZLES.map((n) => <option key={n} value={n}>{t('settings.nozzleMm', { n })}</option>)}
+              </select>
+            </label>
+          )}
           <label>
             <span>{t('settings.language')}</span>
             <select data-testid="settings-language" value={language} onChange={(e) => onLanguage(e.target.value)}>

@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('api', {
   openFilamentProfiles: () => ipcRenderer.invoke('app:openFilamentProfiles'),
   openReleases: () => ipcRenderer.invoke('app:openReleases'),
   setUpdateCheck: (on) => ipcRenderer.invoke('settings:setUpdateCheck', on),
+  setNozzle: (nozzle) => ipcRenderer.invoke('settings:setNozzle', nozzle),
   updateStatus: () => ipcRenderer.invoke('update:status'),
   openUpdate: () => ipcRenderer.invoke('update:open'),
   skipUpdate: (version) => ipcRenderer.invoke('update:skip', version),

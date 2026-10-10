@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { isNearlyBlack } from '../src/core/thumbCheck.mjs';
 import { hashFile, isDataless } from '../src/core/contentHash.mjs';
+import { exportPresetSettings } from '../src/core/printPreset.mjs';
+import { parseNozzle, PRINT_PRESETS, DEFAULT_NOZZLE } from '../src/core/nozzle.mjs';
 import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb, cabinetColorRows, idsNeedingSourcePrinter, setSourcePrinter, idsNeedingEmbedded, setEmbedded, getCover, thumbsToCheck, setThumb, idsNeedingHash, setContentHash, conversionsOf, setConvertedFrom } from '../src/core/db.mjs';
 import JSZip from 'jszip';
 import { listEmbeddedImages, mimeOf } from '../src/core/embeddedImages.mjs';
@@ -139,6 +141,13 @@ function registerIpc() {
     updateNotice = null;
     win?.webContents.send('ui:update', null);
   });
+  // M34: the nozzle on the user's U1 (0.2 / 0.4 / 0.6 / 0.8 mm)
+  ipcMain.handle('settings:setNozzle', (_e, v) => {
+    const nozzle = parseNozzle(v);
+    if (nozzle === null) return { error: t('settings.err.nozzle') };
+    saveSettings(app.getPath('userData'), { nozzle });
+    return { nozzle };
+  });
   ipcMain.handle('settings:setUpdateCheck', (_e, on) => {
     saveSettings(app.getPath('userData'), { updateCheck: on === true });
     if (on === true) return runUpdateCheck({ force: true }); // switched back on: check now
@@ -180,7 +189,8 @@ function registerIpc() {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mfcab-u1-'));
     try {
       const dest = path.join(tmp, `${path.basename(src.rel_path, path.extname(src.rel_path))}-U1.3mf`);
-      const report = await convertToU1(modelPath(db, root, id), dest, loadU1Profiles(process.env.MF_ORCA_PROFILES || DEFAULT_PROFILES_DIR));
+      const nozzle = loadSettings(app.getPath('userData'), root).nozzle; // M34: the user's nozzle, not the source's
+      const report = await convertToU1(modelPath(db, root, id), dest, loadU1Profiles(process.env.MF_ORCA_PROFILES || DEFAULT_PROFILES_DIR), { nozzle });
       const res = await importPaths(db, root, [dest]);
       const newId = res.ids[0];
       if (!newId && res.duplicates[0]) throw new Error(t('u1.err.duplicate', { rel: res.duplicates[0].relPath }));
@@ -320,7 +330,7 @@ function registerIpc() {
   ipcMain.handle('lib:importDialog', () => importViaDialog());
   ipcMain.handle('settings:get', () => {
     const s = loadSettings(app.getPath('userData'), root);
-    return { libraryRoot: root, spools: s.spools, inventory: s.inventory, language: getLang(), updateCheck: s.updateCheck };
+    return { libraryRoot: root, spools: s.spools, inventory: s.inventory, language: getLang(), updateCheck: s.updateCheck, nozzle: s.nozzle };
   });
   ipcMain.handle('settings:setInventory', (_e, list) => {
     try {
@@ -374,7 +384,12 @@ function registerIpc() {
     const dest = await askSavePath(t('dlg.export3mf'), t('export.quantizedName', { name: m.name, n: slots.length, mix: opts?.mix ? t('export.mixSuffix') : '' }), '3mf');
     if (!dest) return null;
     try {
-      const r = await exportQuantized3mf(modelPath(db, root, id), dest, slots, { ...opts, overwrite: true });
+      // M34: the user's nozzle and the chosen print preset (原檔設定 / 公仔)
+      const { nozzle } = loadSettings(app.getPath('userData'), root);
+      const preset = PRINT_PRESETS.includes(opts?.preset) ? opts.preset : 'original';
+      const profiles = preset === 'original' && nozzle === DEFAULT_NOZZLE ? null : loadU1Profiles(process.env.MF_ORCA_PROFILES || DEFAULT_PROFILES_DIR);
+      const presetSettings = exportPresetSettings(preset, profiles, nozzle, slots.length);
+      const r = await exportQuantized3mf(modelPath(db, root, id), dest, slots, { ...opts, overwrite: true, presetSettings });
       return { path: dest, summary: r.summary, mixes: r.mixes.length };
     } catch (err) {
       return { error: err.message };

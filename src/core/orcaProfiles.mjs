@@ -42,7 +42,7 @@ const first = (v) => (Array.isArray(v) ? v[0] : v);
 
 /**
  * U1 presets from the local Snapmaker vendor profiles:
- * { machines: [{name, nozzle, printableArea}], processes: [{name, nozzle, layerHeight}],
+ * { machines: [{name, nozzle, printableArea, minLayerHeight}], processes: [{name, nozzle, layerHeight}],
  *   filaments: [{name, nozzle, type}] } — instantiable presets only.
  * Returns null when the profiles are not installed.
  */
@@ -59,7 +59,12 @@ export function loadU1Profiles(dir = DEFAULT_PROFILES_DIR) {
 
   const u1Machines = [...machines.values()]
     .filter((j) => inst(j) && m(j.name, 'printer_model') === U1_MODEL)
-    .map((j) => ({ name: j.name, nozzle: Number(first(m(j.name, 'nozzle_diameter'))), printableArea: m(j.name, 'printable_area') }));
+    .map((j) => ({
+      name: j.name,
+      nozzle: Number(first(m(j.name, 'nozzle_diameter'))),
+      printableArea: m(j.name, 'printable_area'),
+      minLayerHeight: Number(first(m(j.name, 'min_layer_height'))), // M34: NaN when the profile does not say
+    }));
   const forMachine = (j, resolve) => {
     const compat = resolve(j.name, 'compatible_printers') || [];
     return u1Machines.find((x) => compat.includes(x.name));

@@ -7,7 +7,7 @@ import { LANGS, DICTS, DEFAULT_LANG, pickLang, translate, setLang, getLang, t, l
 import { formatDate, formatInt } from '../../src/renderer/format.js';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
-const SAME_AS_EN = [];
+const SAME_AS_EN = ['settings.nozzleMm']; // language-neutral strings (a unit)
 const placeholders = (s) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
 
 describe('dictionaries', () => {

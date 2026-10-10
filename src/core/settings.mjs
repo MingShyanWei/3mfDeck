@@ -5,6 +5,7 @@ import { indexNewFiles } from './importer.mjs';
 import { listModels, getModel } from './db.mjs';
 import { DEFAULT_SPOOLS } from './filament.mjs';
 import { t } from './i18n/index.mjs';
+import { parseNozzle, DEFAULT_NOZZLE } from './nozzle.mjs';
 
 const file = (userDataDir) => path.join(userDataDir, 'config.json');
 
@@ -27,6 +28,7 @@ export function loadSettings(userDataDir, defaultRoot) {
     updateCheck: saved.updateCheck !== false, // M32: on unless the user switched it off (older configs: on)
     skippedUpdate: saved.skippedUpdate ?? null,
     lastUpdateCheck: saved.lastUpdateCheck ?? null, // ISO time GitHub last answered (24 h throttle)
+    nozzle: parseNozzle(saved.nozzle) ?? DEFAULT_NOZZLE, // M34: the nozzle on the user's U1 (mm)
     updateLatest: saved.updateLatest ?? null, // { version, url } found then
   };
 }

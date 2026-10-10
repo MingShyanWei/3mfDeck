@@ -112,8 +112,12 @@ export const U1_PRESETS = {
   filament_type: 'PLA',
 };
 
-/** project_settings.config for an export: the slots as filaments on U1 system presets, nothing else. */
-export function exportProjectSettings(slots, mixedDefs = null) {
+/**
+ * project_settings.config for an export: the slots as filaments on U1 system
+ * presets. M34: `presetSettings` (printPreset.mjs: the user's nozzle, the
+ * 公仔 settings) is merged over those presets.
+ */
+export function exportProjectSettings(slots, mixedDefs = null, presetSettings = {}) {
   const n = slots.length;
   const cfg = {
     filament_colour: slots.map((s) => s.hex.toUpperCase() + 'FF'),
@@ -125,6 +129,7 @@ export function exportProjectSettings(slots, mixedDefs = null) {
     from: 'project',
     name: 'project_settings',
   };
+  Object.assign(cfg, presetSettings);
   if (mixedDefs) Object.assign(cfg, MIXED_PROJECT_DEFAULTS, { mixed_filament_definitions: mixedDefs });
   return JSON.stringify(cfg, null, 4);
 }
@@ -236,7 +241,7 @@ function transformModel(zipFile, faceSlot, stateMap) {
  * the faces point at the virtual extruder (base count + mix ordinal).
  * Returns { slots, summary: [{color, slot | null, deltaE, mode, mix?}], stats, mixes }.
  */
-export async function exportQuantized3mf(srcPath, destPath, slots = U1_SLOTS, { threshold = MIX_DELTA_E, overThreshold = 'nearest', overwrite = false, mix = false } = {}) {
+export async function exportQuantized3mf(srcPath, destPath, slots = U1_SLOTS, { threshold = MIX_DELTA_E, overThreshold = 'nearest', overwrite = false, mix = false, presetSettings = {} } = {}) {
   const zip = await JSZip.loadAsync(await fs.promises.readFile(srcPath));
   const text = async (p) => (zip.file(p) ? zip.file(p).async('string') : null);
   const project = await text('Metadata/project_settings.config');
@@ -301,7 +306,7 @@ export async function exportQuantized3mf(srcPath, destPath, slots = U1_SLOTS, { 
       stripModelSettings(ms, (n) => (colours[n - 1] ? slotOf(colours[n - 1]) : null) || Math.min(n, slots.length)),
     );
   }
-  zip.file('Metadata/project_settings.config', exportProjectSettings(slots, mix ? mixedFilamentDefinitions(mixRows) : null));
+  zip.file('Metadata/project_settings.config', exportProjectSettings(slots, mix ? mixedFilamentDefinitions(mixRows) : null, presetSettings));
   for (const name of Object.keys(zip.files)) if (SLICER_FILES.test(name)) zip.remove(name);
 
   await new Promise((resolve, reject) => {

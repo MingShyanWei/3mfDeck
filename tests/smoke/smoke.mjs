@@ -975,6 +975,43 @@ try {
   assert.deepEqual(await fs.readFile(offSrc), offBefore, 'source 3MF never modified (mix)');
   step('M10 export: 超門檻顏色寫成 mixed_filament_definitions（2 組 Mix），面指向虛擬擠出頭 5+；原檔未動');
 
+  // 15b) M34 (SPEC 3.15 draft): nozzle setting (0.4 by default, remembered) and the 公仔 export preset
+  await page.click('[data-testid=settings-button]');
+  await page.waitForSelector('[data-testid=settings-nozzle]');
+  assert.equal(await page.inputValue('[data-testid=settings-nozzle]'), '0.4', 'nozzle 0.4 by default');
+  await page.screenshot({ path: path.join(base, 'm34-settings-nozzle.png') });
+  await page.click('[data-testid=settings-done]');
+  assert.equal(await page.inputValue('[data-testid=print-preset]'), 'original');
+  await page.selectOption('[data-testid=print-preset]', 'miniature');
+  await page.waitForSelector('[data-testid=preset-hint]');
+  assert.match(await page.textContent('[data-testid=preset-hint]'), /20–45°/);
+  await page.screenshot({ path: path.join(base, 'm34-export-miniature.png') });
+  await saveTo('q-mini.3mf');
+  await page.click('[data-testid=export-quantized]');
+  await page.waitForFunction(() => /q-mini\.3mf/.test(document.querySelector('[data-testid=export-message]')?.textContent || ''));
+  {
+    const { default: JSZip } = await import('jszip');
+    const cfg = JSON.parse(await (await JSZip.loadAsync(await fs.readFile(path.join(exportsDir, 'q-mini.3mf')))).file('Metadata/project_settings.config').async('string'));
+    assert.deepEqual(
+      [cfg.printer_settings_id, cfg.layer_height, cfg.support_type, cfg.support_top_z_distance, cfg.brim_width, cfg.wall_generator, cfg.mixed_filament_definitions.split(';').length],
+      ['Snapmaker U1 (0.4 nozzle)', '0.08', 'tree(auto)', '0.08', '10', 'arachne', 2],
+    );
+  }
+  await page.selectOption('[data-testid=print-preset]', 'miniatureIroning');
+  await page.waitForFunction(() => /熨燙/.test(document.querySelector('[data-testid=preset-hint]')?.textContent || ''));
+  await page.screenshot({ path: path.join(base, 'm34-export-ironing.png') });
+  await saveTo('q-mini-iron.3mf');
+  await page.click('[data-testid=export-quantized]');
+  await page.waitForFunction(() => /q-mini-iron\.3mf/.test(document.querySelector('[data-testid=export-message]')?.textContent || ''));
+  {
+    const { default: JSZip } = await import('jszip');
+    const cfg = JSON.parse(await (await JSZip.loadAsync(await fs.readFile(path.join(exportsDir, 'q-mini-iron.3mf')))).file('Metadata/project_settings.config').async('string'));
+    assert.deepEqual([cfg.ironing_type, cfg.ironing_spacing, cfg.brim_width], ['top', '0.1', '10']);
+    assert.match(cfg.different_settings_to_system[0], /ironing_type;ironing_spacing/);
+  }
+  await page.selectOption('[data-testid=print-preset]', 'original');
+  step('M34: 設定頁噴嘴預設 0.4；匯出選「公仔」→ 提示後傾 20–45°，檔內 0.08 層高、樹狀支撐 Top Z 0.08、裙邊 10、Arachne，Mix 保留；「公仔＋熨燙」另寫 ironing_type top、間距 0.1');
+
   // Custom spools: 2 spools equal to two of the file colours
   await page.click('[data-testid=settings-button]');
   await page.waitForSelector('[data-testid=spool-editor]');
@@ -1006,7 +1043,11 @@ try {
   await page.fill('[data-testid=search]', '');
 
   // 13) M17: colour labels, colour filter, colour-name search, cabinet purchase suggestions
-  await importViaMenu([await stage('painted.3mf', 'm17-painted.3mf'), await stage('materials.3mf', 'm17-materials.3mf')]);
+  // materials.3mf is still in the library (recovered above); M33 would skip the same bytes, so give this copy its own
+  const m17Materials = await (await import('jszip')).default.loadAsync(await fs.readFile(path.join(FIX, 'materials.3mf')));
+  m17Materials.file('Metadata/m17.txt', 'M17 smoke');
+  await fs.writeFile(path.join(inbox, 'm17-materials.3mf'), await m17Materials.generateAsync({ type: 'nodebuffer' }));
+  await importViaMenu([await stage('painted.3mf', 'm17-painted.3mf'), path.join(inbox, 'm17-materials.3mf')]);
   await page.click('[data-testid=import-skip-all]');
   await page.fill('[data-testid=search]', 'm17');
   await page.waitForFunction(() => document.querySelectorAll('[data-testid=model-card]').length === 2);

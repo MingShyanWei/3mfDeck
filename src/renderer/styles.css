@@ -424,3 +424,7 @@ input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
 /* M33: import notice for files skipped as already in the library */
 .dup-notice .row { display: flex; align-items: center; gap: 8px; }
 .dup-notice .row + .row { margin-top: 6px; }
+
+/* M34: print preset dropdown next to 匯出 3MF */
+.export-group { display: flex; align-items: center; gap: 6px; flex: none; }
+.export-group select { max-width: 150px; }

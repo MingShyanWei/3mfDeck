@@ -9,6 +9,8 @@ import { ProvenanceBadge, PlateBadge, ColorLabels, isNonU1 } from './Badges.jsx'
 import { isUnlabeled, formatBytes, formatInt, formatBbox, formatDate } from '../format.js';
 import { t } from '../../core/i18n/index.mjs';
 
+let lastPreset = 'original'; // M34: the export preset chosen last in this session
+
 export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose, onOpen, onConverted }) {
   const [model, setModel] = useState(null);
   const [draft, setDraft] = useState(null);
@@ -22,6 +24,15 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
   const [converting, setConverting] = useState(false);
   const [converted, setConverted] = useState(null); // M18 conversion result
   const [actionError, setActionError] = useState('');
+  const [preset, setPreset] = useState(lastPreset); // M34: print preset for 匯出 3MF (kept for the session)
+  const [nozzle, setNozzle] = useState(null);
+  useEffect(() => {
+    window.api.getSettings().then((s) => setNozzle(s.nozzle));
+  }, [id]);
+  const choosePreset = (p) => {
+    lastPreset = p;
+    setPreset(p);
+  };
   const load = useCallback(async () => {
     const m = await window.api.get(id);
     setModel(m);
@@ -92,7 +103,7 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
   };
   // M13d: the only export action, top right (Mix mode is always on now)
   const export3mf = async () => {
-    const r = await window.api.exportQuantized(id, { overThreshold: 'nearest', mix: true });
+    const r = await window.api.exportQuantized(id, { overThreshold: 'nearest', mix: true, preset });
     if (r?.error) setActionError(r.error);
     else if (r) setExported({ path: r.path, summary: r.summary, mixes: r.mixes });
   };
@@ -226,11 +237,28 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
           <ColorLabels labels={model.color_labels} pct testid="detail-color-tags" />
         </div>
         {!model.missing && model.format === '3mf' && (
-          <button className="primary" data-testid="export-quantized" onClick={export3mf} title={t('detail.export3mfTitle')}>
-            <i className="mdi mdi-cube-send" /> {t('detail.export3mf')}
-          </button>
+          <div className="export-group">
+            <select data-testid="print-preset" value={preset} onChange={(e) => choosePreset(e.target.value)} title={t('printPreset.label')}>
+              <option value="original">{t('printPreset.original')}</option>
+              <option value="miniature">{t('printPreset.miniature')}</option>
+              <option value="miniatureIroning">{t('printPreset.miniatureIroning')}</option>
+            </select>
+            <button className="primary" data-testid="export-quantized" onClick={export3mf} title={t('detail.export3mfTitle')}>
+              <i className="mdi mdi-cube-send" /> {t('detail.export3mf')}
+            </button>
+          </div>
         )}
       </div>
+      {!model.missing && model.format === '3mf' && preset !== 'original' && (
+        <div className="callout note" data-testid="preset-hint">
+          <i className="mdi mdi-human-handsup" />
+          <span className="grow">
+            {t('printPreset.miniatureHint', { nozzle: nozzle ?? '…' })}
+            {preset === 'miniatureIroning' && <> {t('printPreset.ironingHint')}</>}
+            {nozzle !== null && nozzle > 0.2 && <> {t('printPreset.nozzleHint')}</>}
+          </span>
+        </div>
+      )}
       {model.format === '3mf' && model.colors.length > 0 && (
         <div className="panel-card">
           {plateInfo ? (

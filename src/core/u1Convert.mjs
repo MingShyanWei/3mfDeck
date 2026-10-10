@@ -92,8 +92,10 @@ export function perFilament(ps, key, n) {
  * that must survive the move — the source's own process tweaks, per-filament
  * overrides, the colour table — and the compatibility fixes.
  */
-export function u1ProjectSettings(ps, profiles, { variableLayerHeight = false } = {}) {
-  const nozzle = nearestNozzle(Number([].concat(ps.nozzle_diameter ?? 0.4)[0]));
+export function u1ProjectSettings(ps, profiles, { variableLayerHeight = false, nozzle: wanted = null } = {}) {
+  // M34: the user's nozzle (settings) decides the presets; the source's only when none is given
+  const sourceNozzle = nearestNozzle(Number([].concat(ps.nozzle_diameter ?? 0.4)[0]));
+  const nozzle = wanted ?? sourceNozzle;
   const machine = profiles.machines.find((m) => m.nozzle === nozzle);
   const process = pickProcess(profiles, nozzle, Number(ps.layer_height ?? 0.2));
   if (!machine || !process) throw new Error(t('u1.err.noNozzleProfile', { nozzle }));
@@ -130,6 +132,7 @@ export function u1ProjectSettings(ps, profiles, { variableLayerHeight = false } 
     if (!processKeys.includes(k)) processKeys.push(k);
     if (String(ps[k]) !== v) fixes.push(note);
   };
+  if (nozzle !== sourceNozzle) fixes.push(t('u1.fix.nozzle', { to: nozzle, from: sourceNozzle }));
   set('exclude_object', '1', t('u1.fix.excludeObject'));
   set('brim_type', 'no_brim', t('u1.fix.noBrim'));
   const supportType = String(out.support_type ?? ps.support_type ?? '');
@@ -408,7 +411,7 @@ const DROP = /^Metadata\/(slice_info\.config|plate_\d+\.json|plate_\d+\.gcode(\.
  * exist). `profiles` = loadU1Profiles(). Returns a report:
  * { from, machine, process, filaments, fixes, carried, plates }.
  */
-export async function convertToU1(srcPath, destPath, profiles) {
+export async function convertToU1(srcPath, destPath, profiles, { nozzle = null } = {}) {
   if (!profiles) throw new Error(t('u1.err.noOrca'));
   const zip = await JSZip.loadAsync(await fs.promises.readFile(srcPath));
   const psText = await zip.file('Metadata/project_settings.config')?.async('string');
@@ -417,7 +420,7 @@ export async function convertToU1(srcPath, destPath, profiles) {
   const from = detectPrinter(ps);
   if (from?.isU1) throw new Error(t('u1.err.alreadyU1'));
   const variableLayerHeight = Boolean((await zip.file('Metadata/layer_heights_profile.txt')?.async('string'))?.trim());
-  const conv = u1ProjectSettings(ps, profiles, { variableLayerHeight });
+  const conv = u1ProjectSettings(ps, profiles, { variableLayerHeight, nozzle });
   const srcArea = ps.printable_area;
   if (!Array.isArray(srcArea) || srcArea.length < 3) throw new Error(t('u1.err.noBed'));
   const u1Area = profiles.machines.find((m) => m.name === conv.machine).printableArea;
