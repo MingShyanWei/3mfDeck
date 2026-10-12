@@ -10,7 +10,7 @@ import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import JSZip from 'jszip';
-import { encodeExtruder, remapPaintColor, mappingCsv, exportProjectSettings, stripModelSettings, exportQuantized3mf, U1_PRESETS } from '../../src/core/exportMapping.mjs';
+import { encodeExtruder, remapPaintColor, exportProjectSettings, stripModelSettings, exportQuantized3mf, U1_PRESETS } from '../../src/core/exportMapping.mjs';
 import { decodePaintColor } from '../../src/core/paintColor.mjs';
 import { parse3mf } from '../../src/core/parse/threemf.mjs';
 import { U1_SLOTS, slotsFromColours } from '../../src/core/filament.mjs';
@@ -37,31 +37,6 @@ describe('paint_color writing', () => {
     expect(decodePaintColor(remapPaintColor('40C843', map))).toEqual({ 3: 0.5, 1: 0.25, 4: 0.25 }); // 4 children
     expect(remapPaintColor('4', new Map([[1, 0]]))).toBe(''); // fully unassigned -> attribute dropped
     expect(decodePaintColor(remapPaintColor('841', new Map([[1, 0], [2, 2]])))).toEqual({ 0: 0.5, 2: 0.5 });
-  });
-});
-
-describe('mappingCsv', () => {
-  it('lists colour, faces, share, slot, ΔE or recipe and a note; UTF-8 BOM for Excel', async () => {
-    const { colorStats } = await parse3mf(await fs.readFile(fixture('mixneeded.3mf')));
-    const csv = mappingCsv(colorStats);
-    expect(csv.startsWith('﻿原始色,面數,佔比,指定捲槽,ΔE 或配方,備註\r\n')).toBe(true);
-    const lines = csv.trim().split('\r\n').slice(1);
-    expect(lines).toHaveLength(4);
-    const row = (hex) => lines.find((l) => l.startsWith(hex));
-    // recipes are the two-spool pigment blends the export writes (M15)
-    expect(row('#800080')).toMatch(/^#800080,2,16\.67%,槽2 M #FF00FF,配方 M 52%＋K 48%（ΔE 7\.1）；量化到最近捲 ΔE 30\.3,需混色；量化匯出：量化到最近捲（ΔE 30\.3）$/);
-    expect(row('#FF8C00')).toMatch(/,配方 Y 72%＋M 28%（ΔE 7\.3）；.*,需混色；/);
-    expect(mappingCsv([{ color: '#947B71', faces: 1, pct: 100 }])).toMatch(/,需購買；/);
-    const single = mappingCsv([{ color: '#FFD700', faces: 5, pct: 100 }]);
-    expect(single.trim().split('\r\n')[1]).toBe('#FFD700,5,100%,槽3 Y #FFFF00,ΔE 11.6,單捲');
-  });
-
-  it('skip option and custom slots are reflected', async () => {
-    const csv = mappingCsv([{ color: '#4CAF50', faces: 10, pct: 100 }], U1_SLOTS, { overThreshold: 'skip' });
-    expect(csv).toMatch(/（跳過，不指定）/);
-    expect(csv).toMatch(/量化匯出：跳過該面/);
-    const own = mappingCsv([{ color: '#4CAF50', faces: 10, pct: 100 }], slotsFromColours(['#4CAF50', '#000000']));
-    expect(own.trim().split('\r\n')[1]).toBe('#4CAF50,10,100%,槽1 #4CAF50,ΔE 0,單捲');
   });
 });
 

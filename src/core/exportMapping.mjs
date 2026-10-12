@@ -1,5 +1,4 @@
 // M9 (SPEC 3.5b): export the filament mapping.
-// - mappingCsv(): report of colour -> slot / recipe
 // - exportQuantized3mf(): a NEW 3MF whose faces carry paint_color pointing at
 //   the user's slots, so Snapmaker Orca opens it with the colours assigned.
 //
@@ -19,9 +18,8 @@ import { StringDecoder } from 'node:string_decoder';
 import { Readable, PassThrough } from 'node:stream';
 import fs from 'node:fs';
 import { decodePaintColor } from './paintColor.mjs';
-import { printPlan, recipeText, U1_SLOTS, MIX_DELTA_E } from './filament.mjs';
+import { printPlan, U1_SLOTS, MIX_DELTA_E } from './filament.mjs';
 import { mixPrintPlan, mixedFilamentDefinitions, MIXED_PROJECT_DEFAULTS } from './mixExport.mjs';
-import { t } from './i18n/index.mjs';
 
 // Orca's paint_color string for extruder n (Model.cpp CONST_FILAMENTS; 1..17)
 export function encodeExtruder(n) {
@@ -62,35 +60,6 @@ export function remapPaintColor(str, map) {
   walk();
   if (out.length === 1 && out[0] === 0) return '';
   return out.reverse().map((n) => n.toString(16).toUpperCase()).join('');
-}
-
-const pctText = (v) => `${v}%`;
-const csvCell = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
-
-/**
- * Mapping report (CSV, UTF-8 with BOM for Excel). One row per colour:
- * 原始色, 面數, 佔比, 指定捲槽 (the slot the quantized export uses), ΔE 或配方, 備註.
- */
-export function mappingCsv(colors, slots = U1_SLOTS, { threshold = MIX_DELTA_E, overThreshold = 'nearest' } = {}) {
-  const rows = [['csv.color', 'csv.faces', 'csv.share', 'csv.slot', 'csv.deltaOrRecipe', 'csv.note'].map((k) => t(k))];
-  for (const c of colors) {
-    const plan = printPlan(c.color, slots, threshold);
-    const slot = [t('slot.n', { n: plan.nearest.slot }), plan.nearest.name, plan.nearest.hex].filter(Boolean).join(' ');
-    if (plan.mode === 'single') {
-      rows.push([c.color, c.faces, pctText(c.pct), slot, `ΔE ${plan.nearest.deltaE}`, t('csv.single')]);
-      continue;
-    }
-    const skipped = overThreshold === 'skip';
-    rows.push([
-      c.color,
-      c.faces,
-      pctText(c.pct),
-      skipped ? t('csv.skippedSlot') : slot,
-      t('csv.recipe', { recipe: recipeText(plan.recipe), dE: plan.recipe.deltaE, nearDE: plan.nearest.deltaE }),
-      t(plan.mixable ? 'csv.noteMix' : 'csv.noteBuy', { export: skipped ? t('csv.exportSkip') : t('csv.exportNearest', { dE: plan.nearest.deltaE }) }),
-    ]);
-  }
-  return '﻿' + rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
 
 // Exported projects carry ONLY the spool table, never the source file's

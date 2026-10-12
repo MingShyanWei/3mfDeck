@@ -134,7 +134,7 @@ git clone git@github.com:MingShyanWei/3mfDeck.git
 cd 3mfDeck
 npm install
 npm run dev        # vite build + start Electron
-npm test           # Vitest unit tests (314)
+npm test           # Vitest unit tests (317)
 npm run smoke      # Electron end-to-end smoke test (isolated folders and database)
 npm run dist       # package the macOS dmg (file names carry the build version)
 node scripts/release-notes.mjs  # release notes with the build marker, sizes and SHA256
@@ -159,7 +159,7 @@ src/core/          Pure logic, testable on its own: parsing, colours, mixing, ex
   orcaProfiles.mjs Reads the local Snapmaker Orca printer profiles (geometry only, no network)
 src/core/i18n/     UI dictionaries (en / zh-TW / zh-CN)
 src/renderer/      React UI (three.js preview, detail panel, dialogs)
-tests/unit/        Vitest (35 files, 314 tests)
+tests/unit/        Vitest (35 files, 317 tests)
 tests/smoke/       Real Electron end-to-end test
 docs/user-guide*.md User guide (en / zh-TW / zh-CN)
 docs/screenshots/  README screenshots (en / zh-TW / zh-CN)

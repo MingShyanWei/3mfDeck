@@ -20,7 +20,7 @@ import { importPaths, indexNewFiles } from '../src/core/importer.mjs';
 import { trashModel, restoreModel, emptyTrash } from '../src/core/trash.mjs';
 import { consistencyReport, relocateModel, removeRecord, findInTrash, restoreMissingFromTrash, isInside, removeMissingRecords, findByFilename, applyRelocations } from '../src/core/missing.mjs';
 import { loadSettings, saveSettings, validateSpools, validateInventory, switchRoot, markMissing, modelPath } from '../src/core/settings.mjs';
-import { mappingCsv, exportQuantized3mf } from '../src/core/exportMapping.mjs';
+import { exportQuantized3mf } from '../src/core/exportMapping.mjs';
 import { import3dfpInventory, FILAMENT_PROFILES_URL } from '../src/core/inventoryImport.mjs';
 import { slotsFromColours } from '../src/core/filament.mjs';
 import { SUPPORTED_EXTS } from '../src/core/parse/index.mjs';
@@ -371,13 +371,6 @@ function registerIpc() {
     const r = await dialog.showSaveDialog(win, { title, defaultPath: path.join(app.getPath('downloads'), defaultName), filters: [{ name: ext.toUpperCase(), extensions: [ext] }] });
     return r.canceled || !r.filePath ? null : r.filePath;
   };
-  ipcMain.handle('lib:exportCsv', async (_e, id, opts) => {
-    const m = getModel(db, id);
-    const dest = await askSavePath(t('dlg.exportCsv'), t('export.csvName', { name: m.name }), 'csv');
-    if (!dest) return null;
-    await fs.promises.writeFile(dest, mappingCsv(m.colors, userSlots(), opts));
-    return { path: dest };
-  });
   ipcMain.handle('lib:exportQuantized', async (_e, id, opts) => {
     const m = getModel(db, id);
     const slots = userSlots();

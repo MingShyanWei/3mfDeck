@@ -48,7 +48,6 @@ contextBridge.exposeInMainWorld('api', {
   setSpools: (spools) => ipcRenderer.invoke('settings:setSpools', spools),
   setInventory: (list) => ipcRenderer.invoke('settings:setInventory', list),
   importInventory: () => ipcRenderer.invoke('settings:importInventory'),
-  exportCsv: (id, opts) => ipcRenderer.invoke('lib:exportCsv', id, opts),
   exportQuantized: (id, opts) => ipcRenderer.invoke('lib:exportQuantized', id, opts),
   chooseRoot: () => ipcRenderer.invoke('settings:chooseRoot'),
   onImported: on('lib:imported'),
