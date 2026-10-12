@@ -63,6 +63,7 @@ describe('公仔 (miniature)', () => {
       initial_layer_print_height: '0.2',
       enable_support: '1',
       support_type: 'tree(auto)',
+      support_style: 'tree_hybrid', // Organic (U1's default style) ignores the base pattern
       support_top_z_distance: '0.08',
       support_interface_top_layers: '0',
       support_interface_bottom_layers: '0',
@@ -81,7 +82,7 @@ describe('公仔 (miniature)', () => {
   it('lists every changed key in different_settings_to_system (Orca ignores unlisted project values)', () => {
     const s = exportPresetSettings('miniature', profiles, 0.4, 2);
     const [proc, f1, f2, printer] = s.different_settings_to_system;
-    expect(proc.split(';')).toEqual(expect.arrayContaining(['layer_height', 'enable_support', 'support_top_z_distance', 'brim_type', 'brim_width', 'wall_generator', 'min_feature_size', 'support_base_pattern_spacing']));
+    expect(proc.split(';')).toEqual(expect.arrayContaining(['layer_height', 'enable_support', 'support_style', 'support_top_z_distance', 'brim_type', 'brim_width', 'wall_generator', 'min_feature_size', 'support_base_pattern_spacing']));
     expect(proc).not.toMatch(/settings_id|printer_variant|fan_/);
     expect([f1, f2, printer]).toEqual(['fan_min_speed;fan_max_speed;close_fan_the_first_x_layers', 'fan_min_speed;fan_max_speed;close_fan_the_first_x_layers', '']);
     expect(s.different_settings_to_system).toHaveLength(4);

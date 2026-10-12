@@ -62,7 +62,7 @@ Downloading models is easy; the trouble starts afterwards:
 
 **Export**
 - Export 3MF: quantized to the nearest spool (with ΔE), source slicer settings stripped to avoid Orca warnings
-- Print settings drop-down next to Export 3MF: **Original settings**, **Miniature** (from r/PrintedMinis, u/HOHansen: lowest layer height for your nozzle, tree supports with top Z = layer height, no interface layers, 10 mm brim, Arachne, full cooling) or **Miniature + ironing** (also irons upward flat surfaces such as a base); tilting the model back 20–45° is still done in Orca
+- Print settings drop-down next to Export 3MF: **Original settings**, **Miniature** (from r/PrintedMinis, u/HOHansen: lowest layer height for your nozzle, Tree Hybrid supports with infill inside and top Z = layer height, no interface layers, 10 mm brim, Arachne, full cooling) or **Miniature + ironing** (also irons upward flat surfaces such as a base); tilting the model back 20–45° is still done in Orca
 - Mixed filaments: written to `mixed_filament_definitions` (Orca's native Full Spectrum mixed filament); recipes are guidance only and never written back to the original
 - Originals are never modified; every export is a new file
 

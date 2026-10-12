@@ -24,9 +24,10 @@
 | `layer_height` | 該噴嘴最低層高（0.2→0.04、0.4→0.08、0.6→0.12、0.8→0.16） | 層高越低越好 |
 | `initial_layer_print_height` | max(0.2, 層高) | 第一層 0.2 讓支撐與裙邊黏牢 |
 | `enable_support`／`support_type` | 1／`tree(auto)` | 樹狀支撐 |
+| `support_style` | `tree_hybrid` | U1 預設樣式 default＝Organic，Organic 樹幹一律空心、忽略下列填充設定；Tree Hybrid 才會填充（2026-10-12 實測，使用者選定） |
 | `support_top_z_distance` | 等於層高 | 複雜件 Top Z＝層高（不要 2 倍） |
 | `support_interface_top_layers`／`_bottom_layers` | 0／0 | 不用介面層 |
-| `support_base_pattern`／`support_base_pattern_spacing` | `rectilinear`／1.2 mm | 支撐內部要有填充，間距 1–1.5 mm（貼文指出 Orca 此設定可能無效，需實測） |
+| `support_base_pattern`／`support_base_pattern_spacing` | `rectilinear`／1.2 mm | 支撐內部要有填充，間距 1–1.5 mm（需搭配上列 Tree Hybrid，見驗收） |
 | `brim_type`／`brim_width` | `outer_only`／10 mm | 大裙邊蓋住支撐（寬度由使用者拍板 10 mm） |
 | `wall_generator`／`min_feature_size` | `arachne`／30% | Arachne、最小特徵 30% |
 | 線寬（外牆、內牆、頂面、填充、實心填充） | 0.2 噴嘴改 0.2；其他噴嘴沿用 U1 預設 | 線寬約等於噴嘴（0.2 噴嘴用 0.2）；支撐線寬不改 |
@@ -47,5 +48,10 @@
   - 設定頁可改噴嘴並記住；轉 U1 依設定噴嘴選設定檔（以 0.2 噴嘴原檔、設定 0.4 驗證）。
   - 匯出「公仔」的 3MF 在 Snapmaker Orca GUI 開啟：設定被載入（層高、支撐、裙邊等）、無錯誤或相容性警告、可切片；
     支撐內部填充是否生效列入報告。
-  - 2026-10-11 使用者在 Orca GUI 確認：支撐開啟（樹狀）、裙邊、熨燙設定生效；支撐內部填充尚未確認。
+  - 2026-10-11 使用者在 Orca GUI 確認：支撐開啟（樹狀）、裙邊、熨燙設定生效。
+  - 2026-10-12 支撐內部填充（使用者以 Snapmaker Orca 2.4.0 切片同一隻熊、匯出 G-code）：
+    - U1 預設樣式（default＝Organic）下只改 `support_base_pattern`（rectilinear／default）：兩份約 536 萬行，只差 4 行註解，
+      所有路徑（含 1,116 段支撐）完全相同——Organic 忽略此設定（Orca 原始碼：smsDefault→smsTreeOrganic，TreeSupport3D 把樹的密度歸零）。
+    - 改 `support_style = tree_hybrid`：同層剖面（z 29.96）支撐內部出現間距 1.2 mm 的 rectilinear 填充線（Organic 只有一圈外殼）；
+      支撐走線 274 m → 375 m、總用料 153.4 g → 157.4 g、時間 21h51m → 22h12m。**生效**，公仔設定因此加入 `support_style = tree_hybrid`。
   - 「原檔設定」匯出與現行結果相同（0.4 噴嘴）。

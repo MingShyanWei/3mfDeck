@@ -7,9 +7,14 @@
 // them and some updates" (u/HOHansen), scaled to the user's nozzle: lowest
 // layer height, first layer 0.2, tree supports with Top Z distance = layer
 // height and no interface layers, infill inside the supports (base pattern
-// spacing 1.2 mm), a 10 mm brim (user's choice), Arachne with 30 % minimum
+// rectilinear, spacing 1.2 mm), a 10 mm brim (user's choice), Arachne with 30 % minimum
 // feature size, line width = nozzle for the 0.2 nozzle, ~100 % cooling except
 // the first layer. Orientation (tilt back 20-45°) cannot be set by a file.
+// The support style is Tree Hybrid: U1's "default" style is Organic, which
+// ignores the base pattern and keeps every branch hollow (Orca: smsDefault ->
+// smsTreeOrganic; TreeSupport3D zeroes the tree density). User-sliced
+// 2026-10-12 on the same model: Organic gave identical G-code with
+// rectilinear and default; Tree Hybrid printed rectilinear lines inside.
 // 「公仔＋熨燙」 adds ironing of all top surfaces (user's request; U1 defaults
 // already match the usual speed 30 / flow 8 %), with a line spacing of 25 % of
 // the nozzle instead of U1's 0.15 mm. Not "topmost": Orca irons only the
@@ -66,6 +71,7 @@ export function exportPresetSettings(preset, profiles, nozzle, n) {
     initial_layer_print_height: str(Math.max(0.2, layer)),
     enable_support: '1',
     support_type: 'tree(auto)',
+    support_style: 'tree_hybrid',
     support_top_z_distance: str(layer),
     support_interface_top_layers: '0',
     support_interface_bottom_layers: '0',

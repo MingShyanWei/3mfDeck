@@ -119,7 +119,7 @@ Based on r/PrintedMinis "[FDM miniatures - How I support them and some updates](
 |---|---|
 | Layer height | the nozzle's lowest (0.2→0.04, 0.4→0.08, 0.6→0.12, 0.8→0.16 mm) |
 | First layer | 0.2 mm (so supports and brim stick) |
-| Supports | on, tree; top Z distance = layer height; no interface layers; infill inside the supports at 1.2 mm spacing |
+| Supports | on, tree (Tree Hybrid style); top Z distance = layer height; no interface layers; infill inside the supports (rectilinear, 1.2 mm spacing) |
 | Brim | outer only, 10 mm (covers the support bases) |
 | Walls | Arachne, minimum feature size 30 % |
 | Line width | 0.2 on the 0.2 nozzle; U1 defaults on the others |
@@ -130,7 +130,7 @@ Based on r/PrintedMinis "[FDM miniatures - How I support them and some updates](
 
 **What you must still do yourself** (a file cannot set it): in Orca, **tilt the model back 20–45°** (and 20° to one side if needed). That reduces overhangs and support scars a lot.
 
-> The post's author notes that Orca's "support base pattern" may not produce infill inside the supports. If tree supports break mid-print, check the inside of the supports in the slice preview.
+> **Why Tree Hybrid**: one of the post's key points is **infill inside the tree supports**, so they do not break mid-print. The U1's default tree style is Organic, whose branches are always hollow and which ignores the infill setting; Tree Hybrid fills them (tested on the same model: Organic supports were a single shell, Tree Hybrid had infill lines 1.2 mm apart). It costs about 3 % more filament and 2 % more print time, and large flat overhangs get normal supports underneath, which are harder to remove.
 
 ## 11. Converting to Snapmaker U1
 
