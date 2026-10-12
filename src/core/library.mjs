@@ -22,14 +22,17 @@ async function moveNoClobber(src, dest) {
 /**
  * Put `src` into `dir` under its own basename via `place(src, dest)`, which
  * must fail with EEXIST instead of overwriting; on a clash retry with
- * "-2", "-3", ... before the extension. Returns the absolute destination.
+ * "-2", "-3", ... before the extension. `isTaken(dest)` marks names that are
+ * free on disk but still held by a record (its file deleted by hand), which
+ * count as a clash too. Returns the absolute destination.
  */
-async function placeUnique(src, dir, name, place) {
+async function placeUnique(src, dir, name, place, isTaken = () => false) {
   await fs.mkdir(dir, { recursive: true });
   const ext = path.extname(name);
   const stem = path.basename(name, ext);
   for (let i = 1; ; i++) {
     const dest = path.join(dir, i === 1 ? `${stem}${ext}` : `${stem}-${i}${ext}`);
+    if (isTaken(dest)) continue;
     try {
       await place(src, dest);
       return dest;
@@ -41,16 +44,17 @@ async function placeUnique(src, dir, name, place) {
 
 /**
  * Move `src` to `<root>/<YYYY>/<basename>` (YYYY = import year), adding a
- * numeric suffix on name clashes. Returns the destination path relative to root.
+ * numeric suffix on name clashes, including rel paths in `taken` (paths the
+ * DB already holds). Returns the destination path relative to root.
  */
-export async function moveIntoLibrary(src, root, now = new Date()) {
-  const dest = await placeUnique(src, path.join(root, String(now.getFullYear())), path.basename(src), moveNoClobber);
+export async function moveIntoLibrary(src, root, now = new Date(), taken = new Set()) {
+  const dest = await placeUnique(src, path.join(root, String(now.getFullYear())), path.basename(src), moveNoClobber, (d) => taken.has(path.relative(root, d)));
   return path.relative(root, dest);
 }
 
-/** Move a file to `relDest` under root (suffix on clash). Returns the new rel path. */
-export async function moveWithinRoot(root, relSrc, relDest) {
-  const dest = await placeUnique(path.join(root, relSrc), path.join(root, path.dirname(relDest)), path.basename(relDest), moveNoClobber);
+/** Move a file to `relDest` under root (suffix on clash, including rel paths in `taken`). Returns the new rel path. */
+export async function moveWithinRoot(root, relSrc, relDest, taken = new Set()) {
+  const dest = await placeUnique(path.join(root, relSrc), path.join(root, path.dirname(relDest)), path.basename(relDest), moveNoClobber, (d) => taken.has(path.relative(root, d)));
   return path.relative(root, dest);
 }
 

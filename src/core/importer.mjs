@@ -24,6 +24,7 @@ export async function importPaths(db, root, paths, now = new Date()) {
   const ids = [];
   const errors = [];
   const duplicates = [];
+  const taken = knownRelPaths(db); // a missing record still holds its path
   for (const src of files) {
     let relPath;
     let hash;
@@ -45,7 +46,7 @@ export async function importPaths(db, root, paths, now = new Date()) {
       continue;
     }
     try {
-      relPath = await moveIntoLibrary(src, root, now);
+      relPath = await moveIntoLibrary(src, root, now, taken);
     } catch (err) {
       errors.push({ file: src, error: err.message });
       continue;
@@ -54,6 +55,7 @@ export async function importPaths(db, root, paths, now = new Date()) {
     if (parsed.error) errors.push({ file: src, error: `parse: ${parsed.error}` });
     const id = insertModel(db, { name: stemOf(src), relPath, parsed });
     setContentHash(db, id, hash); // the moved file has the same bytes
+    taken.add(relPath);
     ids.push(id);
   }
   return { ids, skipped, errors, duplicates };

@@ -2,7 +2,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { TRASH_DIR, moveWithinRoot } from './library.mjs';
-import { getModel, listModels, setRelPath, deleteModels } from './db.mjs';
+import { getModel, listModels, setRelPath, deleteModels, knownRelPaths } from './db.mjs';
 
 export const isTrashed = (rel) => rel.startsWith(`${TRASH_DIR}/`);
 
@@ -40,7 +40,7 @@ export async function restoreModel(db, root, id, now = new Date()) {
   const parts = m.rel_path.split('/');
   // .trash/<id>/<original>; a file dropped straight into .trash goes to this year's folder
   const original = parts.length > 2 ? parts.slice(2).join('/') : path.join(String(now.getFullYear()), parts[1]);
-  const rel = await moveWithinRoot(root, m.rel_path, original);
+  const rel = await moveWithinRoot(root, m.rel_path, original, knownRelPaths(db)); // a missing record may still hold `original`
   setRelPath(db, id, rel);
   await pruneEmptyDirs(root, path.dirname(m.rel_path));
   return rel;

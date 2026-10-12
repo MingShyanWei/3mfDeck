@@ -63,7 +63,7 @@ export async function relocateModel(db, root, id, absPath, now = new Date()) {
     await apply(db, root, id, rel);
     return rel;
   }
-  const rel = await moveIntoLibrary(absPath, root, now);
+  const rel = await moveIntoLibrary(absPath, root, now, takenByOthers(db, id));
   await apply(db, root, id, rel);
   return rel;
 }
@@ -172,12 +172,19 @@ export async function findInTrash(root, relPath) {
   return null;
 }
 
+/** Rel paths held by records other than `id` (a missing record's path is free on disk but not for a new file). */
+function takenByOthers(db, id) {
+  const taken = knownRelPaths(db);
+  taken.delete(getModel(db, id).rel_path);
+  return taken;
+}
+
 /** Move a missing record's file back from .trash to its path (suffix on clash). Returns the rel path. */
 export async function restoreMissingFromTrash(db, root, id) {
   const m = getModel(db, id);
   const found = await findInTrash(root, m.rel_path);
   if (!found) throw new Error(t('missing.err.notInTrash', { rel: m.rel_path }));
-  const rel = await moveWithinRoot(root, found, m.rel_path);
+  const rel = await moveWithinRoot(root, found, m.rel_path, takenByOthers(db, id));
   setRelPath(db, id, rel);
   setContentHash(db, id, await hashFile(path.join(root, rel))); // M33: fingerprint of the file actually restored
   return rel;
