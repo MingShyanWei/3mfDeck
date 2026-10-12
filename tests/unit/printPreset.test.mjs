@@ -73,6 +73,7 @@ describe('公仔 (miniature)', () => {
       brim_width: '10',
       wall_generator: 'arachne',
       min_feature_size: '30%',
+      sparse_infill_pattern: 'lightning', // interior mostly hollow; tops still carried
       fan_min_speed: ['100', '100', '100'],
       fan_max_speed: ['100', '100', '100'],
       close_fan_the_first_x_layers: ['1', '1', '1'],
@@ -82,7 +83,7 @@ describe('公仔 (miniature)', () => {
   it('lists every changed key in different_settings_to_system (Orca ignores unlisted project values)', () => {
     const s = exportPresetSettings('miniature', profiles, 0.4, 2);
     const [proc, f1, f2, printer] = s.different_settings_to_system;
-    expect(proc.split(';')).toEqual(expect.arrayContaining(['layer_height', 'enable_support', 'support_style', 'support_top_z_distance', 'brim_type', 'brim_width', 'wall_generator', 'min_feature_size', 'support_base_pattern_spacing']));
+    expect(proc.split(';')).toEqual(expect.arrayContaining(['layer_height', 'enable_support', 'support_style', 'support_top_z_distance', 'brim_type', 'brim_width', 'wall_generator', 'min_feature_size', 'sparse_infill_pattern', 'support_base_pattern_spacing']));
     expect(proc).not.toMatch(/settings_id|printer_variant|fan_/);
     expect([f1, f2, printer]).toEqual(['fan_min_speed;fan_max_speed;close_fan_the_first_x_layers', 'fan_min_speed;fan_max_speed;close_fan_the_first_x_layers', '']);
     expect(s.different_settings_to_system).toHaveLength(4);

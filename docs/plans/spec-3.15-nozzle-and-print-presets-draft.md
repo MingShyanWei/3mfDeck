@@ -30,6 +30,7 @@
 | `support_base_pattern`／`support_base_pattern_spacing` | `rectilinear`／1.2 mm | 支撐內部要有填充，間距 1–1.5 mm（需搭配上列 Tree Hybrid，見驗收） |
 | `brim_type`／`brim_width` | `outer_only`／10 mm | 大裙邊蓋住支撐（寬度由使用者拍板 10 mm） |
 | `wall_generator`／`min_feature_size` | `arachne`／30% | Arachne、最小特徵 30% |
+| `sparse_infill_pattern` | `lightning` | 非貼文內容，使用者要求縮短時間、內部空心（2026-10-12）：只在頂面需要處填充；密度沿用 U1 預設 15% |
 | 線寬（外牆、內牆、頂面、填充、實心填充） | 0.2 噴嘴改 0.2；其他噴嘴沿用 U1 預設 | 線寬約等於噴嘴（0.2 噴嘴用 0.2）；支撐線寬不改 |
 | `fan_min_speed`／`fan_max_speed`（每條線材） | 100 | 冷卻約 100% |
 | `close_fan_the_first_x_layers`（每條線材） | 1 | 第一層除外 |
@@ -54,4 +55,5 @@
       所有路徑（含 1,116 段支撐）完全相同——Organic 忽略此設定（Orca 原始碼：smsDefault→smsTreeOrganic，TreeSupport3D 把樹的密度歸零）。
     - 改 `support_style = tree_hybrid`：同層剖面（z 29.96）支撐內部出現間距 1.2 mm 的 rectilinear 填充線（Organic 只有一圈外殼）；
       支撐走線 274 m → 375 m、總用料 153.4 g → 157.4 g、時間 21h51m → 22h12m。**生效**，公仔設定因此加入 `support_style = tree_hybrid`。
+  - 2026-10-12 閃電填充：同一隻熊、同上 Tree Hybrid 設定，只改 `sparse_infill_pattern = lightning`，使用者在 Orca 切片預估約 16 小時（原 22h12m）。
   - 「原檔設定」匯出與現行結果相同（0.4 噴嘴）。
