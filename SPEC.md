@@ -215,7 +215,7 @@
   匯入時記錄 `source_printer` 供清單過濾（「非 U1」過濾器）。
 - **轉換（自寫引擎，不採用第三方程式碼）**：詳情面板警示區提供「轉換為 Snapmaker U1」按鈕 →
   另存為新檔（檔名加 `-U1`，原檔不動，轉換後匯入檔案櫃）。轉換內容：
-  1. 讀來源專案設定；依來源噴嘴直徑對應 U1 的 process 家族（0.2/0.4/0.6/0.8），
+  1. 讀來源專案設定；依來源噴嘴直徑對應 U1 的 process 家族（0.2/0.4/0.6/0.8）（**M34 起改依設定頁的「噴嘴尺寸」，見 3.15**），
      寫入 U1 system preset 名稱（`printer_model`/`printer_settings_id`/`print_settings_id`/`filament_settings_id`）。
   2. **相容性修正**（比照社群既有做法，但自行實作）：啟用 Exclude Object、關閉多餘 Brim、
      偵測到可變層高（adaptive layer height）時把 Tree 支撐改為 Hybrid。
@@ -367,6 +367,11 @@ CREATE TABLE models (
   notes         TEXT,
   imported_at   TEXT NOT NULL,
   updated_at    TEXT NOT NULL,
+  source_printer TEXT,                  -- 3MF 專案的 printer_model（M18，見 3.9；''＝無／非專案）
+  source_process TEXT,                  -- 其 print_settings_id（M18）
+  embedded_images TEXT,                 -- JSON {cover, images}：3MF 內嵌的產品圖（M19，見 3.4b）
+  cover         BLOB,                   -- 該封面圖的位元組（M19）
+  thumb_dark    INTEGER,                -- 1＝3D 渲染縮圖幾乎全黑、不顯示（M21，見 3.4c）
   content_hash  TEXT,                   -- SHA-256 hex（M33，見 3.1b）；NULL＝尚未計算；有索引
   converted_from INTEGER                -- U1 轉換檔的來源記錄 id（M33，見 3.1b）
 );
@@ -384,9 +389,33 @@ CREATE TABLE color_stats (              -- 3MF 的 paint_color 分布（分析�
   color    TEXT,                        -- #RRGGBB
   faces    INTEGER,
   pct      REAL,
+  label    TEXT,                        -- 色名（M17，見 3.5d）
   PRIMARY KEY (model_id, color)
 );
+CREATE TABLE plates (                   -- 多盤 3MF（M5，見 3.6）
+  model_id  INTEGER REFERENCES models(id) ON DELETE CASCADE,
+  plate     INTEGER,
+  name      TEXT,
+  tri_count INTEGER,
+  PRIMARY KEY (model_id, plate)
+);
+CREATE TABLE plate_color_stats (        -- 每盤的 paint_color 分布（M5）
+  model_id INTEGER REFERENCES models(id) ON DELETE CASCADE,
+  plate    INTEGER,
+  color    TEXT,
+  faces    INTEGER,
+  pct      REAL,
+  PRIMARY KEY (model_id, plate, color)
+);
+CREATE TABLE color_mixing (             -- Full Spectrum（抖色）偵測（M6）
+  model_id         INTEGER PRIMARY KEY REFERENCES models(id) ON DELETE CASCADE,
+  vertex_mixed_pct REAL,
+  full_spectrum    INTEGER NOT NULL
+);
+CREATE INDEX models_content_hash ON models(content_hash);   -- M33
 ```
+
+- 舊資料庫開啟時自動補上後加的欄位與資料表（`ALTER TABLE … ADD COLUMN`），不動既有資料。
 
 - 原則：**檔案系統為真、DB 只是索引**。DB 開機時對 `~/3mf-library/` 做一致性檢查：檔案在 DB 不在 → 提示重建索引；DB 有檔案不在 → 標「遺失」。
 
@@ -412,6 +441,41 @@ Node ≥ 20；macOS 26 為目標平台（不做 Win/Linux）。
 | M2 | 3D 預覽（三種著色模式）＋縮圖 | 鴨子 3MF 用 paint_color 正確上色；GLB 顯示貼圖；STL 灰色可轉 |
 | M3 | 顏色分析面板（分布表＋三種警示） | 鴨子檔案正確標出「42%/35% 疑似抖色配對」；≤4 色提示出現 |
 | M4 | 回收桶、匯出、一致性檢查、打包 dmg | 刪除可還原；拔掉 DB 檔重開 App 能重建索引；dmg 裝到 /Applications 可跑 |
+| M5 | 多盤 3MF：盤數徽章、每盤預覽與顏色分析（3.6） | 多盤檔每盤分開列出、切換檢視；各盤面數加總等於全檔 |
+| M6 | Full Spectrum 抖色偵測、用自己的捲色映射、混色估計模式 | 抖色檔與分區上色檔正確區分；混色估計只在抖色檔出現 |
+| M7 | 遺失記錄：重新定位／移除／從回收桶還原、只提示一次、「遺失」篩選、依檔名找回（3.2b） | 換根目錄後舊記錄標遺失、可逐筆或批次找回；移除記錄不刪檔 |
+| M8 | 單捲印不出的顏色給 CMYK 混色配方 | 超門檻顏色顯示配方與 ΔE；混不出的標「需買線材」 |
+| M9 | 量化 3MF 匯出、自訂捲色（3.5b） | 匯出檔在 Snapmaker Orca GUI 開啟無警告、捲色正確、可切片；原檔不動 |
+| M10 | 混色耗材匯出：Orca 原生 Mix 虛擬擠出頭、FilamentMixer 顏料模型（3.5c） | Orca GUI 載入 mix 定義、面指向正確 |
+| M11 | 建議捲色：面積加權 k-means、含混色覆蓋率 | 依模型顏色給 1–4 捲建議與覆蓋率 |
+| M12 | 線材庫：登記擁有的線材、從線材庫建議捲色、缺色採購建議 | 建議從線材庫挑；線材庫蓋不到的顏色列入採購 |
+| M12b | 匯入 3dfilamentprofiles My Spools 的 JSON／CSV | 兩種格式皆可匯入，重複色碼略過 |
+| M13 | 介面減量：建議捲色移到彈窗、匯出區精簡 | 主畫面只留必要操作 |
+| M13b | 單色模型也給 1 捲建議 | 單色檔顯示 1 捲建議 |
+| M13c | CMYK／CMYW 標準配置覆蓋率比較，可一鍵套用 | 建議彈窗列出標準配置覆蓋率 |
+| M13d | 移除匯出選項摺疊區（Mix 恆開），詳情標題列單一「匯出 3MF」 | 只剩一個匯出按鈕 |
+| M14 | 視覺設計「暗房」（使用者自 3 組 demo 選定 B）套用全 App | 全 App 一致套用 |
+| M14b | 選取中的卡片保留遺失紅框 | 遺失卡片選取後仍可辨識 |
+| M15 | 混色判斷全面改用兩捲顏料模型（修正匯出未寫 Mix） | 預覽、分析、匯出的混色結果一致 |
+| M16 | 移除線框預覽模式 | 預覽只剩三種著色模式 |
+| M17 | 顏色標籤、依顏色篩選與搜尋、整櫃採購建議（3.5d） | 色名標籤正確、可多選篩選、色名可跨語言搜尋 |
+| M18 | Snapmaker U1 相容性檢查與自寫轉換（3.9） | 真實非 U1 檔轉換後在 Orca GUI 開啟無警告、物件在 U1 盤面內 |
+| M19 | 顯示 3MF 內嵌的產品圖（3.4b） | 有內嵌圖才出現「原檔圖」，可切換封面、實拍、盤面圖 |
+| M20 | 改名 3mfDeck、新圖示，自動搬移舊 userData | 舊資料夾的 DB 與設定複製到新位置，舊資料夾不動 |
+| M21 | 卡片縮圖優先用產品封面；修正全黑 3D 縮圖（3.4c） | 有封面用封面；全黑渲染改用格式圖示 |
+| M22 | 建置版本、作者與 repo 顯示在側欄底部（3.11） | 安裝版與開發版皆顯示正確版本 |
+| M23 | Windows／Linux 打包設定（最小範圍） | 產出 Windows 安裝版、免安裝版與 Linux AppImage、deb |
+| M24 | 介面英文／繁中／簡中，預設跟隨系統（3.12） | 三種語言切換並記住，字典鍵值完整 |
+| M25 | README 截圖改用示範模型產生、套件中繼資料 | 截圖可由腳本重新產生 |
+| M26 | 設定頁說明如何取得 3dfilamentprofiles 匯出檔 | 三種語言皆顯示步驟與 My Spools 連結 |
+| M27 | 發行：release manifest、只打包 App 程式碼、deb 套件名 `3mfdeck` | 五個平台檔案與 manifest 的大小、SHA256 一致 |
+| M28 | 單一版本字串 `1.YYMM.DHHMM`（側欄與檔名一致，3.11） | 版本符合 semver、檔名與 App 顯示相同 |
+| M29 | 建議捲色與顏色分析的誠實數字（3.5e） | 見 3.5e 驗收 |
+| M30 | 版本更新通知（3.13） | 見 3.13 驗收 |
+| M31 | 線材庫建議改為窮舉所有子集（3.5f） | 見 3.5f 驗收 |
+| M32 | 更新檢查預設開啟、24 小時最多一次（3.13） | 見 3.13 驗收 |
+| M33 | 重複檔案偵測（3.1b） | 見 3.1b 驗收 |
+| M34 | 噴嘴尺寸設定、公仔／公仔＋熨燙匯出設定（3.15） | 見 3.15 驗收 |
 
 ## 7. 驗證素材（沿用實測證據）
 - 鴨子 FullSpectrum 3MF（664,130 面、4 色 `#00FFFF/#FF00FF/#FFFF00/#000000`）作為 M1/M2/M3 的標準測試檔。
