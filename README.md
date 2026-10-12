@@ -8,6 +8,8 @@ Collect the 3MF files scattered across your disk, MakerWorld and Meshy into one 
 
 ![3mfDeck library with the demo models](docs/screenshots/en/1-library.png)
 
+**How to use it:** see the [user guide](docs/user-guide.md) (step by step: import, colours, spools, export, miniature settings, U1 conversion).
+
 ---
 
 ## Why
@@ -22,6 +24,7 @@ Downloading models is easy; the trouble starts afterwards:
 | Full Spectrum mixing is guesswork | Mix **detection and recipes**: a two-spool pigment model computes the mixed colour and its ΔE, and tells you which slot at what % |
 | Exported 3MF files open in Orca with a pile of warnings | **Export 3MF**: strips incompatible slicer settings, writes only geometry + colours + spool table; mixes are written as Orca's native Mix virtual extruders |
 | Shared files are set up for someone else's printer | **Snapmaker U1 compatibility check**: non-U1 files are flagged (with the source printer) and can be converted in one click (nozzle matching, compatibility fixes, multi-plate coordinate conversion) |
+| The same model downloaded twice, under different names | **Duplicate detection** by content: an identical file is not imported again (the source stays where it was), and a Duplicates filter groups identical files already in the library |
 | Deleted the wrong file | Everything goes to `.trash/` and can be restored — nothing is really deleted; same names are never overwritten (`-2` is added) |
 
 ---
@@ -30,7 +33,12 @@ Downloading models is easy; the trouble starts afterwards:
 
 **Library**
 - Import (files / folders / drag and drop), search, tags, source records (MakerWorld / Printables / Meshy / self-made…), sorting, card and table views
-- Missing files: when records no longer match (e.g. after changing the library folder) they are marked “missing” and can be relocated or removed
+- Import dialog per file (source type, platform, URL, AI prompt, tags, notes); MakerWorld / Bambu Studio 3MF files are pre-filled from their embedded designer, licence and platform; skipped files stay listed under “Unlabelled”
+- Duplicates: files whose contents are already in the library are skipped on import (even under another name or folder); the “Duplicates” filter groups identical files; nothing is deleted automatically
+- Sidebar filters: unlabelled, not U1, duplicates, source, platform, colour (multi-select), tag, missing, trash
+- Trash: deleting moves the file to `<library>/.trash/`; restore one by one, or empty the trash after a second confirmation; “Show in Finder” in the detail panel
+- Missing files: when records no longer match (e.g. after changing the library folder) they are marked “missing” and can be relocated one by one, matched by file name in bulk, or removed (records only, no file deleted)
+- Rebuild index: files found in the library folder but not in the index (e.g. copied in by hand) are offered for indexing
 - Multi-plate 3MF: each plate listed separately, switchable in the viewer
 
 **3D preview**
@@ -40,16 +48,26 @@ Downloading models is easy; the trouble starts afterwards:
 
 **Colours and filaments**
 - Colour analysis: per-face `paint_color` / `basematerials` parsing, area-weighted shares, dither detection
+- Honest numbers: each colour says how it prints (single spool, mix with recipe, or buy filament — and what you get without buying); printable and not printable shares are always shown together
 - Colour labels: every colour is mapped to a fixed name (black / white / gray / red / orange / yellow / green / cyan / blue / purple / pink / brown / skin / gold) for searching and filtering; search accepts the name in any UI language (“blue”, 「藍」 and 「蓝」 all work)
 - Filament inventory: register your own spools (brand, material, RGB, remaining amount); imports 3dfilamentprofiles JSON/CSV exports
   - On 3dfilamentprofiles.com, log in and export from [My Spools](https://3dfilamentprofiles.com/my/spools) (JSON or CSV), then in Settings › Filament inventory press **Import from 3dfilamentprofiles…** and pick the downloaded file (Settings shows the same steps and links to My Spools)
 - Spool suggestions: pick from what you own, or get ideal colour codes; compare with the CMYK / CMYW standard sets; single-colour models get suggestions too
+  - only recommended when every colour covering at least 0.1 % can be printed, so small details are not averaged away; from your inventory every combination is tried, including colours two spools mix into
 - Purchase suggestions: area shares across the whole library, checked against your inventory, tell you which colours to buy first
+
+**Snapmaker U1**
+- Non-U1 projects (e.g. Bambu Lab) are flagged with their printer and listed under “Not U1”
+- Convert to Snapmaker U1: saves a new `-U1` file and imports it, original untouched — U1 printer / process / filament presets for your nozzle size, Exclude Object on, brim off, tree → hybrid supports with variable layer height, plates moved to U1 bed coordinates, the source's filament flow / temperature / cooling kept; converting the same file again asks first; very large projects (over 1 GB of model data) are supported
 
 **Export**
 - Export 3MF: quantized to the nearest spool (with ΔE), source slicer settings stripped to avoid Orca warnings
+- Print settings drop-down next to Export 3MF: **Original settings**, **Miniature** (from r/PrintedMinis, u/HOHansen: lowest layer height for your nozzle, tree supports with top Z = layer height, no interface layers, 10 mm brim, Arachne, full cooling) or **Miniature + ironing** (also irons upward flat surfaces such as a base); tilting the model back 20–45° is still done in Orca
 - Mixed filaments: written to `mixed_filament_definitions` (Orca's native Full Spectrum mixed filament); recipes are guidance only and never written back to the original
 - Originals are never modified; every export is a new file
+
+**Settings**
+- Nozzle size (0.2 / 0.4 / 0.6 / 0.8 mm) used for U1 conversion and export presets; library folder; spool colours (1–4 spools); filament inventory; language; update check
 
 **UI language**
 - English / 繁體中文 / 简体中文; follows the system language by default, can be switched in Settings and is remembered; dates and numbers are formatted for the language
@@ -116,7 +134,7 @@ git clone git@github.com:MingShyanWei/3mfDeck.git
 cd 3mfDeck
 npm install
 npm run dev        # vite build + start Electron
-npm test           # Vitest unit tests (279)
+npm test           # Vitest unit tests (314)
 npm run smoke      # Electron end-to-end smoke test (isolated folders and database)
 npm run dist       # package the macOS dmg (file names carry the build version)
 node scripts/release-notes.mjs  # release notes with the build marker, sizes and SHA256
@@ -141,8 +159,9 @@ src/core/          Pure logic, testable on its own: parsing, colours, mixing, ex
   orcaProfiles.mjs Reads the local Snapmaker Orca printer profiles (geometry only, no network)
 src/core/i18n/     UI dictionaries (en / zh-TW / zh-CN)
 src/renderer/      React UI (three.js preview, detail panel, dialogs)
-tests/unit/        Vitest (33 files, 279 tests)
+tests/unit/        Vitest (35 files, 314 tests)
 tests/smoke/       Real Electron end-to-end test
+docs/user-guide*.md User guide (en / zh-TW / zh-CN)
 docs/screenshots/  README screenshots (en / zh-TW / zh-CN)
 demo/models/       Procedural showcase models (regenerate: node scripts/make-demo-models.mjs)
 scripts/           Fixture, demo-model and screenshot generators

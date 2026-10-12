@@ -8,6 +8,8 @@
 
 ![3mfDeck 檔案櫃與示範模型](docs/screenshots/zh-TW/1-library.png)
 
+**怎麼用：** 見[使用說明](docs/user-guide.zh-TW.md)（照步驟：匯入、顏色、捲色、匯出、公仔設定、轉換 U1）。
+
 ---
 
 ## 為什麼做這個
@@ -22,6 +24,7 @@
 | Full Spectrum 混色全靠猜 | 混色**偵測與配方**：兩捲顏料模型算出混出來的色與 ΔE，告訴你哪一槽幾 % |
 | 匯出的 3MF 在 Orca 打開一堆警告 | **匯出 3MF**：剝除不相容的切片設定，只寫幾何＋顏色＋捲色表；混色寫入 Orca 原生 Mix 虛擬擠出頭 |
 | 別人分享的檔案不是自家印表機的 | **Snapmaker U1 相容性檢查**：非 U1 檔案會警示（含來源機型），可一鍵轉換（噴嘴對應、相容性修正、多盤座標換算） |
+| 同一個模型下載了兩次、檔名還不一樣 | 依內容**偵測重複**：內容完全相同的檔案不會再匯入（原檔留在原處），「重複」過濾把櫃中相同的檔案分組列出 |
 | 刪檔手滑 | 一律進 `.trash/`，可還原，不真刪；同名不覆蓋（加 `-2`） |
 
 ---
@@ -30,7 +33,12 @@
 
 **檔案櫃**
 - 匯入（選檔／資料夾／拖放）、搜尋、標籤、來源紀錄（MakerWorld／Printables／Meshy／自繪…）、排序、卡片格與表格兩種檢視
-- 遺失處置：根目錄換過導致對不上時，標示「遺失」、可重新定位或移除記錄
+- 匯入對話框逐檔填來源（來源類型、平台、網址、AI prompt、標籤、備註）；MakerWorld／Bambu Studio 的 3MF 會依內嵌的設計師、授權、平台自動預填；略過的檔案會列在「未標」提醒補上
+- 重複：內容已在櫃中的檔案匯入時略過（即使檔名、資料夾不同）；「重複」過濾把相同的檔案分組列出；不會自動刪除
+- 側欄過濾：未標、非 U1、重複、來源、平台、顏色（可多選）、標籤、遺失、回收桶
+- 回收桶：刪除即移到 `<根目錄>/.trash/`，可逐一還原，清空需二次確認；詳情面板可「在 Finder 顯示」
+- 遺失處置：根目錄換過導致對不上時，標示「遺失」，可逐筆重新定位、依檔名批次找回，或移除記錄（只移除記錄、不刪檔）
+- 重建索引：檔案櫃資料夾裡有、索引裡沒有的檔案（例如手動放入）會提示收錄
 - 多盤 3MF：每盤分開列出，可切換檢視
 
 **3D 預覽**
@@ -40,16 +48,26 @@
 
 **顏色與線材**
 - 顏色分析：逐面 `paint_color`／`basematerials` 解析，面積加權佔比、抖色偵測
+- 誠實數字：每個顏色標明怎麼印（單捲、混色附配方、或需買線材——以及不買會印成什麼）；可印與不可印比例一定並列
 - 顏色標籤：自動對應固定色名（黑／白／灰／紅／橙／黃／綠／青／藍／紫／粉／棕／膚／金），可依顏色搜尋與過濾；色名用任一介面語言搜尋都找得到（「藍」「蓝」「blue」皆可）
 - 線材庫：登記自己的線捲（品牌、材質、RGB、剩餘量），支援匯入 3dfilamentprofiles 的 JSON/CSV
   - 在 3dfilamentprofiles.com 登入後到 [My Spools](https://3dfilamentprofiles.com/my/spools) 匯出（JSON 或 CSV），再到「設定 › 線材庫」按 **從 3dfilamentprofiles 匯入…** 選擇下載的檔案（設定頁也列出相同步驟與 My Spools 連結）
 - 建議捲色：從現有線材挑，或給理想色碼；CMYK／CMYW 標準配置比較；單色作品也建議
+  - 佔比 0.1% 以上的顏色都印得出才會推薦，小細節不會被主色平均掉；從線材庫挑時會比對所有組合，包括兩捲混出第三色的情況
 - 採購建議：統計整個櫃子的面積佔比，對照線材庫算出該優先買哪些顏色
+
+**Snapmaker U1**
+- 非 U1 專案（例如 Bambu Lab）會標示原機型，並列在「非 U1」過濾
+- 轉換為 Snapmaker U1：另存 `-U1` 新檔並匯入，原檔不動——依噴嘴尺寸套用 U1 機型／process／線材設定、啟用 Exclude Object、關閉 Brim、可變層高時樹狀支撐改 Hybrid、多盤搬到 U1 盤面座標、保留原檔的線材流速／溫度／冷卻；同一檔再轉會先詢問；支援超大專案（模型資料超過 1 GB）
 
 **匯出**
 - 匯出 3MF：量化到最近捲（含 ΔE 標示），剝除來源切片設定避免 Orca 警告
+- 匯出按鈕旁的「列印設定」下拉：**原檔設定**、**公仔**（依 r/PrintedMinis u/HOHansen：噴嘴最低層高、樹狀支撐且 Top Z＝層高、不用介面層、10 mm 裙邊、Arachne、全速冷卻）或 **公仔＋熨燙**（再熨燙朝上的平面，例如底座）；模型往後傾 20–45° 仍需在 Orca 手動調整
 - 混色耗材：寫入 `mixed_filament_definitions`（Orca 原生 Full Spectrum 混合耗材），配方僅供參考、不回寫原檔
 - 原檔永不修改，一律產新檔
+
+**設定**
+- 噴嘴尺寸（0.2／0.4／0.6／0.8 mm，轉換 U1 與匯出依此選設定檔）、檔案櫃根目錄、耗材捲色（1–4 捲）、線材庫、語言、更新檢查
 
 **介面語言**
 - English／繁體中文／简体中文，預設跟隨系統語言，可在設定頁切換並記住；日期與數字依語言格式化
@@ -116,7 +134,7 @@ git clone git@github.com:MingShyanWei/3mfDeck.git
 cd 3mfDeck
 npm install
 npm run dev        # vite build + 啟動 Electron
-npm test           # Vitest 單元測試（279 項）
+npm test           # Vitest 單元測試（314 項）
 npm run smoke      # Electron 端到端 smoke（用隔離的資料夾與資料庫）
 npm run dist       # 打包 macOS dmg（檔名帶建置版本）
 node scripts/release-notes.mjs  # 產生含建置標記、大小、SHA256 的 release 說明
@@ -141,8 +159,9 @@ src/core/          純邏輯，可單獨測試：解析、顏色、混色、匯�
   orcaProfiles.mjs 讀本機 Snapmaker Orca 的機型 profile（僅取幾何資料，不連網）
 src/core/i18n/     介面字典（en／zh-TW／zh-CN）
 src/renderer/      React UI（three.js 預覽、詳情面板、彈窗）
-tests/unit/        Vitest（33 個檔、279 項）
+tests/unit/        Vitest（35 個檔、314 項）
 tests/smoke/       真實 Electron 端到端測試
+docs/user-guide*.md 使用說明（en／zh-TW／zh-CN）
 docs/screenshots/  README 截圖（en／zh-TW／zh-CN）
 demo/models/       程序化產生的示範模型（可用 node scripts/make-demo-models.mjs 重新產生）
 scripts/           測試素材、示範模型與截圖產生腳本
