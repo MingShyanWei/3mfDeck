@@ -66,5 +66,5 @@
   `sparse_infill_density`、`sparse_infill_pattern`、`filament_max_volumetric_speed`、`filament_flow_ratio`（第 3、4 步），皆列入 `different_settings_to_system`。
 - 三個非 U1 驗收檔（原檔在檔案櫃 `.trash/`，只讀）以原檔設定與公仔各匯出：Molly（H2S）7 盤、拉屎茉莉（P1S）8 盤、警徽（P1S）1 盤全部移到 U1 盤面，
   無「保持原位」；機型 `Snapmaker U1 (0.4 nozzle)`，process 原檔設定 0.20 Standard、公仔 0.08mm Standard；溫度自原檔帶入；原檔逐位元組未變。
-  **Snapmaker Orca GUI 開啟待使用者確認。**
+  2026-10-13 使用者在 Snapmaker Orca GUI 開啟 6 個匯出檔：驗收 OK。
 - 單元測試 330 項全過（含讀 iCloud 實檔的 9 項）；smoke 含實檔（Wine-U1、BOOK-U1、U1Cover-U1）全過。
