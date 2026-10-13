@@ -1,4 +1,6 @@
-// M9 (SPEC 3.5b): export the filament mapping.
+// M9 (SPEC 3.5b): export the filament mapping. Since M35 (SPEC 3.16) every
+// export is a Snapmaker U1 project: non-U1 plates move onto the U1 bed and
+// the source's allow-listed settings come along (u1Convert.mjs).
 // - exportQuantized3mf(): a NEW 3MF whose faces carry paint_color pointing at
 //   the user's slots, so Snapmaker Orca opens it with the colours assigned.
 //
@@ -20,6 +22,8 @@ import fs from 'node:fs';
 import { decodePaintColor } from './paintColor.mjs';
 import { printPlan, U1_SLOTS, MIX_DELTA_E } from './filament.mjs';
 import { mixPrintPlan, mixedFilamentDefinitions, MIXED_PROJECT_DEFAULTS } from './mixExport.mjs';
+import { detectPrinter, sourceCarry, convertPlates, modelStream, bedRect } from './u1Convert.mjs';
+import { t } from './i18n/index.mjs';
 
 // Orca's paint_color string for extruder n (Model.cpp CONST_FILAMENTS; 1..17)
 export function encodeExtruder(n) {
@@ -62,8 +66,8 @@ export function remapPaintColor(str, map) {
   return out.reverse().map((n) => n.toString(16).toUpperCase()).join('');
 }
 
-// Exported projects carry ONLY the spool table, never the source file's
-// print/printer settings (layer height, nozzle, ...): those caused e.g.
+// Exported projects never carry the source file's printer / layer settings
+// (layer height, nozzle, ...): those caused e.g.
 // "Too large layer height. Reset to 0.320" when a 0.8 mm-nozzle project was
 // opened. Verified in Snapmaker Orca 2.4.0 GUI (Wine-U1 export):
 //   - no project_settings at all: Orca keeps its current profile, but the
@@ -73,6 +77,9 @@ export function remapPaintColor(str, map) {
 //     and creates "(file.3mf)" presets — wrong printer and bed;
 //   - spool keys + the U1 system preset names (below): Snapmaker U1, 0.4 mm,
 //     0.20 Standard, the slots' colours, no dialog, project not modified.
+// M35: plus the allow-listed source settings (sourceCarry) and two
+// compatibility fixes, every override listed in different_settings_to_system
+// (Orca drops unlisted project values).
 export const U1_PRESETS = {
   printer_model: 'Snapmaker U1',
   printer_settings_id: 'Snapmaker U1 (0.4 nozzle)',
@@ -81,12 +88,19 @@ export const U1_PRESETS = {
   filament_type: 'PLA',
 };
 
+// Written into every export (M35, SPEC 3.16): objects can be skipped while
+// printing; no brim unless a print preset asks for one (公仔: 10 mm).
+export const U1_FIXES = { exclude_object: '1', brim_type: 'no_brim' };
+
 /**
  * project_settings.config for an export: the slots as filaments on U1 system
- * presets. M34: `presetSettings` (printPreset.mjs: the user's nozzle, the
- * 公仔 settings) is merged over those presets.
+ * presets. M35: `carry` = { process: {key: value}, filament: {key: [value per
+ * slot]}, listed: [[keys] per slot] } from the source project, then U1_FIXES.
+ * M34: `presetSettings` (printPreset.mjs: the user's nozzle, the 公仔
+ * settings) is merged last, so it wins over the source. Every override is
+ * listed in different_settings_to_system ([process; filament 1..n; printer]).
  */
-export function exportProjectSettings(slots, mixedDefs = null, presetSettings = {}) {
+export function exportProjectSettings(slots, mixedDefs = null, presetSettings = {}, carry = null) {
   const n = slots.length;
   const cfg = {
     filament_colour: slots.map((s) => s.hex.toUpperCase() + 'FF'),
@@ -98,9 +112,49 @@ export function exportProjectSettings(slots, mixedDefs = null, presetSettings = 
     from: 'project',
     name: 'project_settings',
   };
-  Object.assign(cfg, presetSettings);
+  const processKeys = new Set();
+  const filamentKeys = slots.map(() => new Set());
+  if (carry) {
+    Object.assign(cfg, carry.process);
+    for (const k of Object.keys(carry.process)) processKeys.add(k);
+    Object.assign(cfg, carry.filament);
+    carry.listed.forEach((keys, i) => keys.forEach((k) => filamentKeys[i].add(k)));
+  }
+  Object.assign(cfg, U1_FIXES);
+  for (const k of Object.keys(U1_FIXES)) processKeys.add(k);
+  const { different_settings_to_system: presetListed, ...preset } = presetSettings;
+  Object.assign(cfg, preset);
+  if (presetListed) {
+    for (const k of String(presetListed[0] || '').split(';').filter(Boolean)) processKeys.add(k);
+    filamentKeys.forEach((set, i) => String(presetListed[i + 1] || '').split(';').filter(Boolean).forEach((k) => set.add(k)));
+  }
+  cfg.different_settings_to_system = [[...processKeys].join(';'), ...filamentKeys.map((set) => [...set].join(';')), ''];
   if (mixedDefs) Object.assign(cfg, MIXED_PROJECT_DEFAULTS, { mixed_filament_definitions: mixedDefs });
   return JSON.stringify(cfg, null, 4);
+}
+
+/**
+ * The source's per-filament settings on the export's slots (M35, SPEC 3.16):
+ * each physical slot takes the settings of the source filament with the most
+ * area quantized to it (`weightOf(hex)`, ties: the first filament); a slot no
+ * source filament maps to keeps the U1 preset (value written but not listed,
+ * so Orca uses the preset's). Mixes (virtual extruders) carry nothing.
+ */
+export function carryToSlots(carry, colours, slotOf, n, weightOf = () => 0) {
+  const best = Array(n).fill(null);
+  colours.forEach((hex, i) => {
+    const slot = slotOf(hex);
+    if (!slot || slot > n) return;
+    const cur = best[slot - 1];
+    if (cur === null || weightOf(hex) > weightOf(colours[cur])) best[slot - 1] = i;
+  });
+  const used = best.filter((i) => i !== null);
+  const filament = {};
+  if (used.length) {
+    for (const [k, vals] of Object.entries(carry.filament)) filament[k] = best.map((i) => vals[i ?? used[0]]);
+  }
+  const keys = Object.keys(filament);
+  return { process: carry.process, filament, listed: best.map((i) => (i === null ? [] : keys)) };
 }
 
 // Source-project files that carry slicing settings or results: embedded
@@ -131,8 +185,9 @@ export function stripModelSettings(text, mapExtruder) {
   });
 }
 
-// Stream-transform one .model part: rewrite triangle paint_color per `plan`.
-function transformModel(zipFile, faceSlot, stateMap) {
+// Stream-transform one .model part (a zip entry, or a Readable of its bytes):
+// rewrite triangle paint_color per `plan`.
+function transformModel(source, faceSlot, stateMap) {
   const out = new PassThrough();
   const decoder = new StringDecoder('utf8');
   const tagRe = /<(\/?)([A-Za-z_][\w:.-]*)((?:[^>"]|"[^"]*")*?)(\/?)>/g;
@@ -185,7 +240,8 @@ function transformModel(zipFile, faceSlot, stateMap) {
   (async () => {
     let rest = '';
     try {
-      for await (const chunk of new Readable().wrap(zipFile.nodeStream('nodebuffer'))) {
+      const input = typeof source.nodeStream === 'function' ? new Readable().wrap(source.nodeStream('nodebuffer')) : source;
+      for await (const chunk of input) {
         const text = rest + decoder.write(chunk);
         const cut = text.lastIndexOf('>') + 1;
         out.write(handle(text.slice(0, cut)));
@@ -210,11 +266,23 @@ function transformModel(zipFile, faceSlot, stateMap) {
  * the faces point at the virtual extruder (base count + mix ordinal).
  * Returns { slots, summary: [{color, slot | null, deltaE, mode, mix?}], stats, mixes }.
  */
-export async function exportQuantized3mf(srcPath, destPath, slots = U1_SLOTS, { threshold = MIX_DELTA_E, overThreshold = 'nearest', overwrite = false, mix = false, presetSettings = {} } = {}) {
+export async function exportQuantized3mf(srcPath, destPath, slots = U1_SLOTS, { threshold = MIX_DELTA_E, overThreshold = 'nearest', overwrite = false, mix = false, presetSettings = {}, u1Area = null, colorWeights = null } = {}) {
   const zip = await JSZip.loadAsync(await fs.promises.readFile(srcPath));
   const text = async (p) => (zip.file(p) ? zip.file(p).async('string') : null);
   const project = await text('Metadata/project_settings.config');
-  const colours = project ? (JSON.parse(project).filament_colour || []).map((c) => c.slice(0, 7).toUpperCase()) : [];
+  const ps = project ? JSON.parse(project) : null;
+  const colours = ps ? (ps.filament_colour || []).map((c) => c.slice(0, 7).toUpperCase()) : [];
+
+  // M35: a non-U1 project's plates move onto the U1 bed (u1Area: the chosen
+  // machine's printable_area); a U1 project or a plain 3MF keeps its positions
+  const from = ps ? detectPrinter(ps) : null;
+  const rootPath = /Target="\/?([^"]+\.model)"/.exec((await text('_rels/.rels')) || '')?.[1] || '3D/3dmodel.model';
+  let root = null;
+  if (from && !from.isU1) {
+    if (!u1Area) throw new Error(t('u1.err.noOrca'));
+    if (!Array.isArray(ps.printable_area) || ps.printable_area.length < 3) throw new Error(t('u1.err.noBed'));
+    root = await convertPlates(zip, rootPath, bedRect(ps.printable_area), bedRect(u1Area));
+  }
 
   const summary = new Map();
   const mixRows = []; // { compA, compB, mixB, ... } in first-appearance order
@@ -263,7 +331,7 @@ export async function exportQuantized3mf(srcPath, destPath, slots = U1_SLOTS, { 
   const pending = [];
   for (const [name, file] of Object.entries(zip.files)) {
     if (file.dir || !/\.model$/i.test(name)) continue;
-    const { stream, stats } = transformModel(file, slotOf, stateMap);
+    const { stream, stats } = transformModel(root && name === rootPath ? modelStream(root) : file, slotOf, stateMap);
     zip.file(name, stream, { binary: true });
     pending.push(stats);
   }
@@ -275,7 +343,9 @@ export async function exportQuantized3mf(srcPath, destPath, slots = U1_SLOTS, { 
       stripModelSettings(ms, (n) => (colours[n - 1] ? slotOf(colours[n - 1]) : null) || Math.min(n, slots.length)),
     );
   }
-  zip.file('Metadata/project_settings.config', exportProjectSettings(slots, mix ? mixedFilamentDefinitions(mixRows) : null, presetSettings));
+  const weightOf = (hex) => colorWeights?.get(hex) ?? 0;
+  const carry = ps ? carryToSlots(sourceCarry(ps), colours, slotOf, slots.length, weightOf) : null;
+  zip.file('Metadata/project_settings.config', exportProjectSettings(slots, mix ? mixedFilamentDefinitions(mixRows) : null, presetSettings, carry));
   for (const name of Object.keys(zip.files)) if (SLICER_FILES.test(name)) zip.remove(name);
 
   await new Promise((resolve, reject) => {
@@ -287,5 +357,5 @@ export async function exportQuantized3mf(srcPath, destPath, slots = U1_SLOTS, { 
       .on('error', reject);
   });
   for (const s of pending) for (const k of Object.keys(allStats)) allStats[k] += s[k];
-  return { slots, summary: [...summary.values()], stats: allStats, mixes: mixRows };
+  return { slots, summary: [...summary.values()], stats: allStats, mixes: mixRows, plates: root ? root.plates : [] };
 }

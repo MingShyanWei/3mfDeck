@@ -415,13 +415,6 @@ export function modelsWithHash(db, hash) {
     .all(hash)
     .map((r) => ({ ...r, trashed: Boolean(r.trashed) }));
 }
-/** Live U1 conversions made from this record (M33: converted_from). */
-export function conversionsOf(db, id) {
-  return db.prepare(`SELECT id, name, rel_path FROM models WHERE converted_from = ? AND rel_path NOT LIKE '.trash/%' ORDER BY id`).all(id);
-}
-export function setConvertedFrom(db, id, sourceId) {
-  db.prepare('UPDATE models SET converted_from = ? WHERE id = ?').run(sourceId, id);
-}
 
 export function setRelPath(db, id, relPath) {
   db.prepare('UPDATE models SET rel_path = ? WHERE id = ?').run(relPath, id);

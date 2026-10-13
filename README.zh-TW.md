@@ -8,7 +8,7 @@
 
 ![3mfDeck 檔案櫃與示範模型](docs/screenshots/zh-TW/1-library.png)
 
-**怎麼用：** 見[使用說明](docs/user-guide.zh-TW.md)（照步驟：匯入、顏色、捲色、匯出、公仔設定、轉換 U1）。
+**怎麼用：** 見[使用說明](docs/user-guide.zh-TW.md)（照步驟：匯入、顏色、捲色、匯出、公仔設定、別台印表機的檔案）。
 
 ---
 
@@ -23,7 +23,7 @@
 | 不知道這件作品要用哪幾捲線材 | **顏色分析**（面積加權）＋**建議捲色**（Lab k-means，能 3 捲就不叫你買 4 捲） |
 | Full Spectrum 混色全靠猜 | 混色**偵測與配方**：兩捲顏料模型算出混出來的色與 ΔE，告訴你哪一槽幾 % |
 | 匯出的 3MF 在 Orca 打開一堆警告 | **匯出 3MF**：剝除不相容的切片設定，只寫幾何＋顏色＋捲色表；混色寫入 Orca 原生 Mix 虛擬擠出頭 |
-| 別人分享的檔案不是自家印表機的 | **Snapmaker U1 相容性檢查**：非 U1 檔案會警示（含來源機型），可一鍵轉換（噴嘴對應、相容性修正、多盤座標換算） |
+| 別人分享的檔案不是自家印表機的 | **匯出即 Snapmaker U1**：非 U1 檔案會警示（含來源機型）；匯出 3MF 一律存成 U1 專案（依設定的噴嘴、相容性修正、多盤座標換算到 U1 盤面） |
 | 同一個模型下載了兩次、檔名還不一樣 | 依內容**偵測重複**：內容完全相同的檔案不會再匯入（原檔留在原處），「重複」過濾把櫃中相同的檔案分組列出 |
 | 刪檔手滑 | 一律進 `.trash/`，可還原，不真刪；同名不覆蓋（加 `-2`） |
 
@@ -58,7 +58,7 @@
 
 **Snapmaker U1**
 - 非 U1 專案（例如 Bambu Lab）會標示原機型，並列在「非 U1」過濾
-- 轉換為 Snapmaker U1：另存 `-U1` 新檔並匯入，原檔不動——依噴嘴尺寸套用 U1 機型／process／線材設定、啟用 Exclude Object、關閉 Brim、可變層高時樹狀支撐改 Hybrid、多盤搬到 U1 盤面座標、保留原檔的線材流速／溫度／冷卻；同一檔再轉會先詢問；支援超大專案（模型資料超過 1 GB）
+- 不需另外轉換：匯出 3MF 一律存成 U1 專案——依噴嘴尺寸套用 U1 機型／process／線材設定、啟用 Exclude Object、關閉 Brim（列印設定另有指定除外）、多盤搬到 U1 盤面座標、保留原檔改過的設定與線材流速／溫度／冷卻（每個捲槽採用面積最多的那條原檔線材）；支援超大專案（模型資料超過 1 GB）
 
 **匯出**
 - 匯出 3MF：量化到最近捲（含 ΔE 標示），剝除來源切片設定避免 Orca 警告
@@ -67,7 +67,7 @@
 - 原檔永不修改，一律產新檔
 
 **設定**
-- 噴嘴尺寸（0.2／0.4／0.6／0.8 mm，轉換 U1 與匯出依此選設定檔）、檔案櫃根目錄、耗材捲色（1–4 捲）、線材庫、語言、更新檢查
+- 噴嘴尺寸（0.2／0.4／0.6／0.8 mm，匯出依此選設定檔）、檔案櫃根目錄、耗材捲色（1–4 捲）、線材庫、語言、更新檢查
 
 **介面語言**
 - English／繁體中文／简体中文，預設跟隨系統語言，可在設定頁切換並記住；日期與數字依語言格式化
@@ -136,7 +136,7 @@ git clone git@github.com:MingShyanWei/3mfDeck.git
 cd 3mfDeck
 npm install
 npm run dev        # vite build + 啟動 Electron
-npm test           # Vitest 單元測試（331 項）
+npm test           # Vitest 單元測試（330 項）
 npm run smoke      # Electron 端到端 smoke（用隔離的資料夾與資料庫）
 npm run dist       # 打包 macOS dmg（檔名帶建置版本）
 node scripts/release-notes.mjs  # 產生含建置標記、大小、SHA256 的 release 說明
@@ -155,13 +155,13 @@ node scripts/release-notes.mjs  # 產生含建置標記、大小、SHA256 的 re
 
 ```
 electron/          Electron 主程序（視窗、IPC、自訂圖片協定 mfimg/mfthumb）
-src/core/          純邏輯，可單獨測試：解析、顏色、混色、匯出、轉換、DB、設定
+src/core/          純邏輯，可單獨測試：解析、顏色、混色、匯出（即 U1）、DB、設定
   parse/           3MF／STL／OBJ／AMF／GLB／STEP 解析
-  u1Convert.mjs    Snapmaker U1 相容性轉換
+  u1Convert.mjs    Snapmaker U1：機型偵測、設定檔、盤面換算（供匯出使用）
   orcaProfiles.mjs 讀本機 Snapmaker Orca 的機型 profile（僅取幾何資料，不連網）
 src/core/i18n/     介面字典（en／zh-TW／zh-CN）
 src/renderer/      React UI（three.js 預覽、詳情面板、彈窗）
-tests/unit/        Vitest（36 個檔、331 項）
+tests/unit/        Vitest（36 個檔、330 項）
 tests/smoke/       真實 Electron 端到端測試
 docs/user-guide*.md 使用說明（en／zh-TW／zh-CN）
 docs/screenshots/  README 截圖（en／zh-TW／zh-CN）
@@ -174,7 +174,7 @@ SPEC.md            完整功能規格（已定稿）
 
 1. **檔案系統為真**：DB 只是索引，刪掉能從檔案重建。
 2. **刪檔不真刪**：一律進 `.trash/`，可還原。
-3. **原檔永不動**：匯出、轉換都產新檔。
+3. **原檔永不動**：匯出一律產新檔。
 4. **匯入即搬檔**：集中管理，不搬不給匯入。
 5. **離線可用**：任何功能都不需要網路；唯一的網路行為是可關閉的更新檢查。
 

@@ -8,7 +8,7 @@
 
 ![3mfDeck 模型库与示例模型](docs/screenshots/zh-CN/1-library.png)
 
-**怎么用：** 见[使用说明](docs/user-guide.zh-CN.md)（按步骤：导入、颜色、料卷、导出、手办设置、转换 U1）。
+**怎么用：** 见[使用说明](docs/user-guide.zh-CN.md)（按步骤：导入、颜色、料卷、导出、手办设置、别的打印机的文件）。
 
 ---
 
@@ -23,7 +23,7 @@
 | 不知道这件作品要用哪几卷耗材 | **颜色分析**（面积加权）＋**建议料卷颜色**（Lab k-means，能 3 卷就不叫你买 4 卷） |
 | Full Spectrum 混色全靠猜 | 混色**检测与配方**：两卷颜料模型算出混出来的颜色与 ΔE，告诉你哪一槽多少 % |
 | 导出的 3MF 在 Orca 打开一堆警告 | **导出 3MF**：剥除不兼容的切片设置，只写几何＋颜色＋料卷表；混色写入 Orca 原生 Mix 虚拟挤出头 |
-| 别人分享的文件不是自家打印机的 | **Snapmaker U1 兼容性检查**：非 U1 文件会警示（含源机型），可一键转换（喷嘴对应、兼容性修正、多盘坐标换算） |
+| 别人分享的文件不是自家打印机的 | **导出即 Snapmaker U1**：非 U1 文件会警示（含源机型）；导出 3MF 一律保存为 U1 项目（按设置的喷嘴、兼容性修正、多盘坐标换算到 U1 盘面） |
 | 同一个模型下载了两次、文件名还不一样 | 按内容**检测重复**：内容完全相同的文件不会再导入（原文件留在原处），“重复”过滤把库中相同的文件分组列出 |
 | 误删文件 | 一律进 `.trash/`，可还原，不真删；同名不覆盖（加 `-2`） |
 
@@ -58,7 +58,7 @@
 
 **Snapmaker U1**
 - 非 U1 项目（例如 Bambu Lab）会标示原机型，并列在“非 U1”过滤
-- 转换为 Snapmaker U1：另存 `-U1` 新文件并导入，原文件不动——按喷嘴尺寸套用 U1 机型／process／耗材预设、启用 Exclude Object、关闭 Brim、可变层高时树状支撑改 Hybrid、多盘移到 U1 盘面坐标、保留原文件的耗材流速／温度／冷却；同一文件再转会先询问；支持超大项目（模型数据超过 1 GB）
+- 不需另外转换：导出 3MF 一律保存为 U1 项目——按喷嘴尺寸套用 U1 机型／process／耗材预设、启用 Exclude Object、关闭 Brim（打印设置另有指定除外）、多盘移到 U1 盘面坐标、保留原文件改过的设置与耗材流速／温度／冷却（每个料卷槽采用面积最多的那条原文件耗材）；支持超大项目（模型数据超过 1 GB）
 
 **导出**
 - 导出 3MF：量化到最近料卷（含 ΔE 标示），剥除源切片设置避免 Orca 警告
@@ -67,7 +67,7 @@
 - 原文件永不修改，一律生成新文件
 
 **设置**
-- 喷嘴尺寸（0.2／0.4／0.6／0.8 mm，转换 U1 与导出按此选预设）、模型库根目录、料卷颜色（1–4 卷）、耗材库、语言、更新检查
+- 喷嘴尺寸（0.2／0.4／0.6／0.8 mm，导出按此选预设）、模型库根目录、料卷颜色（1–4 卷）、耗材库、语言、更新检查
 
 **界面语言**
 - English／繁體中文／简体中文，默认跟随系统语言，可在设置页切换并记住；日期与数字按语言格式化
@@ -136,7 +136,7 @@ git clone git@github.com:MingShyanWei/3mfDeck.git
 cd 3mfDeck
 npm install
 npm run dev        # vite build + 启动 Electron
-npm test           # Vitest 单元测试（331 项）
+npm test           # Vitest 单元测试（330 项）
 npm run smoke      # Electron 端到端 smoke（使用隔离的文件夹与数据库）
 npm run dist       # 打包 macOS dmg（文件名带构建版本）
 node scripts/release-notes.mjs  # 生成含构建标记、大小、SHA256 的 release 说明
@@ -155,13 +155,13 @@ node scripts/release-notes.mjs  # 生成含构建标记、大小、SHA256 的 re
 
 ```
 electron/          Electron 主进程（窗口、IPC、自定义图片协议 mfimg/mfthumb）
-src/core/          纯逻辑，可单独测试：解析、颜色、混色、导出、转换、数据库、设置
+src/core/          纯逻辑，可单独测试：解析、颜色、混色、导出（即 U1）、数据库、设置
   parse/           3MF／STL／OBJ／AMF／GLB／STEP 解析
-  u1Convert.mjs    Snapmaker U1 兼容性转换
+  u1Convert.mjs    Snapmaker U1：机型检测、预设、盘面换算（供导出使用）
   orcaProfiles.mjs 读取本机 Snapmaker Orca 的机型 profile（仅取几何数据，不联网）
 src/core/i18n/     界面词典（en／zh-TW／zh-CN）
 src/renderer/      React UI（three.js 预览、详情面板、弹窗）
-tests/unit/        Vitest（36 个文件、331 项）
+tests/unit/        Vitest（36 个文件、330 项）
 tests/smoke/       真实 Electron 端到端测试
 docs/user-guide*.md 使用说明（en／zh-TW／zh-CN）
 docs/screenshots/  README 截图（en／zh-TW／zh-CN）
@@ -174,7 +174,7 @@ SPEC.md            完整功能规格（已定稿）
 
 1. **文件系统为准**：数据库只是索引，删掉能从文件重建。
 2. **删除不真删**：一律进 `.trash/`，可还原。
-3. **原文件永不改动**：导出、转换都生成新文件。
+3. **原文件永不改动**：导出一律生成新文件。
 4. **导入即移动**：集中管理，导入时文件移进模型库。
 5. **离线可用**：任何功能都不需要网络；唯一的网络行为是可关闭的更新检查。
 

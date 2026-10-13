@@ -8,7 +8,7 @@ Collect the 3MF files scattered across your disk, MakerWorld and Meshy into one 
 
 ![3mfDeck library with the demo models](docs/screenshots/en/1-library.png)
 
-**How to use it:** see the [user guide](docs/user-guide.md) (step by step: import, colours, spools, export, miniature settings, U1 conversion).
+**How to use it:** see the [user guide](docs/user-guide.md) (step by step: import, colours, spools, export, miniature settings, other printers' files).
 
 ---
 
@@ -23,7 +23,7 @@ Downloading models is easy; the trouble starts afterwards:
 | Which spools does this model need? | **Colour analysis** (area-weighted) + **spool suggestions** (Lab k-means — if 3 spools do, it won't tell you to buy 4) |
 | Full Spectrum mixing is guesswork | Mix **detection and recipes**: a two-spool pigment model computes the mixed colour and its ΔE, and tells you which slot at what % |
 | Exported 3MF files open in Orca with a pile of warnings | **Export 3MF**: strips incompatible slicer settings, writes only geometry + colours + spool table; mixes are written as Orca's native Mix virtual extruders |
-| Shared files are set up for someone else's printer | **Snapmaker U1 compatibility check**: non-U1 files are flagged (with the source printer) and can be converted in one click (nozzle matching, compatibility fixes, multi-plate coordinate conversion) |
+| Shared files are set up for someone else's printer | **Exported as Snapmaker U1**: non-U1 files are flagged (with the source printer); Export 3MF always writes a U1 project (nozzle from Settings, compatibility fixes, multi-plate coordinates moved onto the U1 bed) |
 | The same model downloaded twice, under different names | **Duplicate detection** by content: an identical file is not imported again (the source stays where it was), and a Duplicates filter groups identical files already in the library |
 | Deleted the wrong file | Everything goes to `.trash/` and can be restored — nothing is really deleted; same names are never overwritten (`-2` is added) |
 
@@ -58,7 +58,7 @@ Downloading models is easy; the trouble starts afterwards:
 
 **Snapmaker U1**
 - Non-U1 projects (e.g. Bambu Lab) are flagged with their printer and listed under “Not U1”
-- Convert to Snapmaker U1: saves a new `-U1` file and imports it, original untouched — U1 printer / process / filament presets for your nozzle size, Exclude Object on, brim off, tree → hybrid supports with variable layer height, plates moved to U1 bed coordinates, the source's filament flow / temperature / cooling kept; converting the same file again asks first; very large projects (over 1 GB of model data) are supported
+- No separate conversion: Export 3MF always writes a U1 project — U1 printer / process / filament presets for your nozzle size, Exclude Object on, brim off (unless a print preset sets one), plates moved to U1 bed coordinates, the source's changed settings and filament flow / temperature / cooling kept (each spool slot takes the source filament with the most area on it); very large projects (over 1 GB of model data) are supported
 
 **Export**
 - Export 3MF: quantized to the nearest spool (with ΔE), source slicer settings stripped to avoid Orca warnings
@@ -67,7 +67,7 @@ Downloading models is easy; the trouble starts afterwards:
 - Originals are never modified; every export is a new file
 
 **Settings**
-- Nozzle size (0.2 / 0.4 / 0.6 / 0.8 mm) used for U1 conversion and export presets; library folder; spool colours (1–4 spools); filament inventory; language; update check
+- Nozzle size (0.2 / 0.4 / 0.6 / 0.8 mm) used for the export presets; library folder; spool colours (1–4 spools); filament inventory; language; update check
 
 **UI language**
 - English / 繁體中文 / 简体中文; follows the system language by default, can be switched in Settings and is remembered; dates and numbers are formatted for the language
@@ -136,7 +136,7 @@ git clone git@github.com:MingShyanWei/3mfDeck.git
 cd 3mfDeck
 npm install
 npm run dev        # vite build + start Electron
-npm test           # Vitest unit tests (331)
+npm test           # Vitest unit tests (330)
 npm run smoke      # Electron end-to-end smoke test (isolated folders and database)
 npm run dist       # package the macOS dmg (file names carry the build version)
 node scripts/release-notes.mjs  # release notes with the build marker, sizes and SHA256
@@ -155,13 +155,13 @@ Useful environment variables (for testing):
 
 ```
 electron/          Electron main process (window, IPC, custom image protocols mfimg/mfthumb)
-src/core/          Pure logic, testable on its own: parsing, colours, mixing, export, conversion, DB, settings
+src/core/          Pure logic, testable on its own: parsing, colours, mixing, export (as U1), DB, settings
   parse/           3MF / STL / OBJ / AMF / GLB / STEP parsers
-  u1Convert.mjs    Snapmaker U1 compatibility conversion
+  u1Convert.mjs    Snapmaker U1: detection, presets, plates onto the U1 bed (used by the export)
   orcaProfiles.mjs Reads the local Snapmaker Orca printer profiles (geometry only, no network)
 src/core/i18n/     UI dictionaries (en / zh-TW / zh-CN)
 src/renderer/      React UI (three.js preview, detail panel, dialogs)
-tests/unit/        Vitest (36 files, 331 tests)
+tests/unit/        Vitest (36 files, 330 tests)
 tests/smoke/       Real Electron end-to-end test
 docs/user-guide*.md User guide (en / zh-TW / zh-CN)
 docs/screenshots/  README screenshots (en / zh-TW / zh-CN)
@@ -174,7 +174,7 @@ SPEC.md            Full functional specification (final)
 
 1. **The file system is the truth**: the DB is only an index and can be rebuilt from the files.
 2. **Deleting never really deletes**: everything goes to `.trash/` and can be restored.
-3. **Originals are never touched**: exports and conversions always create new files.
+3. **Originals are never touched**: every export creates a new file.
 4. **Import means move**: one managed library; files are moved in on import.
 5. **Works offline**: no feature needs the network; the update check is the only network activity and can be switched off.
 

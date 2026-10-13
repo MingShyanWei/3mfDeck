@@ -40,11 +40,11 @@ describe('paint_color writing', () => {
   });
 });
 
-describe('exported project settings: spool table only', () => {
+describe('exported project settings: spool table, U1 presets and the M35 fixes', () => {
   // Carrying the source's print/printer settings made Snapmaker Orca warn
   // "Too large layer height. Reset to 0.320" (0.8 mm-nozzle project). GUI-verified
   // alternatives are documented at exportProjectSettings().
-  it('holds the slots as filaments on the U1 system presets and nothing else', () => {
+  it('holds the slots as filaments on the U1 system presets, plus Exclude Object on and brim off (listed as changed)', () => {
     const cfg = JSON.parse(exportProjectSettings(slotsFromColours(['#FF0000', '#00FF00'])));
     expect(cfg).toEqual({
       filament_colour: ['#FF0000FF', '#00FF00FF'],
@@ -55,6 +55,9 @@ describe('exported project settings: spool table only', () => {
       print_settings_id: '0.20 Standard @Snapmaker U1 (0.4 nozzle)',
       from: 'project',
       name: 'project_settings',
+      exclude_object: '1',
+      brim_type: 'no_brim',
+      different_settings_to_system: ['exclude_object;brim_type', '', '', ''],
     });
   });
 
@@ -152,13 +155,13 @@ describe('exportQuantized3mf', () => {
     const src = path.join(dir, 'src.3mf');
     const z = await JSZip.loadAsync(await fs.readFile(fixture('painted.3mf')));
     const cfg = JSON.parse(await z.file('Metadata/project_settings.config').async('string'));
-    z.file('Metadata/project_settings.config', JSON.stringify({ ...cfg, layer_height: '0.4', nozzle_diameter: ['0.8'], printer_settings_id: 'Bambu Lab H2D 0.8 nozzle' }));
+    z.file('Metadata/project_settings.config', JSON.stringify({ ...cfg, layer_height: '0.4', nozzle_diameter: ['0.8'], printer_settings_id: 'Bambu Lab H2D 0.8 nozzle', printable_area: ['0x0', '350x0', '350x320', '0x320'] }));
     const ms = await z.file('Metadata/model_settings.config').async('string');
     z.file('Metadata/model_settings.config', ms.replace('<metadata key="extruder" value="1"/>', '<metadata key="extruder" value="1"/>\n    <metadata key="layer_height" value="0.4"/>'));
     for (const f of ['Metadata/process_settings_1.config', 'Metadata/filament_settings_1.config', 'Metadata/machine_settings_1.config', 'Metadata/layer_heights_profile.txt', 'Metadata/slice_info.config', 'Metadata/plate_1.json']) z.file(f, 'x');
     await fs.writeFile(src, await z.generateAsync({ type: 'nodebuffer' }));
     const dest = path.join(dir, 'q.3mf');
-    await exportQuantized3mf(src, dest);
+    await exportQuantized3mf(src, dest, U1_SLOTS, { u1Area: ['0.5x1', '270.5x1', '270.5x271', '0.5x271'] }); // M35: an H2D project becomes a U1 one
     const out = await JSZip.loadAsync(await fs.readFile(dest));
     const outCfg = JSON.parse(await out.file('Metadata/project_settings.config').async('string'));
     expect(outCfg.layer_height).toBeUndefined();

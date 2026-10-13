@@ -53,9 +53,18 @@
 - 詳情面板不再有「轉換為 Snapmaker U1」；「非 U1」徽章、篩選與新警示文字正確（三種語言）。
 - 原檔逐位元組不變；既有測試全數通過（原 3.9 轉換的單元測試改為測匯出流程中的對應步驟）。
 
-**待確認（建議值已寫入上文）**
+**已決定（2026-10-13，使用者：照建議）**
 1. 第 4 步「每槽採用映射面積最多的原檔線材設定」是否 OK？替代：全部捲槽都用第一條原檔線材的設定，或完全不帶線材設定。
 2. 第 3 步帶入原檔 process 改動：會讓「原檔設定」匯出不再是純 U1 預設（例如原檔改了牆數就沿用）。是否 OK？
 3. 已是 U1 的檔案也套用第 3、4 步（會帶入原檔設定，與 M34 匯出不同），還是 U1 來源維持 M34 行為不帶？建議：**一律套用**，行為一致。
 
 **併入 SPEC 時**：3.9 改為「M35 起併入匯出，見 3.16」；3.1b 的「轉 U1 前提醒」標為移除。
+
+**驗收紀錄（2026-10-13，實作後）**
+- 已是 U1 的 `Wine-U1.3mf`（使用者捲色 白／#6883A4／黑、0.4 噴嘴、原檔設定）：M34 與 M35 匯出比對，所有檔案逐位元組相同，
+  只有 `project_settings.config` 不同；差異僅 `exclude_object`、`brim_type`（第 2 步）與帶入的
+  `sparse_infill_density`、`sparse_infill_pattern`、`filament_max_volumetric_speed`、`filament_flow_ratio`（第 3、4 步），皆列入 `different_settings_to_system`。
+- 三個非 U1 驗收檔（原檔在檔案櫃 `.trash/`，只讀）以原檔設定與公仔各匯出：Molly（H2S）7 盤、拉屎茉莉（P1S）8 盤、警徽（P1S）1 盤全部移到 U1 盤面，
+  無「保持原位」；機型 `Snapmaker U1 (0.4 nozzle)`，process 原檔設定 0.20 Standard、公仔 0.08mm Standard；溫度自原檔帶入；原檔逐位元組未變。
+  **Snapmaker Orca GUI 開啟待使用者確認。**
+- 單元測試 330 項全過（含讀 iCloud 實檔的 9 項）；smoke 含實檔（Wine-U1、BOOK-U1、U1Cover-U1）全過。

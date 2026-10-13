@@ -1,9 +1,9 @@
-// M18 (SPEC 3.9): Snapmaker U1 compatibility — detection and a self-written
-// converter. The output is a copy (the source is never touched) that keeps
-// the model, paint_color and the filament colour table exactly as they are;
-// only the printer/process/filament presets, a few compatibility settings and
-// the plate positions change. Preset names and bed geometry come from the
-// locally installed Snapmaker Orca profiles (orcaProfiles.mjs).
+// M18 (SPEC 3.9): Snapmaker U1 compatibility — detection, U1 preset choice,
+// the source settings worth keeping and moving plates onto the U1 bed. Since
+// M35 (SPEC 3.16) the export (exportMapping.mjs) uses these pieces: every
+// export is a U1 project; there is no separate conversion any more. Preset
+// names and bed geometry come from the locally installed Snapmaker Orca
+// profiles (orcaProfiles.mjs).
 import fs from 'node:fs';
 import { StringDecoder } from 'node:string_decoder';
 import { Readable } from 'node:stream';
@@ -21,8 +21,6 @@ export function detectPrinter(ps) {
 
 // ---- presets -----------------------------------------------------------------
 
-const NOZZLES = [0.2, 0.4, 0.6, 0.8];
-const nearestNozzle = (d) => NOZZLES.reduce((a, b) => (Math.abs(b - d) < Math.abs(a - d) ? b : a));
 
 /** U1 process for a nozzle: the closest layer height, 「Standard」 on ties. */
 export function pickProcess(profiles, nozzle, layerHeight) {
@@ -87,72 +85,25 @@ export function perFilament(ps, key, n) {
 }
 
 /**
- * project_settings.config for the converted project: U1 system preset names
- * (Orca loads those presets, as verified for the M9 export) plus the settings
- * that must survive the move — the source's own process tweaks, per-filament
- * overrides, the colour table — and the compatibility fixes.
+ * Settings of a source project worth keeping in a U1 export (M35, SPEC 3.16):
+ * process keys the user changed (`different_settings_to_system`, allow-list
+ * PROCESS_CARRY) and per-filament settings (allow-list FILAMENT_CARRY), one
+ * value per source filament. Returns { process: {key: value},
+ * filament: {key: [value per source filament]} }.
  */
-export function u1ProjectSettings(ps, profiles, { variableLayerHeight = false, nozzle: wanted = null } = {}) {
-  // M34: the user's nozzle (settings) decides the presets; the source's only when none is given
-  const sourceNozzle = nearestNozzle(Number([].concat(ps.nozzle_diameter ?? 0.4)[0]));
-  const nozzle = wanted ?? sourceNozzle;
-  const machine = profiles.machines.find((m) => m.nozzle === nozzle);
-  const process = pickProcess(profiles, nozzle, Number(ps.layer_height ?? 0.2));
-  if (!machine || !process) throw new Error(t('u1.err.noNozzleProfile', { nozzle }));
-  const colours = ps.filament_colour || [];
-  const n = colours.length;
-  const types = (ps.filament_type || []).slice(0, n);
-  const sourceNames = [].concat(ps.filament_settings_id || []);
-  const filaments = colours.map((_, i) => pickFilament(profiles, nozzle, types[i] || 'PLA', sourceNames[i] || '') || pickFilament(profiles, nozzle, 'PLA'));
-
-  const out = {
-    printer_model: U1_MODEL,
-    printer_settings_id: machine.name,
-    printer_variant: String(nozzle),
-    print_settings_id: process.name,
-    filament_settings_id: filaments.map((f) => f.name),
-    filament_colour: colours,
-    filament_type: filaments.map((f, i) => types[i] || f.type),
-  };
-  const processKeys = [];
+export function sourceCarry(ps) {
+  const n = (ps.filament_colour || []).length;
+  const process = {};
   const userChanged = new Set(String([].concat(ps.different_settings_to_system || [''])[0]).split(';').filter(Boolean));
   // supports the source prints with keep their kind (tree/normal), not the U1 preset's
   if (String(ps.enable_support) === '1') userChanged.add('support_type');
-  for (const k of PROCESS_CARRY) {
-    if (userChanged.has(k) && ps[k] !== undefined) {
-      out[k] = ps[k];
-      processKeys.push(k);
-    }
-  }
-  // Compatibility fixes
-  const fixes = [];
-  // Always written (the U1 preset might differ); listed as a fix only when the source had it otherwise
-  const set = (k, v, note) => {
-    out[k] = v;
-    if (!processKeys.includes(k)) processKeys.push(k);
-    if (String(ps[k]) !== v) fixes.push(note);
-  };
-  if (nozzle !== sourceNozzle) fixes.push(t('u1.fix.nozzle', { to: nozzle, from: sourceNozzle }));
-  set('exclude_object', '1', t('u1.fix.excludeObject'));
-  set('brim_type', 'no_brim', t('u1.fix.noBrim'));
-  const supportType = String(out.support_type ?? ps.support_type ?? '');
-  const supportsOn = String(out.enable_support ?? ps.enable_support ?? '0') === '1';
-  if (variableLayerHeight && supportsOn && supportType.startsWith('tree')) {
-    // Orca: "Variable layer height is not supported with Organic supports" (Tree default = Organic)
-    out.support_type = supportType;
-    set('support_style', 'tree_hybrid', t('u1.fix.treeHybrid'));
-  }
-  const filamentKeys = colours.map(() => []);
+  for (const k of PROCESS_CARRY) if (userChanged.has(k) && ps[k] !== undefined) process[k] = ps[k];
+  const filament = {};
   for (const k of FILAMENT_CARRY) {
     const vals = perFilament(ps, k, n);
-    if (!vals) continue;
-    out[k] = vals;
-    filamentKeys.forEach((list) => list.push(k));
+    if (vals) filament[k] = vals;
   }
-  out.different_settings_to_system = [processKeys.join(';'), ...filamentKeys.map((l) => l.join(';')), ''];
-  out.from = 'project';
-  out.name = 'project_settings';
-  return { settings: out, nozzle, machine: machine.name, process: process.name, filaments: filaments.map((f) => f.name), fixes, carried: { process: processKeys.filter((k) => !['exclude_object', 'brim_type', 'support_style'].includes(k)), filament: filamentKeys[0] || [] } };
+  return { process, filament };
 }
 
 // ---- plates --------------------------------------------------------------------
@@ -396,48 +347,11 @@ export async function convertPlates(zip, rootPath, srcBed, u1Bed) {
 }
 
 /** The converted root model as a stream (head bytes in CHUNK slices, then the rewritten <build>). */
-function modelStream({ head, build }) {
+export function modelStream({ head, build }) {
   return Readable.from((function* () {
     for (let o = 0; o < head.length; o += CHUNK) yield head.subarray(o, o + CHUNK);
     yield Buffer.from(build, 'utf8');
   })());
-}
-
-// Slicer output and source-printer presets that must not travel with the converted project
-const DROP = /^Metadata\/(slice_info\.config|plate_\d+\.json|plate_\d+\.gcode(\.md5)?|(filament|process|machine)_settings_\d+\.config|filament_sequence\.json)$/;
-
-/**
- * Convert a non-U1 3MF project into a U1 project at `destPath` (must not
- * exist). `profiles` = loadU1Profiles(). Returns a report:
- * { from, machine, process, filaments, fixes, carried, plates }.
- */
-export async function convertToU1(srcPath, destPath, profiles, { nozzle = null } = {}) {
-  if (!profiles) throw new Error(t('u1.err.noOrca'));
-  const zip = await JSZip.loadAsync(await fs.promises.readFile(srcPath));
-  const psText = await zip.file('Metadata/project_settings.config')?.async('string');
-  if (!psText) throw new Error(t('u1.err.noProject'));
-  const ps = JSON.parse(psText);
-  const from = detectPrinter(ps);
-  if (from?.isU1) throw new Error(t('u1.err.alreadyU1'));
-  const variableLayerHeight = Boolean((await zip.file('Metadata/layer_heights_profile.txt')?.async('string'))?.trim());
-  const conv = u1ProjectSettings(ps, profiles, { variableLayerHeight, nozzle });
-  const srcArea = ps.printable_area;
-  if (!Array.isArray(srcArea) || srcArea.length < 3) throw new Error(t('u1.err.noBed'));
-  const u1Area = profiles.machines.find((m) => m.name === conv.machine).printableArea;
-  const rootPath = /Target="\/?([^"]+\.model)"/.exec((await zip.file('_rels/.rels')?.async('string')) || '')?.[1] || '3D/3dmodel.model';
-  const plates = await convertPlates(zip, rootPath, bedRect(srcArea), bedRect(u1Area));
-
-  zip.file(rootPath, modelStream(plates));
-  zip.file('Metadata/project_settings.config', JSON.stringify(conv.settings, null, 4));
-  for (const name of Object.keys(zip.files)) if (DROP.test(name)) zip.remove(name);
-  await new Promise((resolve, reject) => {
-    zip
-      .generateNodeStream({ type: 'nodebuffer', streamFiles: true, compression: 'DEFLATE' })
-      .pipe(fs.createWriteStream(destPath, { flags: 'wx' }))
-      .on('finish', resolve)
-      .on('error', reject);
-  });
-  return { from, machine: conv.machine, process: conv.process, filaments: conv.filaments, fixes: conv.fixes, carried: conv.carried, variableLayerHeight, plates: plates.plates };
 }
 
 /** Source printer of a 3MF file on disk (for records indexed before M18), or null. */

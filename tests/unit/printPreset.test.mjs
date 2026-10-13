@@ -5,7 +5,6 @@ import path from 'node:path';
 import { exportPresetSettings } from '../../src/core/printPreset.mjs';
 import { NOZZLES, DEFAULT_NOZZLE, parseNozzle } from '../../src/core/nozzle.mjs';
 import { exportProjectSettings, U1_PRESETS } from '../../src/core/exportMapping.mjs';
-import { u1ProjectSettings } from '../../src/core/u1Convert.mjs';
 import { loadU1Profiles, DEFAULT_PROFILES_DIR } from '../../src/core/orcaProfiles.mjs';
 import { U1_SLOTS } from '../../src/core/filament.mjs';
 import { tmpDir } from './helpers.mjs';
@@ -111,20 +110,6 @@ describe('公仔 (miniature)', () => {
   it('is merged over the export’s presets; mixed filaments stay', () => {
     const cfg = JSON.parse(exportProjectSettings(U1_SLOTS, '1,2,1,1,50', exportPresetSettings('miniature', profiles, 0.4, 4)));
     expect([cfg.print_settings_id, cfg.layer_height, cfg.mixed_filament_definitions, cfg.filament_colour.length]).toEqual(['0.08mm Standard @Snapmaker U1 (0.4 nozzle)', '0.08', '1,2,1,1,50', 4]);
-  });
-});
-
-describe('U1 conversion follows the nozzle setting', () => {
-  const ps = { printer_model: 'Bambu Lab P1S', nozzle_diameter: ['0.2'], layer_height: '0.12', filament_colour: ['#000000'], filament_type: ['PLA'], printable_area: ['0x0', '256x0', '256x256', '0x256'] };
-  it('a 0.2-nozzle source converted for the user’s 0.4 nozzle gets 0.4 presets and says so', () => {
-    const r = u1ProjectSettings(ps, profiles, { nozzle: 0.4 });
-    expect([r.machine, r.settings.printer_settings_id, r.settings.printer_variant]).toEqual(['Snapmaker U1 (0.4 nozzle)', 'Snapmaker U1 (0.4 nozzle)', '0.4']);
-    expect(r.fixes).toContain('噴嘴：依設定 0.4 mm（原檔 0.2 mm）');
-  });
-  it('without a setting the source nozzle is used, as before', () => {
-    const r = u1ProjectSettings(ps, profiles);
-    expect(r.machine).toBe('Snapmaker U1 (0.2 nozzle)');
-    expect(r.fixes.some((f) => f.startsWith('噴嘴'))).toBe(false);
   });
 });
 

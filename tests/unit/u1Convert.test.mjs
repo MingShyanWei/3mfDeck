@@ -1,12 +1,16 @@
-// M18 (SPEC 3.9): Snapmaker U1 detection and conversion. The profile data
-// below is synthetic test data in the local Orca profile layout (names and
-// the few keys the converter reads), not copies of real profiles.
+// M18 (SPEC 3.9) Snapmaker U1 detection; M35 (SPEC 3.16) every export is a
+// U1 project (plates onto the U1 bed, fixes, carried source settings). The
+// profile data below is synthetic test data in the local Orca profile layout
+// (names and the few keys read), not copies of real profiles.
 import { describe, it, expect, beforeAll } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import JSZip from 'jszip';
 import { loadU1Profiles } from '../../src/core/orcaProfiles.mjs';
-import { detectPrinter, pickProcess, pickFilament, perFilament, u1ProjectSettings, plateCols, bedRect, convertToU1 } from '../../src/core/u1Convert.mjs';
+import { detectPrinter, pickProcess, pickFilament, perFilament, sourceCarry, plateCols, bedRect } from '../../src/core/u1Convert.mjs';
+import { exportQuantized3mf, carryToSlots, U1_PRESETS } from '../../src/core/exportMapping.mjs';
+import { exportPresetSettings } from '../../src/core/printPreset.mjs';
+import { U1_SLOTS } from '../../src/core/filament.mjs';
 import { openDb, insertModel, listModels, sidebarCounts, idsNeedingSourcePrinter } from '../../src/core/db.mjs';
 import { parseFile } from '../../src/core/parse/index.mjs';
 import { FIXTURES, tmpDir } from './helpers.mjs';
@@ -97,7 +101,7 @@ describe('U1 presets from the local profiles', () => {
   });
 });
 
-describe('project settings for U1', () => {
+describe('source settings carried into a U1 export', () => {
   it('per-filament values: the source nozzle volume type entry of Bambu variant arrays', () => {
     expect(perFilament(p1s(), 'filament_max_volumetric_speed', 4)).toEqual(['22', '22', '12', '16']);
     expect(perFilament(p1s({ nozzle_volume_type: ['High Flow'] }), 'filament_max_volumetric_speed', 4)).toEqual(['29', '29', '18', '20']);
@@ -105,26 +109,22 @@ describe('project settings for U1', () => {
     expect(perFilament(p1s(), 'missing_key', 4)).toBe(null);
   });
 
-  it('U1 preset names, untouched colour table, carried settings and compatibility fixes', () => {
-    const r = u1ProjectSettings(p1s(), profiles);
-    const s = r.settings;
-    expect([s.printer_model, s.printer_settings_id, s.print_settings_id, s.printer_variant]).toEqual(['Snapmaker U1', 'Snapmaker U1 (0.4 nozzle)', '0.12mm Standard @Snapmaker U1 (0.4 nozzle)', '0.4']);
-    expect(s.filament_settings_id).toEqual(['Snapmaker PLA Matte @U1', 'Snapmaker PLA Basic @U1', 'Generic PLA Silk', 'Generic PETG']);
-    expect(s.filament_colour).toEqual(['#00FFFF', '#FF00FF', '#FFFF00', '#000000']);
-    expect(s.filament_max_volumetric_speed).toEqual(['22', '22', '12', '16']);
-    expect([s.enable_support, s.support_type, s.sparse_infill_density]).toEqual(['1', 'tree(auto)', '12%']);
-    expect(s.skeleton_infill_density).toBeUndefined();
-    expect([s.exclude_object, s.brim_type, s.support_style]).toEqual(['1', 'no_brim', undefined]);
-    expect(r.fixes).toEqual(['啟用 Exclude Object', '關閉 Brim']);
-    expect(s.different_settings_to_system).toHaveLength(4 + 2);
-    expect(s.different_settings_to_system[0].split(';')).toEqual(expect.arrayContaining(['enable_support', 'support_type', 'exclude_object', 'brim_type']));
+  it('process keys the user changed (allow-list), supports keep their kind; per-filament settings', () => {
+    const c = sourceCarry(p1s());
+    expect(c.process).toEqual({ enable_support: '1', support_type: 'tree(auto)', sparse_infill_density: '12%' }); // not skeleton_infill_density, not layer_height
+    expect(c.filament.filament_max_volumetric_speed).toEqual(['22', '22', '12', '16']);
+    expect(c.filament.fan_max_speed).toEqual(['100', '100', '80', '40']);
   });
 
-  it('variable layer height with tree supports -> Tree Hybrid; a fix already in the source is not reported', () => {
-    const r = u1ProjectSettings(p1s({ exclude_object: '1' }), profiles, { variableLayerHeight: true });
-    expect(r.settings.support_style).toBe('tree_hybrid');
-    expect(r.fixes).toEqual(['關閉 Brim', '可變層高：Tree 支撐改為 Hybrid']);
-    expect(u1ProjectSettings(p1s({ enable_support: '0' }), profiles, { variableLayerHeight: true }).settings.support_style).toBeUndefined();
+  it('each slot takes the settings of the source filament with the most area quantized to it; an unused slot keeps the preset', () => {
+    const carry = { process: {}, filament: { nozzle_temperature: ['200', '210', '220', '230'] } };
+    const colours = ['#A', '#B', '#C', '#D'];
+    const slotOf = (h) => ({ '#A': 1, '#B': 1, '#C': 2, '#D': 5 })[h]; // #D -> a Mix (virtual extruder 5)
+    const area = { '#A': 10, '#B': 30, '#C': 5, '#D': 99 };
+    const r = carryToSlots(carry, colours, slotOf, 4, (h) => area[h]);
+    expect(r.filament.nozzle_temperature).toEqual(['210', '220', '210', '210']); // slot 1 <- #B (30 > 10); 3, 4: placeholder, not listed
+    expect(r.listed).toEqual([['nozzle_temperature'], ['nozzle_temperature'], [], []]);
+    expect(carryToSlots(carry, colours, slotOf, 4).filament.nozzle_temperature[0]).toBe('200'); // no areas: the first filament
   });
 });
 
@@ -135,7 +135,7 @@ describe('plate grid', () => {
   });
 });
 
-describe('convertToU1', () => {
+describe('export = U1 project (M35)', () => {
   // multiplate.3mf: plate 1 (100,100), plate 2 (400,100)+(430,100), plate 3 (700,100) — not where
   // a 4-plate grid puts plate 3 — and an empty plate 4; give it a P1S project
   const p1sProject = async (dir, over = {}, edit = (x) => x) => {
@@ -147,34 +147,67 @@ describe('convertToU1', () => {
     return file;
   };
   const items = async (file) => [...(await (await JSZip.loadAsync(await fs.readFile(file))).file('3D/3dmodel.model').async('string')).matchAll(/transform="([^"]+)"/g)].map((m) => m[1].split(' ').slice(9, 11).map(Number));
+  const settings = async (file) => JSON.parse(await (await JSZip.loadAsync(await fs.readFile(file))).file('Metadata/project_settings.config').async('string'));
+  const exportU1 = (src, dest, opts = {}) => exportQuantized3mf(src, dest, U1_SLOTS, { mix: true, u1Area: U1_AREA, ...opts });
 
-  it('moves each plate onto the U1 bed, keeps an unsafe plate, never touches paint/colours/source', async () => {
+  it('moves each plate onto the U1 bed, keeps an unsafe plate, writes U1 presets, fixes and the carried settings; source untouched', async () => {
     const dir = await tmpDir();
-    const src = await p1sProject(dir);
+    const src = await p1sProject(dir, { nozzle_diameter: ['0.2'] }); // the source nozzle does not matter (M34: Settings decide)
     const before = await fs.readFile(src);
     const dest = path.join(dir, 'p1s-U1.3mf');
-    const r = await convertToU1(src, dest, profiles);
+    const weights = new Map([['#00FFFF', 4], ['#FF00FF', 3], ['#FFFF00', 2], ['#000000', 1]]);
+    const r = await exportU1(src, dest, { colorWeights: weights });
     expect(r.plates).toEqual([
       { plate: 1, status: 'moved', dx: 7.5, dy: 8 }, // bed centre (128,128) -> (135.5,136)
       { plate: 2, status: 'moved', dx: 24.3, dy: 8 }, // + grid stride 324 - 307.2
       { plate: 3, status: 'kept', reason: '物件不在來源盤面範圍內，無法安全換算' },
     ]);
     expect(await items(dest)).toEqual([[107.5, 108], [424.3, 108], [454.3, 108], [700, 100]]);
-    expect(await fs.readFile(src)).toEqual(before); // source untouched
-    const a = await JSZip.loadAsync(before);
+    expect(await fs.readFile(src)).toEqual(before);
+    const cfg = await settings(dest);
+    expect([cfg.printer_model, cfg.printer_settings_id, cfg.print_settings_id]).toEqual([U1_PRESETS.printer_model, U1_PRESETS.printer_settings_id, U1_PRESETS.print_settings_id]);
+    expect([cfg.exclude_object, cfg.brim_type]).toEqual(['1', 'no_brim']);
+    expect([cfg.enable_support, cfg.support_type, cfg.sparse_infill_density, cfg.skeleton_infill_density]).toEqual(['1', 'tree(auto)', '12%', undefined]);
+    // CMYK source filaments land on the CMYK slots one to one
+    expect(cfg.filament_max_volumetric_speed).toEqual(['22', '22', '12', '16']);
+    expect(cfg.fan_max_speed).toEqual(['100', '100', '80', '40']);
+    const [proc, ...rest] = cfg.different_settings_to_system;
+    expect(proc.split(';')).toEqual(expect.arrayContaining(['enable_support', 'support_type', 'sparse_infill_density', 'exclude_object', 'brim_type']));
+    expect(rest).toHaveLength(4 + 1);
+    expect(rest[0].split(';')).toEqual(['filament_max_volumetric_speed', 'fan_max_speed']); // the source's per-filament keys (p1s has these two)
     const b = await JSZip.loadAsync(await fs.readFile(dest));
-    // meshes with paint_color and the per-object settings are byte-identical
-    for (const f of ['3D/Objects/object_1.model', 'Metadata/model_settings.config']) expect(await b.file(f).async('string')).toBe(await a.file(f).async('string'));
-    expect(JSON.parse(await b.file('Metadata/project_settings.config').async('string')).filament_colour).toEqual(p1s().filament_colour);
     expect(Object.keys(b.files).filter((f) => /plate_\d+\.json/.test(f))).toEqual([]); // stale slicer data dropped
-    await expect(convertToU1(src, dest, profiles)).rejects.toThrow(); // never overwrites
+    await expect(exportU1(src, dest)).rejects.toThrow(); // never overwrites unless told to
+  });
+
+  it('a print preset wins over the source settings; the rest of the source stays', async () => {
+    const dir = await tmpDir();
+    const src = await p1sProject(dir);
+    const dest = path.join(dir, 'mini.3mf');
+    await exportU1(src, dest, { presetSettings: exportPresetSettings('miniature', profiles, 0.4, 4) });
+    const cfg = await settings(dest);
+    expect([cfg.brim_type, cfg.brim_width, cfg.support_style, cfg.sparse_infill_pattern]).toEqual(['outer_only', '10', 'tree_hybrid', 'lightning']);
+    expect(cfg.fan_max_speed).toEqual(['100', '100', '100', '100']); // preset, not the source's 80 / 40
+    expect([cfg.sparse_infill_density, cfg.filament_max_volumetric_speed]).toEqual(['12%', ['22', '22', '12', '16']]); // source, no conflict
+    expect(cfg.different_settings_to_system[0].split(';')).toEqual(expect.arrayContaining(['sparse_infill_density', 'brim_width', 'support_style', 'exclude_object']));
+  });
+
+  it('a U1 source keeps its plate positions but gets the fixes and carried settings too', async () => {
+    const dir = await tmpDir();
+    const src = await p1sProject(dir, { printer_model: 'Snapmaker U1', printer_settings_id: 'Snapmaker U1 (0.4 nozzle)', printable_area: U1_AREA });
+    const dest = path.join(dir, 'u1.3mf');
+    const r = await exportU1(src, dest, { u1Area: null }); // no Orca profiles needed
+    expect(r.plates).toEqual([]);
+    expect(await items(dest)).toEqual(await items(src));
+    const cfg = await settings(dest);
+    expect([cfg.exclude_object, cfg.brim_type, cfg.sparse_infill_density]).toEqual(['1', 'no_brim', '12%']);
   });
 
   it('leaves a plate whose objects exceed 270 x 270 where it was', async () => {
     const dir = await tmpDir();
     // the 10 mm cube scaled to 300 mm, still centred on the P1S bed (128,128)
     const huge = (xml) => xml.replace('transform="1 0 0 0 1 0 0 0 1 100 100 0"', 'transform="30 0 0 0 30 0 0 0 1 -22 -22 0"');
-    const r = await convertToU1(await p1sProject(dir, {}, huge), path.join(dir, 'out.3mf'), profiles);
+    const r = await exportU1(await p1sProject(dir, {}, huge), path.join(dir, 'out.3mf'));
     expect(r.plates[0]).toMatchObject({ plate: 1, status: 'kept' });
     expect(r.plates[0].reason).toMatch(/超過 U1 270×270 mm/);
   });
@@ -206,7 +239,7 @@ describe('convertToU1', () => {
     };
     let r;
     try {
-      r = await convertToU1(src, path.join(dir, 'inline-U1.3mf'), profiles);
+      r = await exportU1(src, path.join(dir, 'inline-U1.3mf'));
     } finally {
       proto.async = original;
     }
@@ -220,10 +253,13 @@ describe('convertToU1', () => {
     expect([...out.matchAll(/transform="([^"]+)"/g)].map((m) => m[1].split(' ').slice(9, 11).map(Number))).toEqual([[127.5, 128], [468.3, 128]]);
   });
 
-  it('refuses U1 projects, projects without settings and missing profiles', async () => {
+  it('a non-U1 source needs the local Orca profiles and a bed; nothing is written then', async () => {
     const dir = await tmpDir();
-    await expect(convertToU1(await p1sProject(dir, { printer_model: 'Snapmaker U1' }), path.join(dir, 'a.3mf'), profiles)).rejects.toThrow(/已經是 Snapmaker U1/);
-    await expect(convertToU1(path.join(FIXTURES, 'multiplate.3mf'), path.join(dir, 'b.3mf'), null)).rejects.toThrow(/Snapmaker Orca/);
+    const src = await p1sProject(dir);
+    await expect(exportU1(src, path.join(dir, 'a.3mf'), { u1Area: null })).rejects.toThrow(/Snapmaker Orca/);
+    const noBed = await p1sProject(await tmpDir(), { printable_area: undefined });
+    await expect(exportU1(noBed, path.join(dir, 'b.3mf'))).rejects.toThrow(/盤面尺寸/);
+    await expect(fs.access(path.join(dir, 'a.3mf'))).rejects.toThrow();
   });
 });
 

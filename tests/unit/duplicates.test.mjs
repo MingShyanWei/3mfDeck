@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import Database from 'better-sqlite3';
 import { importPaths } from '../../src/core/importer.mjs';
 import { trashModel } from '../../src/core/trash.mjs';
-import { openDb, listModels, sidebarCounts, idsNeedingHash, setContentHash, modelsWithHash, conversionsOf, setConvertedFrom } from '../../src/core/db.mjs';
+import { openDb, listModels, sidebarCounts, idsNeedingHash, setContentHash, modelsWithHash } from '../../src/core/db.mjs';
 import { hashFile, isDataless, SF_DATALESS } from '../../src/core/contentHash.mjs';
 import { tmpDir, stage, exists, FIXTURES } from './helpers.mjs';
 
@@ -105,16 +105,6 @@ describe('the 重複 filter and older databases', () => {
     expect(listModels(db, { filter: 'duplicates' })).toEqual([]);
     expect(modelsWithHash(db, 'h-a').map((m) => [m.id, m.trashed])).toEqual([[1, false], [4, true]]); // live first
     db.close();
-  });
-
-  it('records which record a U1 conversion came from', () => {
-    const db = openDb(':memory:');
-    db.exec(`INSERT INTO models (id, name, rel_path, format, size_bytes, imported_at, updated_at) VALUES
-      (1, 'src', '2026/src.3mf', '3mf', 1, 'x', 'x'), (2, 'src-U1', '2026/src-U1.3mf', '3mf', 1, 'x', 'x'), (3, 'old', '.trash/3/2026/src-U1-2.3mf', '3mf', 1, 'x', 'x')`);
-    expect(conversionsOf(db, 1)).toEqual([]);
-    setConvertedFrom(db, 2, 1);
-    setConvertedFrom(db, 3, 1); // trashed conversions do not count
-    expect(conversionsOf(db, 1)).toEqual([{ id: 2, name: 'src-U1', rel_path: '2026/src-U1.3mf' }]);
   });
 });
 

@@ -1093,7 +1093,7 @@ try {
   step(`M17 採購建議: ${purchaseRows.length} 個色名排行，建議 ${purchaseRows.filter(([, s]) => s === '1').map(([l]) => l).join('/')}；「加入線材庫」${firstSuggest} -> ${inv[0].name} ${inv[0].hex}`);
   await page.fill('[data-testid=search]', '');
 
-  // 14) M18: a Bambu P1S project -> 非 U1 badge / filter / warning -> 轉換為 Snapmaker U1
+  // 14) M18: a Bambu P1S project -> 非 U1 badge / filter / warning; M35: Export 3MF makes it a U1 project
   {
     const JSZipM18 = (await import('jszip')).default;
     const zip = await JSZipM18.loadAsync(await fs.readFile(path.join(FIX, 'multiplate.3mf')));
@@ -1119,29 +1119,28 @@ try {
     await page.click('[data-testid=filter-all]');
     await openModel('m18-p1s');
     assert.match(await page.textContent('[data-testid=u1-warning]'), /Bambu Lab P1S.*0\.20mm Standard @BBL X1C.*不是 Snapmaker U1/);
+    // M35 (SPEC 3.16): no separate conversion; the warning says the export converts
+    assert.match(await page.textContent('[data-testid=u1-warning]'), /匯出 3MF 時會自動轉為 Snapmaker U1/);
+    assert.equal(await page.$('[data-testid=convert-u1]'), null, 'no 轉換為 Snapmaker U1 button any more');
     const libFile = (await fs.readdir(path.join(curRoot, year))).find((f) => f.startsWith('m18-p1s'));
     const srcBytes = await fs.readFile(path.join(curRoot, year, libFile));
-    await page.click('[data-testid=convert-u1]');
-    await page.waitForSelector('[data-testid=u1-result]', { timeout: 120000 });
-    const result = (await page.textContent('[data-testid=u1-result]')).replace(/\s+/g, ' ');
-    assert.match(result, /已轉換為「m18-p1s-U1」.*原檔未變動/);
-    assert.match(result, /Snapmaker U1 \(0\.4 nozzle\) · 0\.20mm Standard @Snapmaker U1 \(0\.4 nozzle\)/);
-    assert.match(await page.textContent('[data-testid=u1-plates]'), /2 盤移到 U1 盤面；盤 3 保持原位/);
-    assert.deepEqual(await fs.readFile(path.join(curRoot, year, libFile)), srcBytes, 'source 3MF untouched by the conversion');
-    await page.click('[data-testid=u1-open-converted]');
-    await page.waitForFunction(() => document.querySelector('[data-testid=detail-panel] h2')?.textContent === 'm18-p1s-U1');
-    assert.equal(await page.$('[data-testid=u1-warning]'), null, 'the converted project is a U1 project');
-    const outFile = (await fs.readdir(path.join(curRoot, year))).find((f) => f.startsWith('m18-p1s-U1'));
-    const out = JSON.parse(await (await JSZipM18.loadAsync(await fs.readFile(path.join(curRoot, year, outFile)))).file('Metadata/project_settings.config').async('string'));
+    const recordsBefore = (await page.evaluate(() => window.api.list({}))).length;
+    await saveTo('m35-p1s.3mf');
+    await page.selectOption('[data-testid=print-preset]', 'original');
+    await page.click('[data-testid=export-quantized]');
+    await page.waitForFunction(() => /m35-p1s\.3mf/.test(document.querySelector('[data-testid=export-message]')?.textContent || ''), null, { timeout: 120000 });
+    assert.match(await page.textContent('[data-testid=export-plates]'), /2 盤移到 U1 盤面；盤 3 保持原位/);
+    assert.deepEqual(await fs.readFile(path.join(curRoot, year, libFile)), srcBytes, 'source 3MF untouched by the export');
+    assert.equal((await page.evaluate(() => window.api.list({}))).length, recordsBefore, 'the export does not add a record');
+    const outZip = await JSZipM18.loadAsync(await fs.readFile(path.join(exportsDir, 'm35-p1s.3mf')));
+    const out = JSON.parse(await outZip.file('Metadata/project_settings.config').async('string'));
     assert.deepEqual([out.printer_model, out.brim_type, out.exclude_object], ['Snapmaker U1', 'no_brim', '1']);
-    assert.deepEqual(out.filament_colour, ['#00FFFF', '#FF00FF', '#FFFF00', '#000000']);
-    await page.fill('[data-testid=search]', 'm18-p1s-U1');
-    await page.waitForSelector('[data-testid=model-card] [data-testid=card-thumb]', { timeout: 120000 }); // thumbnail rendered for the new record
-    await page.fill('[data-testid=search]', '');
-    step(`M18 U1: m18-p1s 非 U1 徽章/過濾/警示 -> 轉換 ${outFile}（${out.print_settings_id}，2 盤搬到 U1 盤面、盤 3 保持原位），原檔未動`);
+    const firstItem = /<item [^>]*transform="([^"]+)"/.exec(await outZip.file('3D/3dmodel.model').async('string'))[1].split(' ').slice(9, 11).map(Number);
+    assert.deepEqual(firstItem, [107.5, 108], 'plate 1 moved from the P1S bed centre onto the U1 bed');
+    step(`M35 匯出即 U1: m18-p1s 非 U1 徽章/過濾/新警示、無轉換按鈕 -> 匯出 m35-p1s.3mf（${out.printer_settings_id}，2 盤搬到 U1 盤面、盤 3 保持原位，Exclude Object 開、Brim 關），原檔未動、不新增記錄`);
   }
 
-  // 14b) M33 (SPEC 3.1b): identical contents are not imported twice; 重複 filter; convert-again reminder
+  // 14b) M33 (SPEC 3.1b): identical contents are not imported twice; 重複 filter
   {
     const JSZipM33 = (await import('jszip')).default;
     const curRoot = (await page.evaluate(() => window.api.getSettings())).libraryRoot;
@@ -1195,17 +1194,7 @@ try {
     assert.ok(dupPaths.includes('m33-orig') && dupPaths.includes('m33-copy'), JSON.stringify(dupPaths));
     assert.match(await page.textContent('[data-testid=dup-note]'), /內容完全相同的檔案依組列出（不含回收桶）/);
     await page.click('[data-testid=filter-all]');
-    // U1 conversion of m18-p1s again: asked first, cancel makes nothing
-    const p1sId = (await list()).find((m) => m.name === 'm18-p1s').id;
-    await app.evaluate(({ dialog }) => {
-      globalThis.__asked = [];
-      dialog.showMessageBox = async (_w, o) => { globalThis.__asked.push(`${o.message} | ${o.detail}`); return { response: 0 }; }; // cancel
-    });
-    assert.deepEqual(await page.evaluate((id) => window.api.convertU1(id), p1sId), { cancelled: true });
-    const asked = await app.evaluate(() => globalThis.__asked);
-    assert.match(asked[0], /已經轉換過：「m18-p1s-U1」 \| 這個檔案之前已轉換過（\d{4}\/m18-p1s-U1\.3mf）。仍要再轉一次嗎？/);
-    assert.equal((await list()).filter((m) => m.name.startsWith('m18-p1s-U1')).length, 1, 'cancel: no -U1-2');
-    step('M33 重複: 同內容改名匯入 -> 略過、原檔未動、提示可檢視；回收桶中的重複 -> 提示可還原；舊記錄啟動時補指紋 -> 「重複」篩選分組；再轉 U1 先詢問、取消不產生 -U1-2');
+    step('M33 重複: 同內容改名匯入 -> 略過、原檔未動、提示可檢視；回收桶中的重複 -> 提示可還原；舊記錄啟動時補指紋 -> 「重複」篩選分組');
   }
 
   // 15) M19: embedded product images — 3D / 原檔圖 switch, thumbnail strip, plate switcher link

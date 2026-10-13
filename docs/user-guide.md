@@ -14,7 +14,7 @@ This guide follows the order you actually work in: put files into the library, l
 - [8. Filament inventory and purchase suggestions](#8-filament-inventory-and-purchase-suggestions)
 - [9. Exporting a 3MF for Snapmaker Orca](#9-exporting-a-3mf-for-snapmaker-orca)
 - [10. Miniature settings](#10-miniature-settings)
-- [11. Converting to Snapmaker U1](#11-converting-to-snapmaker-u1)
+- [11. Files made for other printers (exported as U1)](#11-files-made-for-other-printers-exported-as-u1)
 - [12. Duplicates, missing records and the trash](#12-duplicates-missing-records-and-the-trash)
 - [13. Settings](#13-settings)
 - [14. FAQ](#14-faq)
@@ -25,10 +25,10 @@ This guide follows the order you actually work in: put files into the library, l
 
 1. Open 3mfDeck (on macOS, Gatekeeper blocks the first launch; see the README).
 2. Open **Settings** (gear, top right) and check three things:
-   - **Nozzle size**: the nozzle currently on your U1 (0.4 mm by default). U1 conversion and export pick the Orca presets for this nozzle.
+   - **Nozzle size**: the nozzle currently on your U1 (0.4 mm by default). The export picks the Orca presets for this nozzle.
    - **Library folder**: `~/3mf-library/` by default. To keep it in iCloud Drive or on an external disk, change it here (see [section 13](#13-settings)).
    - **Spool colours**: the filament colours actually loaded on the U1 (ideal CMYK by default). Colour analysis, mixing recipes and export are all computed with these.
-3. **Convert to Snapmaker U1** and the **Miniature** settings need **Snapmaker Orca** installed locally (`/Applications/Snapmaker Orca.app`). The app only reads its preset files; nothing goes online.
+3. Exporting another printer's project and the **Miniature** settings need **Snapmaker Orca** installed locally (`/Applications/Snapmaker Orca.app`). The app only reads its preset files; nothing goes online.
 
 ![Nozzle size in Settings](screenshots/en/7-settings-nozzle.png)
 
@@ -111,6 +111,7 @@ What the export does:
 - Every colour is quantized to a spool; colours no single spool can print become Orca's native **mixed filaments (Mix)**, so colours are set up as soon as Orca opens the file.
 - The source's slicing settings are stripped; only geometry, colours, the spool table and U1 preset names remain, so Orca shows no compatibility warnings.
 - The printer and process presets follow the **nozzle size** in Settings.
+- It is always a **Snapmaker U1 project**: Exclude Object on, brim off (except Miniature); another printer's project is moved onto the U1 bed as well (see [section 11](#11-files-made-for-other-printers-exported-as-u1)).
 - **The original file is never modified**; every export is a new file.
 
 ![The print-settings drop-down next to Export 3MF, with the Miniature hint](screenshots/en/6-print-presets.png)
@@ -137,18 +138,16 @@ Based on r/PrintedMinis "[FDM miniatures - How I support them and some updates](
 
 > **Why Tree Hybrid**: one of the post's key points is **infill inside the tree supports**, so they do not break mid-print. The U1's default tree style is Organic, whose branches are always hollow and which ignores the infill setting; Tree Hybrid fills them (tested on the same model: Organic supports were a single shell, Tree Hybrid had infill lines 1.2 mm apart). It costs about 3 % more filament and 2 % more print time, and large flat overhangs get normal supports underneath, which are harder to remove.
 
-## 11. Converting to Snapmaker U1
+## 11. Files made for other printers (exported as U1)
 
 Shared 3MF files are often projects for another printer (e.g. Bambu Lab). Opened as they are, they keep that printer's bed, and objects may end up outside the U1's.
 
 - Such files show a **Not U1** warning (with the original printer) on the card and in the detail panel; the **Not U1** filter lists them all.
-- **Convert to Snapmaker U1** in the detail panel saves `<name>-U1.3mf` and imports it; the original is left untouched. The conversion:
-  - switches printer, process and filament presets to U1, **for the nozzle size in Settings**; if the source used another nozzle, the report says "Nozzle: X mm from Settings (the source used Y mm)";
-  - fixes compatibility: Exclude Object on, brim off, tree supports to hybrid when the project has a variable layer height;
-  - moves each plate's objects to U1 bed coordinates; a plate that cannot be moved safely stays where it was, with the reason;
-  - keeps the source's filament flow, temperature and cooling settings.
-- Converting the same file again asks first, so no `-U1-2` appears by accident.
-- Very large projects (over 1 GB of model data) convert too; it just takes longer.
+- Nothing to convert: **Export 3MF…** ([section 9](#9-exporting-a-3mf-for-snapmaker-orca)) always writes a U1 project, and the original is left untouched. The export:
+  - switches printer, process and filament presets to U1, **for the nozzle size in Settings** (not the source's nozzle);
+  - moves each plate's objects to U1 bed coordinates; a plate that cannot be moved safely stays where it was, and the export message says why;
+  - keeps some of the source's changed settings (e.g. supports, infill density) and its filament settings (temperature, flow, cooling). Each spool slot takes the settings of the source filament with the most area mapped to it; where they clash with a print preset (Miniature…), the preset wins.
+- Very large projects (over 1 GB of model data) export too; it just takes longer.
 
 ## 12. Duplicates, missing records and the trash
 
@@ -166,7 +165,7 @@ Shared 3MF files are often projects for another printer (e.g. Bambu Lab). Opened
 
 | Setting | |
 |---|---|
-| Nozzle size | 0.2 / 0.4 / 0.6 / 0.8 mm; used for U1 conversion and export presets |
+| Nozzle size | 0.2 / 0.4 / 0.6 / 0.8 mm; used for the export presets |
 | Language | English / 繁體中文 / 简体中文; follows the system by default |
 | Library folder | changing it **moves no files**: the new folder is indexed and records under the old one are marked missing (switch back to restore them) |
 | Spool colours | the real colours of 1–4 spools; "Reset to ideal CMYK" restores the default |
@@ -189,5 +188,5 @@ No. The row also says "if not bought: slot N (ΔE)"; if that difference is accep
 **I changed the library folder and everything is "missing".**
 Changing the folder moves no files, so records under the old folder are marked missing. Switch back to restore them, or use **Find by file name…** to match them to the new place.
 
-**U1 conversion or the miniature settings say Snapmaker Orca was not found.**
+**The export says Snapmaker Orca was not found.**
 Both read the presets of a locally installed Snapmaker Orca; install it first.

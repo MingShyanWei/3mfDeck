@@ -11,7 +11,7 @@ import { t } from '../../core/i18n/index.mjs';
 
 let lastPreset = 'original'; // M34: the export preset chosen last in this session
 
-export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose, onOpen, onConverted }) {
+export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose }) {
   const [model, setModel] = useState(null);
   const [draft, setDraft] = useState(null);
   const [saved, setSaved] = useState(false);
@@ -21,8 +21,6 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
   const [inTrash, setInTrash] = useState(false); // missing record whose file is in .trash
   const [previewMode, setPreviewMode] = useState('3d'); // M19: '3d' | 'images'
   const [imagePath, setImagePath] = useState(null);
-  const [converting, setConverting] = useState(false);
-  const [converted, setConverted] = useState(null); // M18 conversion result
   const [actionError, setActionError] = useState('');
   const [preset, setPreset] = useState(lastPreset); // M34: print preset for 匯出 3MF (kept for the session)
   const [nozzle, setNozzle] = useState(null);
@@ -39,7 +37,6 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
     setDraft(toDraft(m));
     setSaved(false);
     setExported(null);
-    setConverted(null);
     setActionError('');
     setPlate(m.plates.length > 1 ? m.plates[0].plate : null);
     setPreviewMode('3d');
@@ -90,22 +87,12 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
     await load();
     onSaved();
   };
-  // M18: convert to a Snapmaker U1 project (new "-U1" file in the cabinet; the source stays)
-  const convertU1 = async () => {
-    setConverting(true);
-    setActionError('');
-    const r = await window.api.convertU1(id);
-    setConverting(false);
-    if (r.cancelled) return; // M33: already converted, the user chose not to convert again
-    if (r.error) return setActionError(r.error);
-    setConverted(r);
-    onConverted();
-  };
   // M13d: the only export action, top right (Mix mode is always on now)
   const export3mf = async () => {
+    setActionError('');
     const r = await window.api.exportQuantized(id, { overThreshold: 'nearest', mix: true, preset });
     if (r?.error) setActionError(r.error);
-    else if (r) setExported({ path: r.path, summary: r.summary, mixes: r.mixes });
+    else if (r) setExported({ path: r.path, summary: r.summary, mixes: r.mixes, plates: r.plates });
   };
 
   return (
@@ -156,6 +143,14 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
                 skipped: exported.summary.filter((x) => x.slot === null).length ? t('detail.exportedSkipped', { n: exported.summary.filter((x) => x.slot === null).length }) : '',
                 mixes: exported.mixes ? t('detail.exportedMixes', { n: exported.mixes }) : '',
               })}
+            {/* M35: a non-U1 project's plates moved onto the U1 bed */}
+            {exported.plates?.length > 0 && (
+              <span data-testid="export-plates">
+                {' '}
+                {t('u1.reportPlates', { n: exported.plates.filter((p) => p.status === 'moved').length })}
+                {exported.plates.filter((p) => p.status === 'kept').map((p) => t('u1.reportKept', { plate: p.plate, reason: p.reason })).join('')}
+              </span>
+            )}
           </span>
         </div>
       )}
@@ -166,32 +161,13 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
             <div>
               {t('u1.warningPre')}<b>{model.source_printer}</b>{t('u1.warningPost', { process: model.source_process ? t('u1.warningProcess', { process: model.source_process }) : '' })}
             </div>
-            <div className="row">
-              <button className="primary" data-testid="convert-u1" disabled={converting} onClick={convertU1}>
-                {converting ? <><i className="mdi mdi-loading mdi-spin" /> {t('u1.converting')}</> : <><i className="mdi mdi-swap-horizontal" /> {t('u1.convert')}</>}
-              </button>
-              <span className="small">{t('u1.convertNote')}</span>
-            </div>
-            {actionError && !model.missing && <div className="small" data-testid="u1-error">{actionError}</div>}
           </div>
         </div>
       )}
-      {converted && (
-        <div className="callout note u1-result" data-testid="u1-result">
-          <i className="mdi mdi-check" />
-          <div className="grow">
-            <div>{t('u1.converted', { name: converted.name, rel: converted.relPath })}</div>
-            <ul className="u1-report small">
-              <li>{converted.report.machine} · {converted.report.process}</li>
-              <li>{t('u1.reportFilaments', { list: [...new Set(converted.report.filaments)].join(t('common.listSep')) })}</li>
-              {converted.report.fixes.length > 0 && <li>{t('u1.reportFixes', { list: converted.report.fixes.join(t('common.listSep')) })}</li>}
-              <li data-testid="u1-plates">
-                {t('u1.reportPlates', { n: converted.report.plates.filter((p) => p.status === 'moved').length })}
-                {converted.report.plates.filter((p) => p.status === 'kept').map((p) => t('u1.reportKept', { plate: p.plate, reason: p.reason })).join('')}
-              </li>
-            </ul>
-            <button data-testid="u1-open-converted" onClick={() => onOpen(converted.id)}>{t('u1.openConverted')}</button>
-          </div>
+      {actionError && !model.missing && (
+        <div className="callout danger" data-testid="export-error">
+          <i className="mdi mdi-alert-circle-outline" />
+          <span className="grow">{actionError}</span>
         </div>
       )}
       {trashed && (
