@@ -105,7 +105,7 @@ async function shoot(lang, vase) {
     await page.screenshot({ path: path.join(dir, `${name}.png`) });
     console.log(`  ${lang}/${name}.png`);
   };
-  const [app, page] = await launch(base, lang);
+  let [app, page] = await launch(base, lang);
   try {
     if (await page.$('[data-testid=settings-done]')) await page.click('[data-testid=settings-done]');
     await importFiles(app, page, files);
@@ -138,6 +138,48 @@ async function shoot(lang, vase) {
     await page.click('[data-testid=purchase-open]');
     await page.waitForSelector('[data-testid=purchase-row]');
     await shot(page, '5-purchase-suggestions');
+    await page.click('[data-testid=purchase-close]');
+
+    // M34: the print-settings drop-down next to Export 3MF, with the 公仔 hint
+    await openModel(page, 'demo-knot');
+    await page.selectOption('[data-testid=print-preset]', 'miniature');
+    await page.waitForSelector('[data-testid=preset-hint]');
+    await shot(page, '6-print-presets');
+    await page.selectOption('[data-testid=print-preset]', 'original');
+
+    // M34: nozzle size in Settings
+    await page.click('[data-testid=settings-button]');
+    await page.waitForSelector('[data-testid=settings-nozzle]');
+    await shot(page, '7-settings-nozzle');
+    await page.click('[data-testid=settings-done]');
+
+    // M33: a byte-identical copy placed in another folder by hand (as happens with
+    // a re-downloaded model) -> rebuild index -> fingerprinted at the next start ->
+    // 重複 filter; then importing the same file again is skipped with a notice
+    const libRoot = (await page.evaluate(() => window.api.getSettings())).libraryRoot;
+    const tower = (await page.evaluate(() => window.api.list({}))).find((m) => m.name === 'demo-tower');
+    await fs.mkdir(path.join(libRoot, 'downloads'), { recursive: true });
+    await fs.copyFile(path.join(libRoot, tower.rel_path), path.join(libRoot, 'downloads', 'demo-tower.3mf'));
+    await page.evaluate(() => window.api.rebuildIndex());
+    await app.close();
+    [app, page] = await launch(base, lang);
+    await page.waitForFunction(async () => (await window.api.sidebar()).hashPending === 0, null, { timeout: 60000 });
+    // the copy is our own model too: label it self-made, like the imported ones
+    await page.evaluate(async () => {
+      const copy = (await window.api.list({})).find((m) => m.rel_path === 'downloads/demo-tower.3mf');
+      await window.api.update(copy.id, { provenance_type: 'self_made' });
+    });
+    await page.click('[data-testid=filter-duplicates]');
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=dup-badge]').length === 2);
+    const again = path.join(inbox, 'demo-tower (1).3mf');
+    await fs.copyFile(path.join(DEMO, 'demo-tower.3mf'), again);
+    await app.evaluate(({ dialog, Menu }, filePaths) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths });
+      Menu.getApplicationMenu().getMenuItemById('import').click();
+    }, [again]);
+    await page.waitForSelector('[data-testid=dup-notice]');
+    await settle(page, 1500); // card thumbnails
+    await shot(page, '8-duplicates');
   } finally {
     await app.close();
     await fs.rm(base, { recursive: true, force: true });

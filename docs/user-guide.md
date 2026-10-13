@@ -30,6 +30,8 @@ This guide follows the order you actually work in: put files into the library, l
    - **Spool colours**: the filament colours actually loaded on the U1 (ideal CMYK by default). Colour analysis, mixing recipes and export are all computed with these.
 3. **Convert to Snapmaker U1** and the **Miniature** settings need **Snapmaker Orca** installed locally (`/Applications/Snapmaker Orca.app`). The app only reads its preset files; nothing goes online.
 
+![Nozzle size in Settings](screenshots/en/7-settings-nozzle.png)
+
 ## 2. The window
 
 | Area | What is there |
@@ -111,6 +113,8 @@ What the export does:
 - The printer and process presets follow the **nozzle size** in Settings.
 - **The original file is never modified**; every export is a new file.
 
+![The print-settings drop-down next to Export 3MF, with the Miniature hint](screenshots/en/6-print-presets.png)
+
 ## 10. Miniature settings
 
 Based on r/PrintedMinis "[FDM miniatures - How I support them and some updates](https://www.reddit.com/r/PrintedMinis/comments/1i8hcyz/fdm_miniatures_how_i_support_them_and_some_updates/)" (u/HOHansen), scaled to your nozzle. Exporting with "Miniature" writes:
@@ -155,6 +159,8 @@ Shared 3MF files are often projects for another printer (e.g. Bambu Lab). Opened
   - Not needed any more: select them and **Remove selected…** removes the records only; no file is deleted.
 - **Trash**: deleted files are kept in `<library>/.trash/` and can be **restored** one by one; **Empty trash…** deletes them for good after a second confirmation.
 - **Rebuild index**: if files are in the library folder but not indexed (e.g. copied in by hand), a notice appears at the top; **Rebuild index** adds them.
+
+![The Duplicates filter and the notice for a skipped duplicate](screenshots/en/8-duplicates.png)
 
 ## 13. Settings
 

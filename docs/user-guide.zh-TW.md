@@ -30,6 +30,8 @@
    - **耗材捲色**：U1 上實際裝的線材顏色（預設理想 CMYK）。顏色分析、混色配方、匯出都用這組顏色計算。
 3. 「轉換為 Snapmaker U1」與「公仔」設定需要本機安裝 **Snapmaker Orca**（`/Applications/Snapmaker Orca.app`），App 只讀它的設定檔，不連網。
 
+![設定頁的噴嘴尺寸](screenshots/zh-TW/7-settings-nozzle.png)
+
 ## 2. 畫面導覽
 
 | 區域 | 內容 |
@@ -111,6 +113,8 @@
 - 機型與 process 依設定頁的**噴嘴尺寸**選擇。
 - **原檔永遠不會被修改**，匯出一律是新檔。
 
+![匯出按鈕旁的列印設定下拉，選「公仔」時的提示](screenshots/zh-TW/6-print-presets.png)
+
 ## 10. 公仔設定
 
 依 r/PrintedMinis〈[FDM miniatures - How I support them and some updates](https://www.reddit.com/r/PrintedMinis/comments/1i8hcyz/fdm_miniatures_how_i_support_them_and_some_updates/)〉（u/HOHansen）的原則，換算到你的噴嘴。匯出時選「公仔」會寫入：
@@ -155,6 +159,8 @@
   - 不要了：勾選後「移除所選…」只移除記錄，不刪任何檔案。
 - **回收桶**：刪除的檔案在 `<根目錄>/.trash/`，可逐一「還原」回原位；「清空回收桶…」需二次確認後才真的刪除。
 - **重建索引**：若有檔案在檔案櫃資料夾裡卻不在索引中（例如手動放入），上方會提示，按「重建索引」即可收錄。
+
+![「重複」篩選與重複匯入的提示](screenshots/zh-TW/8-duplicates.png)
 
 ## 13. 設定頁
 

@@ -88,6 +88,8 @@
 |---|---|
 | ![颜色分析](docs/screenshots/zh-CN/2-colour-analysis.png) **颜色分析**：面积占比、色名标签、每色的打印方式 | ![原文件图](docs/screenshots/zh-CN/3-embedded-images.png) **原文件图**：3MF 内嵌的封面与盘面图 |
 | ![建议料卷颜色](docs/screenshots/zh-CN/4-spool-suggestions.png) **建议料卷颜色**：理想色、从耗材库挑、标准配置 | ![采购建议](docs/screenshots/zh-CN/5-purchase-suggestions.png) **采购建议**：整个模型库最缺哪些颜色 |
+| ![打印设置](docs/screenshots/zh-CN/6-print-presets.png) **打印设置**：导出按钮旁选原文件设置、手办或手办＋熨烫 | ![重复](docs/screenshots/zh-CN/8-duplicates.png) **重复**：内容相同的文件分组列出，重复的不会再导入 |
+| ![喷嘴尺寸](docs/screenshots/zh-CN/7-settings-nozzle.png) **设置**：喷嘴尺寸、根目录、料卷颜色 | |
 
 ## 支持格式与环境
 

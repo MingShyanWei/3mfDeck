@@ -88,6 +88,8 @@
 |---|---|
 | ![顏色分析](docs/screenshots/zh-TW/2-colour-analysis.png) **顏色分析**：面積佔比、色名標籤、每色的列印方式 | ![原檔圖](docs/screenshots/zh-TW/3-embedded-images.png) **原檔圖**：3MF 內嵌的封面與盤面圖 |
 | ![建議捲色](docs/screenshots/zh-TW/4-spool-suggestions.png) **建議捲色**：理想色、從線材庫挑、標準配置 | ![採購建議](docs/screenshots/zh-TW/5-purchase-suggestions.png) **採購建議**：整個檔案櫃最缺哪些顏色 |
+| ![列印設定](docs/screenshots/zh-TW/6-print-presets.png) **列印設定**：匯出按鈕旁選原檔設定、公仔或公仔＋熨燙 | ![重複](docs/screenshots/zh-TW/8-duplicates.png) **重複**：內容相同的檔案分組列出，重複的不會再匯入 |
+| ![噴嘴尺寸](docs/screenshots/zh-TW/7-settings-nozzle.png) **設定**：噴嘴尺寸、根目錄、耗材捲色 | |
 
 ## 支援格式與環境
 

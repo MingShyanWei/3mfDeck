@@ -30,6 +30,8 @@
    - **料卷颜色**：U1 上实际装的耗材颜色（默认理想 CMYK）。颜色分析、混色配方、导出都用这组颜色计算。
 3. “转换为 Snapmaker U1”与“手办”设置需要本机安装 **Snapmaker Orca**（`/Applications/Snapmaker Orca.app`），App 只读取它的预设文件，不联网。
 
+![设置页的喷嘴尺寸](screenshots/zh-CN/7-settings-nozzle.png)
+
 ## 2. 界面导览
 
 | 区域 | 内容 |
@@ -111,6 +113,8 @@
 - 机型与 process 按设置页的**喷嘴尺寸**选择。
 - **原文件永远不会被修改**，导出一律是新文件。
 
+![导出按钮旁的打印设置下拉，选“手办”时的提示](screenshots/zh-CN/6-print-presets.png)
+
 ## 10. 手办设置
 
 依 r/PrintedMinis〈[FDM miniatures - How I support them and some updates](https://www.reddit.com/r/PrintedMinis/comments/1i8hcyz/fdm_miniatures_how_i_support_them_and_some_updates/)〉（u/HOHansen）的原则，换算到你的喷嘴。导出时选“手办”会写入：
@@ -155,6 +159,8 @@
   - 不要了：勾选后“移除所选…”只移除记录，不删任何文件。
 - **回收站**：删除的文件在 `<根目录>/.trash/`，可逐个“还原”回原位；“清空回收站…”需二次确认后才真的删除。
 - **重建索引**：若有文件在模型库文件夹里却不在索引中（例如手动放入），上方会提示，点“重建索引”即可收录。
+
+![“重复”筛选与重复导入的提示](screenshots/zh-CN/8-duplicates.png)
 
 ## 13. 设置页
 
