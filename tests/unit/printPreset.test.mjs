@@ -8,6 +8,9 @@ import { exportProjectSettings, U1_PRESETS } from '../../src/core/exportMapping.
 import { loadU1Profiles, DEFAULT_PROFILES_DIR } from '../../src/core/orcaProfiles.mjs';
 import { U1_SLOTS } from '../../src/core/filament.mjs';
 import { tmpDir } from './helpers.mjs';
+import en from '../../src/core/i18n/en.mjs';
+import zhTW from '../../src/core/i18n/zh-TW.mjs';
+import zhCN from '../../src/core/i18n/zh-CN.mjs';
 
 // synthetic profiles in the shape loadU1Profiles returns (not copies of real presets)
 const machine = (n, minLayerHeight) => ({ name: `Snapmaker U1 (${n} nozzle)`, nozzle: n, printableArea: ['0.5x1', '270.5x1', '270.5x271', '0.5x271'], minLayerHeight });
@@ -53,6 +56,14 @@ describe('原檔設定 (original)', () => {
 });
 
 describe('公仔 (miniature)', () => {
+  it('the in-app hint names what the preset writes (Tree Hybrid with infill, lightning infill), in every language', () => {
+    const s = exportPresetSettings('miniature', profiles, 0.4, 1);
+    expect([s.support_style, s.sparse_infill_pattern]).toEqual(['tree_hybrid', 'lightning']);
+    for (const dict of [en, zhTW, zhCN]) {
+      expect(dict['printPreset.miniatureHint']).toMatch(/Tree Hybrid/);
+      expect(dict['printPreset.miniatureHint']).toMatch(/lightning|閃電|闪电/);
+    }
+  });
   it('0.4 nozzle: lowest layer 0.08, first layer 0.2, tree supports with Top Z = layer, no interface, infill in supports, 10 mm brim, Arachne 30 %, cooling', () => {
     const s = exportPresetSettings('miniature', profiles, 0.4, 3);
     expect(s).toMatchObject({

@@ -1579,12 +1579,14 @@ try {
   // M30: the relaunch above (fresh userData, check off) made no request either
   assert.equal(updateHits.length, hitsWhenDisabled, `update API hit after the check was switched off: ${updateHits.join(', ')}`);
 } finally {
+  // Printed even when a step failed: a renderer exception is often the cause of
+  // the failed assertion (M35: a call to a removed function in DetailPanel's
+  // load left the plate switcher unrendered; the run stopped at the assertion
+  // and the collected pageerror was never shown).
+  if (consoleProblems.length) console.error('Console problems:\n' + consoleProblems.join('\n'));
   await app.close();
   updateServer.close();
 }
 
-if (consoleProblems.length) {
-  console.error('Console problems:\n' + consoleProblems.join('\n'));
-  process.exit(1);
-}
+if (consoleProblems.length) process.exit(1);
 console.log(`SMOKE OK — no console errors/warnings. Temp dir: ${base}`);

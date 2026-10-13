@@ -186,7 +186,7 @@ export default {
   "preset.cmyw": "CMYW 淡色用（白代黑）",
   "printPreset.label": "匯出的列印設定",
   "printPreset.miniature": "公仔",
-  "printPreset.miniatureHint": "公仔設定（{nozzle} mm 噴嘴）：樹狀支撐、支撐上方間距等於層高、不用介面層、10 mm 裙邊。請在 Orca 把模型往後傾 20–45°（需要時再往左或右 20°），以減少懸空面。",
+  "printPreset.miniatureHint": "公仔設定（{nozzle} mm 噴嘴）：Tree Hybrid 樹狀支撐（內部有填充）、支撐上方間距等於層高、不用介面層、10 mm 裙邊、閃電填充（內部大多空心，較省時）。請在 Orca 把模型往後傾 20–45°（需要時再往左或右 20°），以減少懸空面。",
   "printPreset.miniatureIroning": "公仔＋熨燙",
   "printPreset.ironingHint": "熨燙：所有朝上的平面都會被燙（例如平的底座頂部），公仔身上朝上的小平台也會；細節多的部位請在切片預覽確認。",
   "printPreset.nozzleHint": "換成 0.2 mm 噴嘴（並在設定頁改尺寸）可用 0.04 mm 層高，細節更好。",

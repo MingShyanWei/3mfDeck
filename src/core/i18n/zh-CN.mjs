@@ -186,7 +186,7 @@ export default {
   "preset.cmyw": "CMYW 浅色用（白代黑）",
   "printPreset.label": "导出的打印设置",
   "printPreset.miniature": "手办",
-  "printPreset.miniatureHint": "手办设置（{nozzle} mm 喷嘴）：树状支撑、支撑上方间距等于层高、不用接触层、10 mm 裙边。请在 Orca 把模型往后倾 20–45°（需要时再往左或右 20°），以减少悬空面。",
+  "printPreset.miniatureHint": "手办设置（{nozzle} mm 喷嘴）：Tree Hybrid 树状支撑（内部有填充）、支撑上方间距等于层高、不用接触层、10 mm 裙边、闪电填充（内部大多空心，较省时）。请在 Orca 把模型往后倾 20–45°（需要时再往左或右 20°），以减少悬空面。",
   "printPreset.miniatureIroning": "手办＋熨烫",
   "printPreset.ironingHint": "熨烫：所有朝上的平面都会被烫（例如平的底座顶部），手办身上朝上的小平台也会；细节多的部位请在切片预览确认。",
   "printPreset.nozzleHint": "换成 0.2 mm 喷嘴（并在设置页改尺寸）可用 0.04 mm 层高，细节更好。",
