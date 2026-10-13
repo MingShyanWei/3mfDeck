@@ -136,7 +136,7 @@ git clone git@github.com:MingShyanWei/3mfDeck.git
 cd 3mfDeck
 npm install
 npm run dev        # vite build + 啟動 Electron
-npm test           # Vitest 單元測試（317 項）
+npm test           # Vitest 單元測試（331 項）
 npm run smoke      # Electron 端到端 smoke（用隔離的資料夾與資料庫）
 npm run dist       # 打包 macOS dmg（檔名帶建置版本）
 node scripts/release-notes.mjs  # 產生含建置標記、大小、SHA256 的 release 說明
@@ -161,7 +161,7 @@ src/core/          純邏輯，可單獨測試：解析、顏色、混色、匯�
   orcaProfiles.mjs 讀本機 Snapmaker Orca 的機型 profile（僅取幾何資料，不連網）
 src/core/i18n/     介面字典（en／zh-TW／zh-CN）
 src/renderer/      React UI（three.js 預覽、詳情面板、彈窗）
-tests/unit/        Vitest（35 個檔、317 項）
+tests/unit/        Vitest（36 個檔、331 項）
 tests/smoke/       真實 Electron 端到端測試
 docs/user-guide*.md 使用說明（en／zh-TW／zh-CN）
 docs/screenshots/  README 截圖（en／zh-TW／zh-CN）

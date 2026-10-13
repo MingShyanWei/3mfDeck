@@ -15,6 +15,11 @@ function newZip() {
   return zip;
 }
 
+// Orca (bbs_3mf.cpp) loads 3D/Objects/*.model only when they are listed in
+// 3D/_rels/3dmodel.model.rels; without it the root's p:path components point
+// at nothing and the plate opens empty, as real Bambu / Orca projects never do.
+const SUB_MODEL_RELS = '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/Objects/object_1.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>';
+
 // Axis-aligned box: 8 vertices, 12 triangles (outward winding)
 function box(sx, sy, sz) {
   const v = [
@@ -124,6 +129,7 @@ ${tris.map((t, i) => `     <triangle v1="${t[0]}" v2="${t[1]}" v3="${t[2]}"${pai
   zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>');
   zip.file('3D/3dmodel.model', root);
   zip.file('3D/Objects/object_1.model', mesh);
+  zip.file('3D/_rels/3dmodel.model.rels', SUB_MODEL_RELS);
   zip.file('Metadata/model_settings.config', modelSettings);
   zip.file('Metadata/project_settings.config', projectSettings);
   return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
@@ -232,6 +238,7 @@ ${plate(3, '', [[6, 1]])}
   zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>');
   zip.file('3D/3dmodel.model', root);
   zip.file('3D/Objects/object_1.model', meshes);
+  zip.file('3D/_rels/3dmodel.model.rels', SUB_MODEL_RELS);
   zip.file('Metadata/model_settings.config', modelSettings);
   zip.file('Metadata/project_settings.config', JSON.stringify({ filament_colour: ['#00FFFF', '#FF00FF', '#FFFF00', '#000000'] }, null, 4));
   zip.file('Metadata/plate_1.json', plateJson([901]));
