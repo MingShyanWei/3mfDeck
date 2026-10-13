@@ -1,10 +1,10 @@
-<!-- build: 1.2610.131054 -->
+<!-- build: 1.2610.131126 -->
 # 3mfDeck release manifest
 
 | | |
 |---|---|
-| Version | **1.2610.131054** — built 2026-10-13 10:54:25 (+08:00) |
-| Source commit | `064253c` (clean tree; all five files come from this one build; adds to 1.2610.121430: every Export 3MF is a Snapmaker U1 project — another printer's plates move onto the U1 bed, compatibility fixes, the source's filament settings kept — and the separate Convert to Snapmaker U1 is gone; also the screenshots, SPEC merge and test-fixture fixes since then) |
+| Version | **1.2610.131126** — built 2026-10-13 11:26:41 (+08:00) |
+| Source commit | `39c5050` (clean tree; all five files come from this one build; adds to 1.2610.131054: 3MF duplicates are detected by the contents inside the ZIP, so the same project packed again at another time counts as a duplicate) |
 | Built on | macOS (arm64) with electron-builder 26; Windows and Linux files are cross-built on macOS |
 | Release type | Manual: files are uploaded to [GitHub Releases](https://github.com/MingShyanWei/3mfDeck/releases) by hand (no CI) |
 
@@ -24,11 +24,11 @@ The first line of this file and of every Release description is the machine-read
 
 | File | Platform | Architecture | Size (bytes) | SHA256 |
 |---|---|---|---:|---|
-| `3mfDeck-1.2610.131054-arm64.dmg` | macOS (Apple silicon) | arm64 | 132,667,578 | `c738eef3fefc3e633dad1c03a158e296224bac6523be79aa703b8d4d8edf425c` |
-| `3mfDeck-1.2610.131054-win-x64-setup.exe` | Windows installer (NSIS) | x64 | 115,602,757 | `2f404c14c049e0dc06a7aabd1c43f0d5ced736b6dadc8e61924ddfc3b86cd094` |
-| `3mfDeck-1.2610.131054-win-x64-portable.exe` | Windows portable (no install) | x64 | 115,358,172 | `891ec7634e7ed0d8041518f04277d4a5ee56d6dfdfa948b1391762c42b1232c0` |
-| `3mfDeck-1.2610.131054-linux-x64.AppImage` | Linux (any distribution) | x64 | 133,371,297 | `593090da57134d3e396bc48c55fcd202ce4880728c3bd32d305273e6308ecb08` |
-| `3mfdeck_1.2610.131054_amd64.deb` | Linux (Debian / Ubuntu) | x64 (amd64) | 105,977,272 | `5cf13a1d47b86a645e65d82b1bcbabbbe2fdf0e3a959f1eeba065a034540277b` |
+| `3mfDeck-1.2610.131126-arm64.dmg` | macOS (Apple silicon) | arm64 | 132,669,202 | `8cec7e53f297db6e5fd988d3f601716f26582251279cce43c7fe5abcaaf7c31c` |
+| `3mfDeck-1.2610.131126-win-x64-setup.exe` | Windows installer (NSIS) | x64 | 115,604,036 | `f3d819ee7415b7e110c5304a1738055b10a056b0a5f8cf0778db2052b37db5fd` |
+| `3mfDeck-1.2610.131126-win-x64-portable.exe` | Windows portable (no install) | x64 | 115,359,384 | `b68b1e2fc899f424dbebffd6d0c4623f5aef8f230062e09300beac11e5aaabb2` |
+| `3mfDeck-1.2610.131126-linux-x64.AppImage` | Linux (any distribution) | x64 | 133,375,305 | `ccb84f17955d4fad0ef68229b8ebe404f52c06525e299202a45f99d786426aed` |
+| `3mfdeck_1.2610.131126_amd64.deb` | Linux (Debian / Ubuntu) | x64 (amd64) | 105,978,268 | `a448bd39f17ba4dafeca2300d594382e5f4cd9b52d6f29d2e43bb37ba55a8c13` |
 
 Check a download: `shasum -a 256 <file>` (macOS / Linux) or `Get-FileHash <file> -Algorithm SHA256` (Windows PowerShell), and compare with the table.
 
@@ -50,14 +50,14 @@ The app's only network activity is the update check: **on by default**, after st
 - right-click (Control-click) 3mfDeck in Applications → **Open** → **Open**; if macOS shows no Open button, go to **System Settings › Privacy & Security**, click **Open Anyway** next to the 3mfDeck message, and confirm with your password; or
 - run `xattr -dr com.apple.quarantine /Applications/3mfDeck.app` in Terminal, then open it normally.
 
-**Windows** — run `3mfDeck-1.2610.131054-win-x64-setup.exe` to install (you can choose the folder), or run `3mfDeck-1.2610.131054-win-x64-portable.exe` directly without installing. If SmartScreen says “Windows protected your PC”, click **More info → Run anyway**.
+**Windows** — run `3mfDeck-1.2610.131126-win-x64-setup.exe` to install (you can choose the folder), or run `3mfDeck-1.2610.131126-win-x64-portable.exe` directly without installing. If SmartScreen says “Windows protected your PC”, click **More info → Run anyway**.
 
-**Linux** — AppImage: `chmod +x 3mfDeck-1.2610.131054-linux-x64.AppImage && ./3mfDeck-1.2610.131054-linux-x64.AppImage`. Debian / Ubuntu: `sudo apt install ./3mfdeck_1.2610.131054_amd64.deb` (the package is named `3mfdeck`; remove it with `sudo apt remove 3mfdeck`).
+**Linux** — AppImage: `chmod +x 3mfDeck-1.2610.131126-linux-x64.AppImage && ./3mfDeck-1.2610.131126-linux-x64.AppImage`. Debian / Ubuntu: `sudo apt install ./3mfdeck_1.2610.131126_amd64.deb` (the package is named `3mfdeck`; remove it with `sudo apt remove 3mfdeck`).
 
 ## Verification status
 
-- macOS: this build is installed and its sidebar shows `v1.2610.131054` (git `064253c`), equal to the packaged app version. All 330 unit tests pass, including the ones that read real sample files from the user's iCloud folder, and the end-to-end smoke test passed against both the development build and the installed app with those real files. The user's three real non-U1 projects were exported as U1 projects with every plate on the U1 bed; the user opened all six exports (original settings and 公仔 for each) in the Snapmaker Orca GUI and accepted them.
-- All five: the packaged `package.json` version is `1.2610.131054`; Windows string `FileVersion` `1.2610.131054`, binary `ProductVersion` `1.2610.65535.0` (from day 7 the binary field is capped at 65535, see Version format; the file name and the app show `1.2610.131054`); deb control `Package: 3mfdeck`, `Version: 1.2610.131054`, `Maintainer: Caspar Wei <6902864+MingShyanWei@users.noreply.github.com>`.
+- macOS: this build is installed and its sidebar shows `v1.2610.131126` (git `39c5050`), equal to the packaged app version. All 336 unit tests pass, including the ones that read real sample files from the user's iCloud folder, and the end-to-end smoke test passed against both the development build and the installed app with those real files. A read-only dry run of the new fingerprint on the user's library (141 records, 363 ms) found exactly the two expected duplicate groups; the app's own recompute on its next start has not been observed yet.
+- All five: the packaged `package.json` version is `1.2610.131126`; Windows string `FileVersion` `1.2610.131126`, binary `ProductVersion` `1.2610.65535.0` (from day 7 the binary field is capped at 65535, see Version format; the file name and the app show `1.2610.131126`); deb control `Package: 3mfdeck`, `Version: 1.2610.131126`, `Maintainer: Caspar Wei <6902864+MingShyanWei@users.noreply.github.com>`.
 - Windows / Linux: built and inspected only (correct file types, x64 SQLite native module bundled, deb control metadata); **not run on a real Windows or Linux machine**.
 - Package contents: every `app.asar` holds only `dist/`, `electron/`, `src/core/`, `package.json` and the runtime `node_modules`.
 
@@ -66,10 +66,10 @@ The app's only network activity is the update check: **on by default**, after st
 ## 繁體中文：版本與下載
 
 - **版本格式**：`1.<YYMM>.<DHHMM>`（建置時間：年月．日時分），**日不補零**——semver 不允許前導零，`1.2610.020146` 不合法、`1.2610.20146` 合法。檔名、側欄顯示（開發版另加「dev」）與 App 版本是同一個字串；`package.json` 的 `version` 維持 `0.1.0`（合法 semver，不出現在檔名或 App 中）。
-- **macOS（arm64）**：`3mfDeck-1.2610.131054-arm64.dmg`，拖進「應用程式」。**此版未用 Developer ID 簽章（僅 ad-hoc）、未公證**，第一次開啟會被擋：
+- **macOS（arm64）**：`3mfDeck-1.2610.131126-arm64.dmg`，拖進「應用程式」。**此版未用 Developer ID 簽章（僅 ad-hoc）、未公證**，第一次開啟會被擋：
   - 在「應用程式」裡對 3mfDeck **右鍵 →「打開」→「打開」**；若沒有「打開」按鈕，到 **「系統設定 › 隱私權與安全性」** 按 3mfDeck 訊息旁的 **「強制打開」** 並輸入密碼；或
   - 在終端機執行 `xattr -dr com.apple.quarantine /Applications/3mfDeck.app` 後正常開啟。
   - 若之後要讓使用者下載後免警告，需加入 Apple Developer Program 做簽章＋公證（不在本版範圍）。
-- **Windows（x64）**：`3mfDeck-1.2610.131054-win-x64-setup.exe`（安裝版）或 `3mfDeck-1.2610.131054-win-x64-portable.exe`（免安裝版）。未做程式碼簽章，SmartScreen 若警告請按「其他資訊 → 仍要執行」。
-- **Linux（x64）**：`3mfDeck-1.2610.131054-linux-x64.AppImage`（`chmod +x` 後執行）或 `3mfdeck_1.2610.131054_amd64.deb`（`sudo apt install ./3mfdeck_1.2610.131054_amd64.deb`）。
+- **Windows（x64）**：`3mfDeck-1.2610.131126-win-x64-setup.exe`（安裝版）或 `3mfDeck-1.2610.131126-win-x64-portable.exe`（免安裝版）。未做程式碼簽章，SmartScreen 若警告請按「其他資訊 → 仍要執行」。
+- **Linux（x64）**：`3mfDeck-1.2610.131126-linux-x64.AppImage`（`chmod +x` 後執行）或 `3mfdeck_1.2610.131126_amd64.deb`（`sudo apt install ./3mfdeck_1.2610.131126_amd64.deb`）。
 - 檔案完整性：用上表的 SHA256 比對（`shasum -a 256 <檔名>`）。
