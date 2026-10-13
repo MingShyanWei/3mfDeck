@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { isNearlyBlack } from '../src/core/thumbCheck.mjs';
-import { hashFile, isDataless } from '../src/core/contentHash.mjs';
+import { fingerprintFile, isDataless } from '../src/core/contentHash.mjs';
 import { exportPresetSettings } from '../src/core/printPreset.mjs';
 import { parseNozzle, PRINT_PRESETS } from '../src/core/nozzle.mjs';
 import { openDb, listModels, getModel, updateModel, setTags, sidebarCounts, getThumb, idsNeedingThumb, cabinetColorRows, idsNeedingSourcePrinter, setSourcePrinter, idsNeedingEmbedded, setEmbedded, getCover, thumbsToCheck, setThumb, idsNeedingHash, setContentHash } from '../src/core/db.mjs';
@@ -468,7 +468,7 @@ async function backfillHashes() {
     try {
       const file = modelPath(db, root, id);
       if (!fs.existsSync(file) || (await isDataless(file))) continue;
-      setContentHash(db, id, await hashFile(file));
+      setContentHash(db, id, await fingerprintFile(file));
       done++;
     } catch {
       // missing or unreadable file: try again next start

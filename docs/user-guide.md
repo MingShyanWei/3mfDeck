@@ -46,7 +46,7 @@ This guide follows the order you actually work in: put files into the library, l
 Drag files or folders onto the window, click **Import…**, or use **File › Import…**. Supported: `.3mf .stl .obj .amf .glb .gltf .step .stp`.
 
 - **Files are moved into the library** (`<library>/<year>/<file name>`), not copied. A different file with the same name gets `-2`, `-3`; nothing is overwritten.
-- **Files whose contents are already in the library are not imported again**, whatever their name or folder. The source stays where it was, untouched, and a notice names the existing copy (click "View" to jump to it). If the identical file is in the trash, the notice points you there to restore it.
+- **Files whose contents are already in the library are not imported again** (for a 3MF the model, settings and images inside count, so the same project saved again at another time is still the same), whatever their name or folder. The source stays where it was, untouched, and a notice names the existing copy (click "View" to jump to it). If the identical file is in the trash, the notice points you there to restore it.
 - After importing, the **import dialog** asks for each file's source: source type (AI generated / Downloaded / Self-made), platform, URL, AI prompt, date retrieved, tags (comma-separated) and notes.
   - MakerWorld / Bambu Studio 3MF files are **pre-filled** from their embedded data (designer, licence, platform); usually you just click "Save and next".
   - "Skip this file" or "Skip all" leaves them for later; the **Unlabelled** filter keeps listing them as a reminder.

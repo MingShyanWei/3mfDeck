@@ -350,7 +350,7 @@ export function sidebarCounts(db) {
     unlabeled: one(`SELECT COUNT(*) FROM models m WHERE ${live} AND (provenance_type IS NULL OR provenance_type = 'unknown')`),
     nonU1: one(`SELECT COUNT(*) FROM models m WHERE ${live} AND ${NON_U1}`),
     duplicates: one(`SELECT COUNT(*) FROM models m WHERE ${live} AND ${DUPLICATE}`),
-    hashPending: one(`SELECT COUNT(*) FROM models m WHERE ${live} AND m.content_hash IS NULL`),
+    hashPending: one(`SELECT COUNT(*) FROM models m WHERE ${live} AND ${NEEDS_HASH}`),
     types: Object.fromEntries(
       db.prepare(`SELECT provenance_type AS k, COUNT(*) AS n FROM models m WHERE ${live} GROUP BY provenance_type`).all().map((r) => [r.k, r.n]),
     ),
@@ -402,8 +402,10 @@ export function cabinetColorRows(db) {
 
 // M33 (SPEC 3.1b): content fingerprints
 /** Models (live and trashed) whose fingerprint is still unknown, oldest first. */
+// M36: a 3MF (always a ZIP) still holding an M33 whole-file fingerprint needs the ZIP-content one
+const NEEDS_HASH = "(m.content_hash IS NULL OR (m.format = '3mf' AND m.content_hash NOT LIKE 'zip1:%'))";
 export function idsNeedingHash(db) {
-  return db.prepare('SELECT id FROM models WHERE content_hash IS NULL ORDER BY id').pluck().all();
+  return db.prepare(`SELECT m.id FROM models m WHERE ${NEEDS_HASH} ORDER BY m.id`).pluck().all();
 }
 export function setContentHash(db, id, hash) {
   db.prepare('UPDATE models SET content_hash = ? WHERE id = ?').run(hash, id);

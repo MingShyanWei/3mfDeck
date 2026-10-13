@@ -4,7 +4,7 @@ import path from 'node:path';
 import { collectImportFiles, moveIntoLibrary, listLibraryFiles, listTrashFiles } from './library.mjs';
 import { parseFile } from './parse/index.mjs';
 import { insertModel, knownRelPaths, modelsWithHash, setContentHash } from './db.mjs';
-import { hashFile } from './contentHash.mjs';
+import { fingerprintFile } from './contentHash.mjs';
 
 const stemOf = (p) => path.basename(p, path.extname(p));
 const fileExists = (p) => fs.access(p).then(() => true, () => false);
@@ -29,7 +29,7 @@ export async function importPaths(db, root, paths, now = new Date()) {
     let relPath;
     let hash;
     try {
-      hash = await hashFile(src);
+      hash = await fingerprintFile(src);
     } catch (err) {
       errors.push({ file: src, error: err.message });
       continue;
