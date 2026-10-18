@@ -127,7 +127,7 @@ Based on r/PrintedMinis "[FDM miniatures - How I support them and some updates](
 | Supports | on, tree (Tree Hybrid style); top Z distance = layer height; no interface layers; infill inside the supports (rectilinear, 1.2 mm spacing) |
 | Brim | outer only, 10 mm (covers the support bases) |
 | Walls | Arachne, minimum feature size 30 % |
-| Interior | Lightning infill: only where top surfaces need carrying, otherwise hollow (tested on the grizzly: 22h12m → about 16h) |
+| Interior | The U1 default (not changed) |
 | Line width | 0.2 on the 0.2 nozzle; U1 defaults on the others |
 | Cooling | fans 100 % except the first layer |
 | Z-hop on retraction | already on in the U1 presets, left as is |

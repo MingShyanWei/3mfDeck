@@ -56,12 +56,12 @@ describe('原檔設定 (original)', () => {
 });
 
 describe('公仔 (miniature)', () => {
-  it('the in-app hint names what the preset writes (Tree Hybrid with infill, lightning infill), in every language', () => {
+  it('the in-app hint names what the preset writes (Tree Hybrid with infill; the infill itself is the U1 default), in every language', () => {
     const s = exportPresetSettings('miniature', profiles, 0.4, 1);
-    expect([s.support_style, s.sparse_infill_pattern]).toEqual(['tree_hybrid', 'lightning']);
+    expect([s.support_style, s.sparse_infill_pattern, s.sparse_infill_density]).toEqual(['tree_hybrid', undefined, undefined]);
     for (const dict of [en, zhTW, zhCN]) {
       expect(dict['printPreset.miniatureHint']).toMatch(/Tree Hybrid/);
-      expect(dict['printPreset.miniatureHint']).toMatch(/lightning|閃電|闪电/);
+      expect(dict['printPreset.miniatureHint']).not.toMatch(/lightning|閃電|闪电|hollow|空心/);
     }
   });
   it('0.4 nozzle: lowest layer 0.08, first layer 0.2, tree supports with Top Z = layer, no interface, infill in supports, 10 mm brim, Arachne 30 %, cooling', () => {
@@ -83,7 +83,6 @@ describe('公仔 (miniature)', () => {
       brim_width: '10',
       wall_generator: 'arachne',
       min_feature_size: '30%',
-      sparse_infill_pattern: 'lightning', // interior mostly hollow; tops still carried
       fan_min_speed: ['100', '100', '100'],
       fan_max_speed: ['100', '100', '100'],
       close_fan_the_first_x_layers: ['1', '1', '1'],
@@ -93,7 +92,8 @@ describe('公仔 (miniature)', () => {
   it('lists every changed key in different_settings_to_system (Orca ignores unlisted project values)', () => {
     const s = exportPresetSettings('miniature', profiles, 0.4, 2);
     const [proc, f1, f2, printer] = s.different_settings_to_system;
-    expect(proc.split(';')).toEqual(expect.arrayContaining(['layer_height', 'enable_support', 'support_style', 'support_top_z_distance', 'brim_type', 'brim_width', 'wall_generator', 'min_feature_size', 'sparse_infill_pattern', 'support_base_pattern_spacing']));
+    expect(proc.split(';')).toEqual(expect.arrayContaining(['layer_height', 'enable_support', 'support_style', 'support_top_z_distance', 'brim_type', 'brim_width', 'wall_generator', 'min_feature_size', 'support_base_pattern_spacing']));
+    expect(proc.split(';')).not.toContain('sparse_infill_pattern'); // infill: U1 default (2026-10-18)
     expect(proc).not.toMatch(/settings_id|printer_variant|fan_/);
     expect([f1, f2, printer]).toEqual(['fan_min_speed;fan_max_speed;close_fan_the_first_x_layers', 'fan_min_speed;fan_max_speed;close_fan_the_first_x_layers', '']);
     expect(s.different_settings_to_system).toHaveLength(4);

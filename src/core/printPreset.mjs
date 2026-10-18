@@ -15,8 +15,9 @@
 // smsTreeOrganic; TreeSupport3D zeroes the tree density). User-sliced
 // 2026-10-12 on the same model: Organic gave identical G-code with
 // rectilinear and default; Tree Hybrid printed rectilinear lines inside.
-// Lightning sparse infill (user's request to hollow the figure out): infill
-// only where top surfaces need it. Same model in Orca: 22h12m -> about 16h.
+// Sparse infill stays the U1 preset's (pattern and 15 % density): lightning
+// infill was tried on 2026-10-12 to hollow the figure out and removed again
+// on 2026-10-18 at the user's request (「不要這樣中空，預設的就好」).
 // 「公仔＋熨燙」 adds ironing of all top surfaces (user's request; U1 defaults
 // already match the usual speed 30 / flow 8 %), with a line spacing of 25 % of
 // the nozzle instead of U1's 0.15 mm. Not "topmost": Orca irons only the
@@ -82,7 +83,6 @@ export function exportPresetSettings(preset, profiles, nozzle, n) {
     brim_type: 'outer_only',
     brim_width: '10',
     wall_generator: 'arachne',
-    sparse_infill_pattern: 'lightning',
     min_feature_size: '30%',
     fan_min_speed: Array(n).fill('100'),
     fan_max_speed: Array(n).fill('100'),

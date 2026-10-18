@@ -186,7 +186,7 @@ export default {
   "preset.cmyw": "CMYW for pastels (white instead of black)",
   "printPreset.label": "Print settings for the export",
   "printPreset.miniature": "Miniature",
-  "printPreset.miniatureHint": "Miniature settings ({nozzle} mm nozzle): Tree Hybrid supports with infill inside, Top Z distance = layer height, no interface layers, 10 mm brim, lightning infill (mostly hollow inside, faster). In Orca, tilt the model back 20–45° (and 20° to one side if needed) to reduce overhangs.",
+  "printPreset.miniatureHint": "Miniature settings ({nozzle} mm nozzle): Tree Hybrid supports with infill inside, Top Z distance = layer height, no interface layers, 10 mm brim. In Orca, tilt the model back 20–45° (and 20° to one side if needed) to reduce overhangs.",
   "printPreset.miniatureIroning": "Miniature + ironing",
   "printPreset.ironingHint": "Ironing: every upward-facing flat surface is ironed (e.g. a flat base top), including small ledges on the figure; check detailed areas in the slice preview.",
   "printPreset.nozzleHint": "A 0.2 mm nozzle (set it in Settings) allows 0.04 mm layers and finer detail.",

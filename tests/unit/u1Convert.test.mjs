@@ -186,7 +186,7 @@ describe('export = U1 project (M35)', () => {
     const dest = path.join(dir, 'mini.3mf');
     await exportU1(src, dest, { presetSettings: exportPresetSettings('miniature', profiles, 0.4, 4) });
     const cfg = await settings(dest);
-    expect([cfg.brim_type, cfg.brim_width, cfg.support_style, cfg.sparse_infill_pattern]).toEqual(['outer_only', '10', 'tree_hybrid', 'lightning']);
+    expect([cfg.brim_type, cfg.brim_width, cfg.support_style, cfg.sparse_infill_pattern]).toEqual(['outer_only', '10', 'tree_hybrid', undefined]); // infill: U1 default
     expect(cfg.fan_max_speed).toEqual(['100', '100', '100', '100']); // preset, not the source's 80 / 40
     expect([cfg.sparse_infill_density, cfg.filament_max_volumetric_speed]).toEqual(['12%', ['22', '22', '12', '16']]); // source, no conflict
     expect(cfg.different_settings_to_system[0].split(';')).toEqual(expect.arrayContaining(['sparse_infill_density', 'brim_width', 'support_style', 'exclude_object']));
