@@ -14,8 +14,30 @@ export const U1_SLOTS = [
 /** Default spool colours for the settings page (ideal CMYK). */
 export const DEFAULT_SPOOLS = U1_SLOTS.map((s) => s.hex);
 
+// M37 (SPEC 3.17): up to 16 spools. The U1 has 4 toolheads (T0-T3); a project
+// with more spools slices in Orca but calls tools the U1 does not have, so
+// more than U1_HEADS spools is for keeping colours and merging them in Orca.
+export const MAX_SPOOLS = 16;
+export const U1_HEADS = 4;
+/** Colour of spool i (0-based) when the spool count is raised: CMYK, then white. */
+export const defaultSpool = (i) => DEFAULT_SPOOLS[i] ?? '#FFFFFF';
+
 /**
- * Slots from the user's spool colours (1-4, SPEC 3.5b). A slot whose colour is
+ * 「保留原色」 (M37): the colours on a model's faces as spools — exact hex
+ * duplicates merged, largest area first (colour stats are face-count ordered,
+ * re-sorted here so the order does not depend on the caller).
+ */
+export function keepColourSpools(colorStats) {
+  const faces = new Map();
+  for (const c of colorStats) {
+    const hex = c.color.slice(0, 7).toUpperCase();
+    faces.set(hex, (faces.get(hex) || 0) + (c.faces ?? 0));
+  }
+  return [...faces].sort((a, b) => b[1] - a[1]).map(([hex]) => hex);
+}
+
+/**
+ * Slots from the user's spool colours (1-16, SPEC 3.5b / 3.17). A slot whose colour is
  * the ideal default keeps its C/M/Y/K name; a custom colour is just "槽N"
  * (naming a red spool "C" would mislead).
  */

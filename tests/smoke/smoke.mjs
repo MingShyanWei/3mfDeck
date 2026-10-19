@@ -1140,6 +1140,45 @@ try {
     step(`M35 匯出即 U1: m18-p1s 非 U1 徽章/過濾/新警示、無轉換按鈕 -> 匯出 m35-p1s.3mf（${out.printer_settings_id}，2 盤搬到 U1 盤面、盤 3 保持原位，Exclude Object 開、Brim 關），原檔未動、不新增記錄`);
   }
 
+  // 14a) M37 (SPEC 3.17): 「保留原色」 and more than 4 spools (U1 has 4 toolheads)
+  {
+    const JSZipM37 = (await import('jszip')).default;
+    await page.fill('[data-testid=search]', '');
+    await openModel('regions');
+    assert.equal(await page.$('[data-testid=export-over-heads]'), null, 'no warning with 4 spools');
+    await page.click('[data-testid=suggest-open]');
+    await page.waitForSelector('[data-testid=spool-suggest]');
+    assert.match(await page.textContent('[data-testid=suggest-keep]'), /保留原色 · 5 捲/);
+    await page.click('[data-testid=suggest-keep]');
+    await page.waitForFunction(() => /保留原色 · 5 捲/.test(document.querySelector('.sg-headline')?.textContent || ''));
+    await page.click('[data-testid=suggest-apply]');
+    await page.waitForSelector('[data-testid=suggest-apply]:disabled');
+    await page.click('[data-testid=suggest-close]');
+    const keep = (await page.evaluate(() => window.api.getSettings())).spools;
+    assert.deepEqual(keep, ['#000000', '#0086D6', '#EC008C', '#F4EE2A', '#FFFFFF'], `keep spools: ${keep}`);
+    await page.waitForSelector('[data-testid=export-over-heads]');
+    assert.match(await page.textContent('[data-testid=export-over-heads]'), /U1 只有 4 個噴頭/);
+    await saveTo('m37-keep.3mf');
+    await page.selectOption('[data-testid=print-preset]', 'original');
+    await page.click('[data-testid=export-quantized]');
+    await page.waitForSelector('[data-testid=export-message-over-heads]', { timeout: 120000 });
+    const cfg = JSON.parse(await (await JSZipM37.loadAsync(await fs.readFile(path.join(exportsDir, 'm37-keep.3mf')))).file('Metadata/project_settings.config').async('string'));
+    assert.deepEqual(cfg.filament_colour, keep.map((h) => `${h}FF`));
+    assert.equal(cfg.mixed_filament_definitions, undefined, 'own colours: no mixes');
+    // settings: 1-16 spools, the same warning, back to CMYK clears it
+    await page.click('[data-testid=settings-button]');
+    await page.waitForSelector('[data-testid=spool-over-heads]');
+    const counts = await page.$$eval('[data-testid=spool-count] option', (o) => o.map((x) => Number(x.value)));
+    assert.deepEqual([counts[0], counts.at(-1), counts.length], [1, 16, 16]);
+    await page.selectOption('[data-testid=spool-count]', '16');
+    assert.equal(await page.inputValue('[data-testid=spool-16]'), '#FFFFFF');
+    await page.click('[data-testid=spool-reset]');
+    await page.waitForSelector('[data-testid=spool-over-heads]', { state: 'detached' });
+    await page.click('[data-testid=settings-done]');
+    await page.waitForSelector('[data-testid=export-over-heads]', { state: 'detached' });
+    step(`M37 保留原色: regions.3mf -> 「保留原色 · 5 捲」（${keep.join(' ')}），套用後噴頭警告出現、匯出 5 色無混色並附提醒；設定頁捲數 1–16、第 16 捲預設白色，恢復 CMYK 後警告消失`);
+  }
+
   // 14b) M33 (SPEC 3.1b): identical contents are not imported twice; 重複 filter
   {
     const JSZipM33 = (await import('jszip')).default;

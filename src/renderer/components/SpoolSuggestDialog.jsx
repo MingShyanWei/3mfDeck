@@ -6,6 +6,7 @@ import { suggestSpools, STANDARD_PRESETS } from '../../core/spoolSuggest.mjs';
 import { suggestFromInventory, coverageOf } from '../../core/inventorySuggest.mjs';
 import { MUST_COVER_PCT } from '../../core/coverage.mjs';
 import { useSetSpools, useSlots } from '../slots.js';
+import { keepColourSpools, MAX_SPOOLS } from '../../core/filament.mjs';
 import { t, getLang } from '../../core/i18n/index.mjs';
 
 // conic coverage ring: single-spool share, + mixing share, rest uncovered
@@ -39,7 +40,7 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
   const [idealK, setIdealK] = useState(ideal.recommended?.k ?? 1);
   const [inv, setInv] = useState(null); // suggestFromInventory() result, or { empty: true }
   const [invK, setInvK] = useState(null);
-  const [sel, setSel] = useState('ideal'); // 'ideal' | 'inventory' | preset id
+  const [sel, setSel] = useState('ideal'); // 'ideal' | 'inventory' | 'keep' | preset id
   const [applied, setApplied] = useState(null); // key of the applied option
 
   useEffect(() => {
@@ -65,6 +66,10 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
 
   const lang = getLang(); // preset names are translated getters, read when spread
   const presets = useMemo(() => STANDARD_PRESETS.map((p) => ({ ...p, cov: coverageOf(colors, p.hexes, { maxColours: 60 }) })), [colors, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  // M37: 「保留原色」 — the file's own colours, one spool each (disabled over MAX_SPOOLS)
+  const keepHexes = useMemo(() => keepColourSpools(colors), [colors]);
+  const keepOk = keepHexes.length <= MAX_SPOOLS;
+  const keepCov = useMemo(() => (keepOk ? coverageOf(colors, keepHexes, { maxColours: 60 }) : null), [colors, keepHexes, keepOk]);
   const current = useMemo(() => coverageOf(colors, slots.map((s) => s.hex), { maxColours: 60 }), [colors, slots]);
   const idealPick = ideal.results.find((r) => r.k === idealK);
   const invPick = inv?.results?.find((r) => r.k === invK) || null;
@@ -80,14 +85,16 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
 
   // what the stage shows
   let stage;
-  if (preset) {
+  if (sel === 'keep' && keepCov) {
+    stage = { kicker: ['mdi-format-color-fill', t('suggest.keepHead')], title: t('suggest.keepTitle', { k: keepHexes.length }), desc: t('suggest.keepDesc'), cov: keepCov, hexes: keepHexes, names: shares(keepCov), worst: keepCov.worst, key: 'keep' };
+  } else if (preset) {
     stage = { kicker: ['mdi-palette-outline', t('suggest.presets')], title: preset.name, desc: t('suggest.presetDesc'), cov: preset.cov, hexes: preset.hexes, names: shares(preset.cov), worst: preset.cov.worst, key: `preset:${preset.id}` };
   } else if (sel === 'inventory') {
     stage = invPick && { kicker: ['mdi-library', t('suggest.fromInventory')], title: t('suggest.invTitle', { k: invPick.k }), desc: t('suggest.invDesc', { k: invPick.k }), cov: invPick, hexes: invPick.spools.map((s) => s.hex), names: shares({ usage: invPick.spools }, invPick.spools.map((s) => s.name)), worst: invPick.worst, key: `inventory:${invPick.k}`, results: inv.results, k: invK, rec: inv.recommended, setK: setInvK };
   } else {
     stage = idealPick && { kicker: ['mdi-star-four-points', t('suggest.ideal')], title: t('suggest.idealTitle', { k: idealPick.k }), desc: t('suggest.idealDesc'), cov: idealPick, hexes: idealPick.spools.map((s) => s.hex), names: shares({ usage: idealPick.spools }), worst: idealPick.worst, key: `ideal:${idealPick.k}`, results: ideal.results, k: idealK, rec: ideal.recommended, setK: setIdealK, flag: t('suggest.needBuy') };
   }
-  const isSuggestion = stage && !preset;
+  const isSuggestion = stage && (sel === 'ideal' || sel === 'inventory'); // M37: 「保留原色」 has no k choices
 
   return (
     <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose?.()}>
@@ -101,6 +108,10 @@ export default function SpoolSuggestDialog({ colors, onClose }) {
           <Option testid="suggest-inventory" on={sel === 'inventory'} cov={invPick} hexes={invPick?.spools.map((s) => s.hex)} title={invPick ? t('suggest.invTitle', { k: invPick.k }) : t('suggest.myInventory')} onClick={() => setSel('inventory')}>
             {!inv && <div className="cov">{t('suggest.computing')}</div>}
             {inv?.empty && <div className="cov">{t('suggest.invEmpty')}</div>}
+          </Option>
+          <h4><i className="mdi mdi-format-color-fill" />{t('suggest.keepHead')}</h4>
+          <Option testid="suggest-keep" on={sel === 'keep'} cov={keepCov} hexes={keepOk ? keepHexes : null} title={keepOk ? t('suggest.keepTitle', { k: keepHexes.length }) : t('suggest.keepHead')} onClick={() => keepOk && setSel('keep')}>
+            {!keepOk && <div className="cov" data-testid="suggest-keep-too-many">{t('suggest.keepTooMany', { n: keepHexes.length })}</div>}
           </Option>
           <h4><i className="mdi mdi-palette-outline" />{t('suggest.presets')}</h4>
           <div data-testid="standard-presets">

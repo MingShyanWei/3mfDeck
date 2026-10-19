@@ -25,11 +25,15 @@ import { mixPrintPlan, mixedFilamentDefinitions, MIXED_PROJECT_DEFAULTS } from '
 import { detectPrinter, sourceCarry, convertPlates, modelStream, bedRect } from './u1Convert.mjs';
 import { t } from './i18n/index.mjs';
 
-// Orca's paint_color string for extruder n (Model.cpp CONST_FILAMENTS; 1..17)
+// Orca's paint_color string for extruder n (Model.cpp CONST_FILAMENTS). The
+// string is read from its end: 1-2 one nibble; 3-17 "C" then n-3; 18 and up
+// "C", "F", then n-18 (as remapPaintColor writes it; M37: 16 spools plus a
+// second mix reach 18).
 export function encodeExtruder(n) {
   if (n <= 0) return '';
   if (n <= 2) return (n << 2).toString(16).toUpperCase();
-  return (n - 3).toString(16).toUpperCase() + 'C';
+  if (n <= 17) return (n - 3).toString(16).toUpperCase() + 'C';
+  return (n - 18).toString(16).toUpperCase() + 'FC';
 }
 
 /**

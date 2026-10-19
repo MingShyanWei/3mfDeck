@@ -88,7 +88,9 @@ Click **Suggest spools…** in the colour analysis:
 
 - **Ideal**: the best 1–4 spool colours for this model (when buying, pick the nearest colour on a swatch card).
 - **From my filaments**: tries every combination from your inventory ([section 8](#8-filament-inventory-and-purchase-suggestions)) and picks the fewest spools that can print every colour, including colours that two spools mix into.
+- **Keep original colours**: the spools become this file's own colours, one spool per colour, no mixing (up to 16 spools).
 - **Standard sets**: CMYK and CMYW coverage for comparison.
+- **More than 4 spools**: the U1 has 4 toolheads. A file with more than 4 spools slices in Orca but cannot print on the U1; merge the filaments down to 4 in Orca first. The app reminds you next to the export button and in Settings.
 - Every option shows single-spool / with mixing / not printable shares. An option is marked "recommended" only if every colour covering at least 0.1 % can be printed, so small details (eyes, nose) are not averaged away by the main colour.
 - **Apply to spool settings** makes filament mapping, mixing recipes and export use that set.
 
@@ -168,7 +170,7 @@ Shared 3MF files are often projects for another printer (e.g. Bambu Lab). Opened
 | Nozzle size | 0.2 / 0.4 / 0.6 / 0.8 mm; used for the export presets |
 | Language | English / 繁體中文 / 简体中文; follows the system by default |
 | Library folder | changing it **moves no files**: the new folder is indexed and records under the old one are marked missing (switch back to restore them) |
-| Spool colours | the real colours of 1–4 spools; "Reset to ideal CMYK" restores the default |
+| Spool colours | the real colours of 1–16 spools (more than 4 cannot print directly on the U1); "Reset to ideal CMYK" restores the default |
 | Filament inventory | see [section 8](#8-filament-inventory-and-purchase-suggestions) |
 | Version & updates | current version, open the Releases page, automatic update check |
 

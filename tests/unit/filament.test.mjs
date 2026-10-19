@@ -111,3 +111,17 @@ describe('parse3mf geometry (preview data)', () => {
     expect(Math.max(...g.positions)).toBe(30); // cm -> mm
   });
 });
+
+describe('M37: up to 16 spools, 「保留原色」', () => {
+  it('raising the count: CMYK first, then white', async () => {
+    const { defaultSpool, MAX_SPOOLS, U1_HEADS } = await import('../../src/core/filament.mjs');
+    expect([MAX_SPOOLS, U1_HEADS]).toEqual([16, 4]);
+    expect(Array.from({ length: 6 }, (_, i) => defaultSpool(i))).toEqual(['#00FFFF', '#FF00FF', '#FFFF00', '#000000', '#FFFFFF', '#FFFFFF']);
+  });
+  it('keepColourSpools: the face colours, exact duplicates merged, largest area first', async () => {
+    const { keepColourSpools, slotsFromColours } = await import('../../src/core/filament.mjs');
+    const stats = [{ color: '#ff0000', faces: 5 }, { color: '#00FF00', faces: 9 }, { color: '#FF0000', faces: 6 }, { color: '#0000FFFF', faces: 1 }];
+    expect(keepColourSpools(stats)).toEqual(['#FF0000', '#00FF00', '#0000FF']); // red 11 > green 9 > blue 1
+    expect(slotsFromColours(keepColourSpools(stats)).map((s) => s.slot)).toEqual([1, 2, 3]);
+  });
+});

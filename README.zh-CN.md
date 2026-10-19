@@ -67,7 +67,7 @@
 - 原文件永不修改，一律生成新文件
 
 **设置**
-- 喷嘴尺寸（0.2／0.4／0.6／0.8 mm，导出按此选预设）、模型库根目录、料卷颜色（1–4 卷）、耗材库、语言、更新检查
+- 喷嘴尺寸（0.2／0.4／0.6／0.8 mm，导出按此选预设）、模型库根目录、料卷颜色（1–16 卷；超过 4 卷是为了保留颜色、到 Orca 再合并）、耗材库、语言、更新检查
 
 **界面语言**
 - English／繁體中文／简体中文，默认跟随系统语言，可在设置页切换并记住；日期与数字按语言格式化
@@ -136,7 +136,7 @@ git clone git@github.com:MingShyanWei/3mfDeck.git
 cd 3mfDeck
 npm install
 npm run dev        # vite build + 启动 Electron
-npm test           # Vitest 单元测试（337 项）
+npm test           # Vitest 单元测试（341 项）
 npm run smoke      # Electron 端到端 smoke（使用隔离的文件夹与数据库）
 npm run dist       # 打包 macOS dmg（文件名带构建版本）
 node scripts/release-notes.mjs  # 生成含构建标记、大小、SHA256 的 release 说明
@@ -161,7 +161,7 @@ src/core/          纯逻辑，可单独测试：解析、颜色、混色、导�
   orcaProfiles.mjs 读取本机 Snapmaker Orca 的机型 profile（仅取几何数据，不联网）
 src/core/i18n/     界面词典（en／zh-TW／zh-CN）
 src/renderer/      React UI（three.js 预览、详情面板、弹窗）
-tests/unit/        Vitest（36 个文件、337 项）
+tests/unit/        Vitest（36 个文件、341 项）
 tests/smoke/       真实 Electron 端到端测试
 docs/user-guide*.md 使用说明（en／zh-TW／zh-CN）
 docs/screenshots/  README 截图（en／zh-TW／zh-CN）

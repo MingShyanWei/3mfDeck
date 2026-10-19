@@ -8,6 +8,8 @@ import { plateImage } from '../../core/embeddedImages.mjs';
 import { ProvenanceBadge, PlateBadge, ColorLabels, isNonU1 } from './Badges.jsx';
 import { isUnlabeled, formatBytes, formatInt, formatBbox, formatDate } from '../format.js';
 import { t } from '../../core/i18n/index.mjs';
+import { useSlots } from '../slots.js';
+import { U1_HEADS } from '../../core/filament.mjs';
 
 let lastPreset = 'original'; // M34: the export preset chosen last in this session
 
@@ -22,6 +24,7 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
   const [previewMode, setPreviewMode] = useState('3d'); // M19: '3d' | 'images'
   const [imagePath, setImagePath] = useState(null);
   const [actionError, setActionError] = useState('');
+  const slots = useSlots();
   const [preset, setPreset] = useState(lastPreset); // M34: print preset for 匯出 3MF (kept for the session)
   const [nozzle, setNozzle] = useState(null);
   useEffect(() => {
@@ -92,7 +95,7 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
     setActionError('');
     const r = await window.api.exportQuantized(id, { overThreshold: 'nearest', mix: true, preset });
     if (r?.error) setActionError(r.error);
-    else if (r) setExported({ path: r.path, summary: r.summary, mixes: r.mixes, plates: r.plates });
+    else if (r) setExported({ path: r.path, summary: r.summary, mixes: r.mixes, plates: r.plates, overHeads: slots.length > U1_HEADS });
   };
 
   return (
@@ -143,6 +146,7 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
                 skipped: exported.summary.filter((x) => x.slot === null).length ? t('detail.exportedSkipped', { n: exported.summary.filter((x) => x.slot === null).length }) : '',
                 mixes: exported.mixes ? t('detail.exportedMixes', { n: exported.mixes }) : '',
               })}
+            {exported.overHeads && <span data-testid="export-message-over-heads"> {t('spools.overHeads')}</span>}
             {/* M35: a non-U1 project's plates moved onto the U1 bed */}
             {exported.plates?.length > 0 && (
               <span data-testid="export-plates">
@@ -225,6 +229,13 @@ export default function DetailPanel({ id, platforms, onSaved, onRemoved, onClose
           </div>
         )}
       </div>
+      {/* M37: more spools than U1 toolheads */}
+      {!model.missing && model.format === '3mf' && slots.length > U1_HEADS && (
+        <div className="callout warn" data-testid="export-over-heads">
+          <i className="mdi mdi-alert-outline" />
+          <span className="grow">{t('spools.overHeads')}</span>
+        </div>
+      )}
       {!model.missing && model.format === '3mf' && preset !== 'original' && (
         <div className="callout note" data-testid="preset-hint">
           <i className="mdi mdi-human-handsup" />

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { indexNewFiles } from './importer.mjs';
 import { listModels, getModel } from './db.mjs';
-import { DEFAULT_SPOOLS } from './filament.mjs';
+import { DEFAULT_SPOOLS, MAX_SPOOLS } from './filament.mjs';
 import { t } from './i18n/index.mjs';
 import { parseNozzle, DEFAULT_NOZZLE } from './nozzle.mjs';
 
@@ -50,11 +50,11 @@ export function validateInventory(list) {
 }
 
 /**
- * Spool colours of the user's printer (SPEC 3.5b): 1-4 "#RRGGBB" values, the
- * actual filaments loaded. Throws on invalid input; returns the normalized list.
+ * Spool colours of the user's printer (SPEC 3.5b, M37: 1-16) "#RRGGBB" values,
+ * the actual filaments loaded. Throws on invalid input; returns the normalized list.
  */
 export function validateSpools(spools) {
-  if (!Array.isArray(spools) || spools.length < 1 || spools.length > 4) throw new Error(t('settings.err.spoolCount'));
+  if (!Array.isArray(spools) || spools.length < 1 || spools.length > MAX_SPOOLS) throw new Error(t('settings.err.spoolCount'));
   return spools.map((h) => {
     if (!/^#[0-9a-fA-F]{6}$/.test(h)) throw new Error(t('settings.err.hex', { hex: h }));
     return h.toUpperCase();

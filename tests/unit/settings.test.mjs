@@ -96,10 +96,11 @@ describe('spool colours (SPEC 3.5b)', () => {
     expect(loadSettings(userData, '/r').spools).toEqual(['#0A9ED8', '#000000']);
   });
 
-  it('validateSpools: 1-4 colours, #RRGGBB, normalized to upper case', () => {
+  it('validateSpools: 1-16 colours (M37), #RRGGBB, normalized to upper case', () => {
     expect(validateSpools(['#0a9ed8'])).toEqual(['#0A9ED8']);
-    expect(() => validateSpools([])).toThrow(/1–4/);
-    expect(() => validateSpools(['#000000', '#111111', '#222222', '#333333', '#444444'])).toThrow(/1–4/);
+    expect(() => validateSpools([])).toThrow(/1–16/);
+    expect(validateSpools(Array(16).fill('#ffffff'))).toHaveLength(16);
+    expect(() => validateSpools(Array(17).fill('#FFFFFF'))).toThrow(/1–16/);
     expect(() => validateSpools(['red'])).toThrow(/#RRGGBB/);
     expect(() => validateSpools(['#12345'])).toThrow(/#RRGGBB/);
   });

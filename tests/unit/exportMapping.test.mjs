@@ -29,6 +29,31 @@ describe('paint_color writing', () => {
     expect(encodeExtruder(0)).toBe('');
   });
 
+  it('M37: extruders 18 and up use the escape nibble and decode back (16 spools + a second mix = 18)', () => {
+    expect([encodeExtruder(17), encodeExtruder(18), encodeExtruder(19), encodeExtruder(32)]).toEqual(['EC', '0FC', '1FC', 'EFC']);
+    for (let n = 17; n <= 32; n++) {
+      expect(decodePaintColor(encodeExtruder(n))).toEqual({ [n]: 1 });
+      expect(remapPaintColor(encodeExtruder(n), new Map())).toBe(encodeExtruder(n)); // same as the remapper writes it
+    }
+  });
+
+  it('M37: 16 spools plus mixes — every face lands on its own spool or a mix numbered 17, 18, …', async () => {
+    const dir = await tmpDir();
+    const sixteen = ['#00FFFF', '#FF00FF', '#FFFF00', '#000000', ...Array.from({ length: 12 }, (_, i) => `#${(0x101010 * (i + 2)).toString(16).toUpperCase().padStart(6, '0')}`)];
+    const dest = path.join(dir, 'q16.3mf');
+    const r = await exportQuantized3mf(fixture('mixneeded.3mf'), dest, slotsFromColours(sixteen), { mix: true });
+    expect(r.mixes.length).toBeGreaterThanOrEqual(2);
+    const cfg = JSON.parse(await (await JSZip.loadAsync(await fs.readFile(dest))).file('Metadata/project_settings.config').async('string'));
+    expect(cfg.filament_colour).toHaveLength(16);
+    const z = await JSZip.loadAsync(await fs.readFile(dest));
+    const model = Object.keys(z.files).find((f) => f.endsWith('.model') && f.includes('Objects')) || '3D/3dmodel.model';
+    const used = new Set();
+    for (const [, pc] of (await z.file(model).async('string')).matchAll(/paint_color="([^"]+)"/g)) for (const k of Object.keys(decodePaintColor(pc))) used.add(Number(k));
+    const max = 16 + r.mixes.length;
+    expect([...used].every((n) => n >= 1 && n <= max)).toBe(true);
+    expect([...used].some((n) => n >= 18)).toBe(true); // the escape encoding is exercised
+  });
+
   it('remapPaintColor keeps the split structure and maps every leaf', () => {
     const map = new Map([[1, 3], [2, 1], [3, 4]]);
     expect(remapPaintColor('4', map)).toBe('0C');

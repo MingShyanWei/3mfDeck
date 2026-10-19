@@ -67,7 +67,7 @@ Downloading models is easy; the trouble starts afterwards:
 - Originals are never modified; every export is a new file
 
 **Settings**
-- Nozzle size (0.2 / 0.4 / 0.6 / 0.8 mm) used for the export presets; library folder; spool colours (1–4 spools); filament inventory; language; update check
+- Nozzle size (0.2 / 0.4 / 0.6 / 0.8 mm) used for the export presets; library folder; spool colours (1–16 spools; more than 4 is for keeping colours and merging them in Orca); filament inventory; language; update check
 
 **UI language**
 - English / 繁體中文 / 简体中文; follows the system language by default, can be switched in Settings and is remembered; dates and numbers are formatted for the language
@@ -136,7 +136,7 @@ git clone git@github.com:MingShyanWei/3mfDeck.git
 cd 3mfDeck
 npm install
 npm run dev        # vite build + start Electron
-npm test           # Vitest unit tests (337)
+npm test           # Vitest unit tests (341)
 npm run smoke      # Electron end-to-end smoke test (isolated folders and database)
 npm run dist       # package the macOS dmg (file names carry the build version)
 node scripts/release-notes.mjs  # release notes with the build marker, sizes and SHA256
@@ -161,7 +161,7 @@ src/core/          Pure logic, testable on its own: parsing, colours, mixing, ex
   orcaProfiles.mjs Reads the local Snapmaker Orca printer profiles (geometry only, no network)
 src/core/i18n/     UI dictionaries (en / zh-TW / zh-CN)
 src/renderer/      React UI (three.js preview, detail panel, dialogs)
-tests/unit/        Vitest (36 files, 337 tests)
+tests/unit/        Vitest (36 files, 341 tests)
 tests/smoke/       Real Electron end-to-end test
 docs/user-guide*.md User guide (en / zh-TW / zh-CN)
 docs/screenshots/  README screenshots (en / zh-TW / zh-CN)

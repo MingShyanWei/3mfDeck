@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { DEFAULT_SPOOLS } from '../../core/filament.mjs';
+import { DEFAULT_SPOOLS, MAX_SPOOLS, U1_HEADS, defaultSpool } from '../../core/filament.mjs';
 import { t, LANGS, LANG_NAMES } from '../../core/i18n/index.mjs';
 import { NOZZLES } from '../../core/nozzle.mjs';
 import { FILAMENT_PROFILES_URL } from '../../core/inventoryImport.mjs';
@@ -24,7 +24,7 @@ export default function SettingsDialog({ onClose, onRootChanged, onSpoolsChanged
     window.api.appInfo().then((i) => setVersion(i.version));
   }, []);
 
-  const setCount = (n) => setSpools(Array.from({ length: n }, (_, i) => spools[i] ?? DEFAULT_SPOOLS[i]));
+  const setCount = (n) => setSpools(Array.from({ length: n }, (_, i) => spools[i] ?? defaultSpool(i)));
   const setColour = (i, v) => setSpools(spools.map((c, k) => (k === i ? v : c)));
   const saveSpools = async (list) => {
     const r = await window.api.setSpools(list);
@@ -81,7 +81,7 @@ export default function SettingsDialog({ onClose, onRootChanged, onSpoolsChanged
               <div className="row">
                 <span className="small muted">{t('settings.spoolCount')}</span>
                 <select data-testid="spool-count" value={spools.length} onChange={(e) => setCount(Number(e.target.value))}>
-                  {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}
+                  {Array.from({ length: MAX_SPOOLS }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
               {spools.map((c, i) => (
@@ -91,6 +91,9 @@ export default function SettingsDialog({ onClose, onRootChanged, onSpoolsChanged
                   <input className="mono" data-testid={`spool-${i + 1}`} value={c} onChange={(e) => setColour(i, e.target.value)} placeholder="#RRGGBB" />
                 </div>
               ))}
+              {spools.length > U1_HEADS && (
+                <p className="callout warn small" data-testid="spool-over-heads"><i className="mdi mdi-alert-outline" /> <span className="grow">{t('spools.overHeads')}</span></p>
+              )}
               <div className="row">
                 <button className="primary" data-testid="spool-save" onClick={() => saveSpools(spools)}>{t('settings.saveSpools')}</button>
                 <button data-testid="spool-reset" onClick={() => saveSpools(DEFAULT_SPOOLS)}>{t('settings.resetSpools')}</button>
